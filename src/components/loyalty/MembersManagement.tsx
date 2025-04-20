@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -8,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Award, Pencil, Search, Mail, Import, Export, Filter, Users, User, UserPlus, Gift, BadgePercent } from "lucide-react";
+import { Award, Pencil, Search, Mail, Upload, Download, Filter, Users, User, UserPlus, Gift, BadgePercent } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
 export default function MembersManagement() {
@@ -21,7 +20,6 @@ export default function MembersManagement() {
   const [birthdate, setBirthdate] = useState('');
   const [selectedMember, setSelectedMember] = useState<any>(null);
   
-  // Mock members data
   const [members, setMembers] = useState([
     { 
       id: 1, 
@@ -123,7 +121,6 @@ export default function MembersManagement() {
     setMembers([...members, newMember]);
     toast.success("Member added successfully with 50 welcome points");
     
-    // Reset form
     setName('');
     setEmail('');
     setPhone('');
