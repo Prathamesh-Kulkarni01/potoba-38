@@ -24,7 +24,7 @@ app.use((req, res, next) => {
 
 // Middleware
 app.use(cors({
-  origin: ['https://super-potato-rvg456pjwj25wr9-8080.app.github.dev', 'http://localhost:8080'],
+  origin: ['https://preview--potoba-38.lovable.app', 'http://localhost:8080'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
