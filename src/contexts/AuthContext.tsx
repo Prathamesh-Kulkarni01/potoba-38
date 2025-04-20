@@ -139,7 +139,8 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
       
       const { user, token } = response.data;
       
-      // Save token to localStorage
+      // Save token to localStorage - ensure this line executes
+      console.log('Saving token to localStorage:', token);
       localStorage.setItem('token', token);
       
       setUser(user);
@@ -155,7 +156,8 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
         if (mockResponse.success && mockResponse.data) {
           const { user, token } = mockResponse.data;
           
-          // Save token to localStorage
+          // Save token to localStorage - ensure this executes in mock flow too
+          console.log('Saving mock token to localStorage:', token);
           localStorage.setItem('token', token);
           
           setUser(user);

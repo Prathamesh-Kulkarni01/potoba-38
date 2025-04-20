@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,7 +21,13 @@ const Signup = () => {
     setIsLoading(true);
     
     try {
+      console.log('Starting signup process...');
       await signup(name, email, password);
+      
+      // Check if the token was saved correctly
+      const token = localStorage.getItem('token');
+      console.log('Token after signup:', token);
+      
       navigate('/onboarding');
     } catch (error) {
       console.error('Signup error:', error);

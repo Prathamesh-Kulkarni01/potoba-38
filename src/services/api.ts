@@ -1,4 +1,4 @@
-import { toast } from "sonner";
+import { toast } from "@/hooks/use-toast";
 import { mockApi } from "./mockApi";
 import { 
   ApiResponse, 
@@ -160,7 +160,10 @@ const syncWithServer = async (): Promise<void> => {
 const handleApiError = (error: any): never => {
   const errorMessage = error.response?.data?.error || error.message || 'An unknown error occurred';
   console.error('API Error:', errorMessage);
-  toast.error(errorMessage);
+  toast({
+    variant: "destructive",
+    description: errorMessage
+  });
   throw new Error(errorMessage);
 };
 
@@ -394,12 +397,17 @@ const apiRequest = async <T>(
 // Start listening for online/offline events to trigger sync
 if (typeof window !== 'undefined') {
   window.addEventListener('online', () => {
-    toast.info('Connection restored. Syncing data...');
+    toast({
+      description: 'Connection restored. Syncing data...',
+    });
     syncWithServer();
   });
   
   window.addEventListener('offline', () => {
-    toast.warning('You are offline. Changes will be synced when you reconnect.');
+    toast({
+      variant: "warning",
+      description: 'You are offline. Changes will be synced when you reconnect.',
+    });
   });
   
   // Attempt to sync when the app starts
