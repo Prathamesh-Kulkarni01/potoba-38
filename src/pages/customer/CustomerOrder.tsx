@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import CustomerMenu from '../components/customer/CustomerMenu';
+import CustomerMenu from '../../components/customer/CustomerMenu';
 import { Loader2, AlertCircle } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 

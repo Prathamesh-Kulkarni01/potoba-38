@@ -1,35 +1,69 @@
-import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+
+import React, { useState, useEffect } from 'react';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { motion } from 'framer-motion';
 import { Utensils, ChefHat } from 'lucide-react';
+import { toast } from '@/hooks/use-toast';
 
-const Signup = () => {
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [role, setRole] = useState('user');
+const Login = () => {
+  const [email, setEmail] = useState('demo@example.com');
+  const [password, setPassword] = useState('password');
   const [isLoading, setIsLoading] = useState(false);
-  const { signup } = useAuth();
+  const { login, isAuthenticated, user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Get redirect path from URL query parameter
+  const searchParams = new URLSearchParams(location.search);
+  const redirectPath = searchParams.get('redirect') || '/dashboard';
+
+  // If user is already logged in, check if they have restaurants
+  useEffect(() => {
+    if (isAuthenticated() && user) {
+      console.log("User already authenticated:", user);
+      console.log("User role:", user.role);
+      console.log("User permissions:", user.permissions);
+      
+      // Safely check if the user has restaurants
+      if (!user.restaurants || user.restaurants.length === 0) {
+        navigate('/onboarding');
+      } else {
+        navigate(redirectPath);
+      }
+    }
+  }, [isAuthenticated, navigate, redirectPath, user]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     
     try {
-      console.log('Starting signup process...');
-      await signup(name, email, password, role);
+      await login(email, password);
       
-      // Redirect to restaurant onboarding right after signup
-      navigate('/onboarding');
+      // Introduce a small delay to ensure user state is updated
+      setTimeout(() => {
+        if (isAuthenticated() && user) {
+          console.log("User authenticated:", user);
+          console.log("User role:", user.role || 'No role assigned');
+          console.log("User permissions:", user.permissions || 'No permissions assigned');
+          
+          // Safely check if user has restaurants
+          if (!user.restaurants || user.restaurants.length === 0) {
+            navigate('/onboarding');
+          } else {
+            navigate(redirectPath);
+          }
+        } else {
+          console.log("Authentication failed or user data not available");
+        }
+      }, 100);
     } catch (error) {
-      console.error('Signup error:', error);
+      console.error('Login error:', error);
       // Toast is handled in auth context
     } finally {
       setIsLoading(false);
@@ -64,7 +98,7 @@ const Signup = () => {
             animate={{ y: 0, opacity: 1 }}
             transition={{ delay: 0.2, duration: 0.4 }}
           >
-            Create your account to get started
+            Login to manage your restaurants
           </motion.p>
         </div>
         
@@ -75,23 +109,13 @@ const Signup = () => {
         >
           <Card>
             <CardHeader>
-              <CardTitle>Sign Up</CardTitle>
+              <CardTitle>Login</CardTitle>
               <CardDescription>
-                Enter your details to create an account
+                Enter your credentials to access your dashboard
               </CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Name</Label>
-                  <Input
-                    id="name"
-                    placeholder="Your Name"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    required
-                  />
-                </div>
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
                   <Input
@@ -104,7 +128,12 @@ const Signup = () => {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="password">Password</Label>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="password">Password</Label>
+                    <Link to="/forgot-password" className="text-sm text-restaurant-primary hover:underline">
+                      Forgot password?
+                    </Link>
+                  </div>
                   <Input
                     id="password"
                     type="password"
@@ -113,33 +142,16 @@ const Signup = () => {
                     required
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="role">Role</Label>
-                  <Select value={role} onValueChange={setRole}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a role" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="user">User</SelectItem>
-                      <SelectItem value="staff">Staff</SelectItem>
-                      <SelectItem value="manager">Manager</SelectItem>
-                      <SelectItem value="admin">Administrator</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Note: This is for demo purposes. In a real application, role assignment would be managed by administrators.
-                  </p>
-                </div>
                 <Button type="submit" className="w-full" disabled={isLoading}>
-                  {isLoading ? "Creating account..." : "Sign up"}
+                  {isLoading ? "Logging in..." : "Log in"}
                 </Button>
               </form>
             </CardContent>
             <CardFooter className="flex justify-center">
               <p className="text-sm text-muted-foreground">
-                Already have an account?{" "}
-                <Link to="/login" className="text-restaurant-primary hover:underline">
-                  Log in
+                Don't have an account?{" "}
+                <Link to="/signup" className="text-restaurant-primary hover:underline">
+                  Sign up
                 </Link>
               </p>
             </CardFooter>
@@ -168,4 +180,4 @@ const Signup = () => {
   );
 };
 
-export default Signup;
+export default Login;

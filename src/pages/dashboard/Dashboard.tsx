@@ -1,20 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { Navigate, Outlet, useLocation, Route, Routes } from 'react-router-dom';
-import RestaurantDashboard from '../components/dashboard/RestaurantDashboard';
-import TableManagement from '../components/table/TableManagement';
-import MenuManagement from '../components/menu/MenuManagement';
-import OrderTable from '../components/order/OrderTable';
-import MarketingCampaigns from '../components/marketing/MarketingCampaigns';
-import WhatsAppBot from '../components/marketing/WhatsAppBot';
-import AiAssistant from '../components/marketing/AiAssistant';
-import RewardsManagement from '../components/loyalty/RewardsManagement';
-import PromotionsManagement from '../components/loyalty/PromotionsManagement';
-import MembersManagement from '../components/loyalty/MembersManagement';
+import RestaurantDashboard from '../../components/dashboard/RestaurantDashboard';
+import TableManagement from '../../components/table/TableManagement';
+import MenuManagement from '../../components/menu/MenuManagement';
+import OrderTable from '../../components/order/OrderTable';
+import MarketingCampaigns from '../../components/marketing/MarketingCampaigns';
+import WhatsAppBot from '../../components/marketing/WhatsAppBot';
+import AiAssistant from '../../components/marketing/AiAssistant';
+import RewardsManagement from '../../components/loyalty/RewardsManagement';
+import PromotionsManagement from '../../components/loyalty/PromotionsManagement';
+import MembersManagement from '../../components/loyalty/MembersManagement';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import { DashboardShell } from '@/components/dashboard/DashboardShell';
 import authService from '@/services/authService';
-import AddMenuItem from './AddMenuItem';
+import AddMenuItem from '../menu/AddMenuItem';
 
 const Dashboard = () => {
   const location = useLocation();
