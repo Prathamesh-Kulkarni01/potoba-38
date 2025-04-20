@@ -127,8 +127,8 @@ exports.createRestaurant = async (req, res) => {
     console.log('Creating restaurant for user:', req.user.id);
     logToFrontend(`Creating restaurant for user: ${req.user.id}`);
     
-    // Add user to req.body
-    req.body.user = req.user.id;
+    // Add owner to req.body
+    req.body.owner = req.user._id;
 
     // Handle mock user in development
     if (req.user.id === 'mock-user-id') {
@@ -148,9 +148,9 @@ exports.createRestaurant = async (req, res) => {
     console.log('Restaurant created:', restaurant);
     logToFrontend(`Restaurant created: ${restaurant.name}`);
 
-    // Add restaurant to user
+    // Add restaurant to user's list of restaurants
     await User.findByIdAndUpdate(
-      req.user.id,
+      req.user._id,
       { $push: { restaurants: restaurant._id } },
       { new: true }
     );

@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { Restaurant } from '../types/auth';
 import authService from './authService';
+import { useAuth } from '../contexts/AuthContext'; // Correctly import useAuth
 
 const API_URL = '/api';
 
@@ -50,7 +51,17 @@ export const restaurantService = {
           Authorization: `Bearer ${token}`
         }
       });
-      
+
+      // Update user context with the new restaurant
+      const newRestaurant = response.data.data;
+      const { user, setUser } = useAuth(); // Use the imported useAuth hook
+      if (user) {
+        setUser({
+          ...user,
+          restaurants: [...(user.restaurants || []), newRestaurant]
+        });
+      }
+
       return response.data;
     } catch (error) {
       console.error('Create restaurant error:', error);

@@ -4,6 +4,7 @@ const Restaurant = require('../models/Restaurant');
 const auth = require('../middleware/auth');
 const { authenticate } = require('../middleware/authMiddleware');
 const { createDemoData } = require('../controllers/restaurants');
+const User = require('../models/User');
 
 // Standardized error response function
 const handleError = (res, error, message = 'Server error', status = 500) => {
@@ -46,6 +47,14 @@ router.post('/', authenticate, async (req, res) => {
   try {
     const restaurant = new Restaurant({ ...req.body, owner: req.user._id });
     await restaurant.save();
+
+    // Add restaurant to user's list of restaurants
+    await User.findByIdAndUpdate(
+      req.user._id,
+      { $push: { restaurants: restaurant._id } },
+      { new: true }
+    );
+
     res.status(201).json(restaurant);
   } catch (error) {
     handleError(res, error, 'Error creating restaurant');

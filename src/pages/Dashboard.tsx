@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Navigate, Outlet, useLocation, Route, Routes } from 'react-router-dom';
 import RestaurantDashboard from '../components/RestaurantDashboard';
@@ -17,9 +16,24 @@ import { DashboardShell } from '@/components/DashboardShell';
 
 const Dashboard = () => {
   const location = useLocation();
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, updateUser } = useAuth(); // Added updateUser from context
   const [showFoodIcon, setShowFoodIcon] = useState(false);
-  
+
+  // Fetch user and update auth context on mount
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const response = await fetch('/api/auth/me'); // Replace with actual API endpoint
+        const userData = await response.json();
+        updateUser(userData); // Update user in auth context
+      } catch (error) {
+        console.error('Failed to fetch user:', error);
+      }
+    };
+
+    fetchUser();
+  }, [updateUser]);
+
   // Always initialize hooks before any conditional returns
   useEffect(() => {
     const timer = setTimeout(() => {

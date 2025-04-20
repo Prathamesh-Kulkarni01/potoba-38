@@ -27,6 +27,8 @@ interface AuthContextType {
   currentRestaurantId: string | null;
   setCurrentRestaurantId: (id: string) => void;
   hasPermission: (permission: string) => boolean;
+  setUser: (user: User | null) => void; // Expose setUser
+  updateUser: (user: User) => void; // Add updateUser method
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -269,6 +271,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, navigate }
     }
   };
 
+  const updateUser = (updatedUser: User) => {
+    setUser((prevUser) => ({
+      ...prevUser,
+      ...updatedUser,
+    }));
+  };
+
   return (
     <AuthContext.Provider value={{ 
       user, 
@@ -282,7 +291,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, navigate }
       getCurrentRestaurant,
       currentRestaurantId,
       setCurrentRestaurantId,
-      hasPermission
+      hasPermission,
+      setUser,
+      updateUser // Include updateUser in the context value
     }}>
       {children}
     </AuthContext.Provider>
