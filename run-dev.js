@@ -26,7 +26,7 @@ const frontendProcess = runCommand('npm', ['run', 'dev'], process.cwd());
 
 // Start the backend (Express)
 const serverDir = path.join(process.cwd(), 'server');
-const backendProcess = runCommand('npm', ['run', 'dev'], serverDir);
+const backendProcess = runCommand('node', ['src/server.js'], serverDir);
 
 // Handle process termination
 const handleTermination = () => {
@@ -41,7 +41,7 @@ process.on('SIGINT', handleTermination);
 process.on('SIGTERM', handleTermination);
 process.on('exit', handleTermination);
 
-console.log('\nš Development servers running!');
-console.log('š Frontend: http://localhost:8080');
-console.log('š Backend: http://localhost:5000');
+console.log('\n✅ Development servers running!');
+console.log('🚀 Frontend: http://localhost:8080');
+console.log('🚀 Backend: http://localhost:5000');
 console.log('\nPress Ctrl+C to stop all servers.\n');
