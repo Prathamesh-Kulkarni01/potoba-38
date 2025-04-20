@@ -15,7 +15,7 @@ const Hero = () => {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
       >
-        <Badge className="mb-4 bg-food-secondary/20 text-food-secondary border-none px-3 py-1">
+        <Badge className="mb-4 mt-4 md:mb-0 bg-food-secondary/20 text-food-secondary border-none px-3 py-1">
           <Sparkles className="mr-1 h-3.5 w-3.5" />
           AI-Powered Food Management
         </Badge>

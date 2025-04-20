@@ -23,7 +23,7 @@ const Header = () => {
 
   const toggleMenu = () => setIsOpen(!isOpen);
 
-  const headerClasses = `fixed top-0 w-full z-50 transition-all duration-300 theme-transition
+  const headerClasses = `fixed top-0 w-full  z-50 transition-all duration-300 theme-transition
     ${scrolled ? 'py-2 bg-background/90 backdrop-blur-md shadow-md' : 'py-4 bg-transparent'}`;
 
   return (
@@ -35,7 +35,7 @@ const Header = () => {
             <img 
               src="/images/icon-logo.png"
               alt="Potoba" 
-              className="h-10 w-auto mr-2" 
+              className="h-10 w-auto object-cover" 
             />
             <span className="text-xl font-bold text-food-primary">Potoba</span>
           </Link>
