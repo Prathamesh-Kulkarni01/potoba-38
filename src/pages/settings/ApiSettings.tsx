@@ -22,19 +22,19 @@ const ApiSettings = () => {
   const [remoteConnectionStatus, setRemoteConnectionStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   
   const [localConfig, setLocalConfig] = useState({
-    host: 'localhost',
-    port: '27017',
-    database: 'restaurant-app',
+    host: process.env.LOCAL_DB_HOST || 'localhost',
+    port: process.env.LOCAL_DB_PORT || '27017',
+    database: process.env.LOCAL_DB_NAME || 'restaurant-app',
     username: '',
     password: ''
   });
   
   const [remoteConfig, setRemoteConfig] = useState({
-    host: '',
-    port: '27017',
-    database: 'restaurant-app',
-    username: '',
-    password: ''
+    host: process.env.REMOTE_DB_HOST || '',
+    port: process.env.REMOTE_DB_PORT || '27017',
+    database: process.env.REMOTE_DB_NAME || 'restaurant-app',
+    username: process.env.REMOTE_DB_USERNAME || '',
+    password: process.env.REMOTE_DB_PASSWORD || ''
   });
   
   const handleTestConnection = async (type: 'local' | 'remote') => {
