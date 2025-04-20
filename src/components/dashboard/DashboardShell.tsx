@@ -46,7 +46,7 @@ interface DashboardShellProps {
   children: React.ReactNode;
 }
 
-export function DashboardShell({ children }: DashboardShellProps) {
+export  function DashboardShell({ children }: DashboardShellProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout, getCurrentRestaurant, hasPermission } = useAuth();
@@ -350,9 +350,9 @@ export function DashboardShell({ children }: DashboardShellProps) {
           </div>
           
           {/* Bottom Navigation for Mobile */}
-          <div className="fixed bottom-0 left-0 right-0 md:hidden bg-restaurant-primary text-white z-30">
+          <div className="fixed bottom-0 left-0 right-0 md:hidden  bg-restaurant-background bg-pattern text-white z-30">
             <div className="flex justify-around items-center p-3">
-              {[filteredMainMenuItems,filteredMarketingMenuItems,filteredLoyaltyMenuItems].slice(0, 8).map((item) => (
+              {[...filteredMainMenuItems,...filteredMarketingMenuItems,...filteredLoyaltyMenuItems].slice(0, 8).map((item) => (
                 <Button 
                   key={item.path}
                   variant="ghost"
