@@ -1,4 +1,3 @@
-
 import { toast } from "sonner";
 import { mockApi } from "./mockApi";
 import { 
@@ -16,13 +15,146 @@ import {
   UpdateOrderStatusDto
 } from "@/types/api";
 
+// Helper to check if we're in offline mode
+const isOfflineMode = (): boolean => {
+  return localStorage.getItem('offlineMode') === 'true';
+};
+
 // Helper to get the configured API base URL or use the default
 const getApiBaseUrl = (): string => {
+  if (isOfflineMode()) {
+    const port = localStorage.getItem('apiPort') || '5000';
+    return `http://localhost:${port}/api`;
+  }
   return localStorage.getItem('apiBaseUrl') || 'http://localhost:5000/api';
 };
 
 // Toggle this to use mock API or real API
-const USE_MOCK_API = false; // Changed to false to use real API
+const USE_MOCK_API = false; 
+
+// Function to store data locally in IndexedDB for offline use
+const saveToIndexedDB = async <T>(storeName: string, data: T, id?: string): Promise<void> => {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('RestaurantAppOfflineDB', 1);
+    
+    request.onupgradeneeded = (event) => {
+      const db = (event.target as IDBOpenDBRequest).result;
+      
+      // Create object stores if they don't exist
+      if (!db.objectStoreNames.contains('restaurants')) {
+        db.createObjectStore('restaurants', { keyPath: 'id' });
+      }
+      if (!db.objectStoreNames.contains('menuItems')) {
+        db.createObjectStore('menuItems', { keyPath: 'id' });
+      }
+      if (!db.objectStoreNames.contains('tables')) {
+        db.createObjectStore('tables', { keyPath: 'id' });
+      }
+      if (!db.objectStoreNames.contains('orders')) {
+        db.createObjectStore('orders', { keyPath: 'id' });
+      }
+      if (!db.objectStoreNames.contains('users')) {
+        db.createObjectStore('users', { keyPath: 'id' });
+      }
+      if (!db.objectStoreNames.contains('syncQueue')) {
+        db.createObjectStore('syncQueue', { keyPath: 'id', autoIncrement: true });
+      }
+    };
+    
+    request.onsuccess = (event) => {
+      const db = (event.target as IDBOpenDBRequest).result;
+      const transaction = db.transaction([storeName], 'readwrite');
+      const store = transaction.objectStore(storeName);
+      
+      let storeOperation;
+      if (id) {
+        // For updates to existing items
+        storeOperation = store.put({ ...data, id });
+      } else {
+        // For new items
+        storeOperation = store.put(data);
+      }
+      
+      storeOperation.onsuccess = () => resolve();
+      storeOperation.onerror = () => reject(new Error('Failed to save to IndexedDB'));
+      
+      transaction.oncomplete = () => db.close();
+    };
+    
+    request.onerror = () => reject(new Error('Failed to open IndexedDB'));
+  });
+};
+
+// Function to retrieve data from IndexedDB
+const getFromIndexedDB = async <T>(storeName: string, id?: string): Promise<T | T[]> => {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('RestaurantAppOfflineDB', 1);
+    
+    request.onsuccess = (event) => {
+      const db = (event.target as IDBOpenDBRequest).result;
+      const transaction = db.transaction([storeName], 'readonly');
+      const store = transaction.objectStore(storeName);
+      
+      let getOperation;
+      if (id) {
+        getOperation = store.get(id);
+        getOperation.onsuccess = () => resolve(getOperation.result as T);
+      } else {
+        getOperation = store.getAll();
+        getOperation.onsuccess = () => resolve(getOperation.result as T[]);
+      }
+      
+      getOperation.onerror = () => reject(new Error('Failed to get data from IndexedDB'));
+      
+      transaction.oncomplete = () => db.close();
+    };
+    
+    request.onerror = () => reject(new Error('Failed to open IndexedDB'));
+  });
+};
+
+// Function to add operation to sync queue
+const addToSyncQueue = async (operation: {
+  type: 'CREATE' | 'UPDATE' | 'DELETE';
+  endpoint: string;
+  method: string;
+  data?: any;
+  id?: string;
+}): Promise<void> => {
+  return saveToIndexedDB('syncQueue', {
+    ...operation,
+    timestamp: new Date().toISOString(),
+    synced: false
+  });
+};
+
+// Function to sync data with server when online
+const syncWithServer = async (): Promise<void> => {
+  if (isOfflineMode() || !navigator.onLine) return;
+  
+  try {
+    const syncQueue = await getFromIndexedDB<any[]>('syncQueue');
+    const unsyncedOperations = syncQueue.filter(op => !op.synced);
+    
+    for (const operation of unsyncedOperations) {
+      try {
+        await apiRequest(
+          operation.endpoint,
+          operation.method,
+          operation.data,
+          localStorage.getItem('token') || undefined
+        );
+        
+        // Mark as synced
+        await saveToIndexedDB('syncQueue', { ...operation, synced: true }, operation.id);
+      } catch (error) {
+        console.error('Failed to sync operation:', operation, error);
+      }
+    }
+  } catch (error) {
+    console.error('Error during sync:', error);
+  }
+};
 
 // Error handler helper
 const handleApiError = (error: any): never => {
@@ -39,6 +171,97 @@ const apiRequest = async <T>(
   data?: any,
   token?: string
 ): Promise<ApiResponse<T>> => {
+  // If offline mode is enabled, use IndexedDB
+  if (isOfflineMode() && !endpoint.includes('health-check')) {
+    try {
+      // Determine the store name based on the endpoint
+      let storeName = '';
+      let id = '';
+      
+      if (endpoint.includes('/auth')) {
+        storeName = 'users';
+      } else if (endpoint.includes('/menu')) {
+        storeName = 'menuItems';
+        // Extract ID from endpoint like /restaurants/123/menu/456
+        const parts = endpoint.split('/');
+        if (parts.length > 3) id = parts[parts.length - 1];
+      } else if (endpoint.includes('/tables')) {
+        storeName = 'tables';
+        const parts = endpoint.split('/');
+        if (parts.length > 3) id = parts[parts.length - 1];
+      } else if (endpoint.includes('/orders')) {
+        storeName = 'orders';
+        const parts = endpoint.split('/');
+        if (parts.length > 3) id = parts[parts.length - 1];
+      } else if (endpoint.includes('/restaurants')) {
+        storeName = 'restaurants';
+        const parts = endpoint.split('/');
+        if (parts.length > 1) id = parts[parts.length - 1];
+      }
+      
+      // Handle different HTTP methods
+      switch (method) {
+        case 'GET':
+          if (id) {
+            const item = await getFromIndexedDB<T>(storeName, id);
+            return { success: true, data: item };
+          } else {
+            const items = await getFromIndexedDB<T[]>(storeName);
+            return { success: true, data: items as unknown as T };
+          }
+          
+        case 'POST':
+          const newId = Math.random().toString(36).substring(2, 15);
+          await saveToIndexedDB(storeName, { ...data, id: newId });
+          
+          // Add to sync queue for when online
+          await addToSyncQueue({
+            type: 'CREATE',
+            endpoint,
+            method,
+            data
+          });
+          
+          return { success: true, data: { ...data, id: newId } as unknown as T };
+          
+        case 'PUT':
+        case 'PATCH':
+          await saveToIndexedDB(storeName, data, id);
+          
+          // Add to sync queue
+          await addToSyncQueue({
+            type: 'UPDATE',
+            endpoint,
+            method,
+            data,
+            id
+          });
+          
+          return { success: true, data: data as unknown as T };
+          
+        case 'DELETE':
+          // We don't actually delete in offline mode, just mark as deleted
+          await saveToIndexedDB(storeName, { id, _deleted: true }, id);
+          
+          // Add to sync queue
+          await addToSyncQueue({
+            type: 'DELETE',
+            endpoint,
+            method,
+            id
+          });
+          
+          return { success: true };
+          
+        default:
+          return { success: false, error: `Unsupported method ${method} in offline mode` };
+      }
+    } catch (error: any) {
+      console.error('Offline storage error:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
   // If mock API is enabled, use it instead of making real HTTP requests
   if (USE_MOCK_API) {
     // Split the endpoint to determine which mock API method to call
@@ -168,6 +391,23 @@ const apiRequest = async <T>(
   }
 };
 
+// Start listening for online/offline events to trigger sync
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => {
+    toast.info('Connection restored. Syncing data...');
+    syncWithServer();
+  });
+  
+  window.addEventListener('offline', () => {
+    toast.warning('You are offline. Changes will be synced when you reconnect.');
+  });
+  
+  // Attempt to sync when the app starts
+  if (navigator.onLine) {
+    syncWithServer();
+  }
+}
+
 // API Functions for authentication
 export const authApi = {
   login: async (email: string, password: string): Promise<ApiResponse<AuthResponse>> => {
@@ -289,7 +529,10 @@ export const api = {
   restaurants: restaurantApi,
   menu: menuApi,
   tables: tableApi,
-  orders: orderApi
+  orders: orderApi,
+  
+  // Add sync function to manually trigger synchronization
+  syncData: syncWithServer
 };
 
 export default api;

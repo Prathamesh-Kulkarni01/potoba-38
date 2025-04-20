@@ -5,14 +5,17 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Server, Save, Globe, Code, Webhook, Database, FileJson, RefreshCw } from 'lucide-react';
+import { Server, Save, Globe, Code, Webhook, Database, FileJson, RefreshCw, CloudOff, CloudSync, CheckCircle, XCircle } from 'lucide-react';
 import { ApiConnectionStatus } from '@/components/ApiConnectionStatus';
+import { Switch } from "@/components/ui/switch";
 
 const ApiSettings = () => {
   const [apiUrl, setApiUrl] = useState<string>(localStorage.getItem('apiBaseUrl') || 'http://localhost:5000/api');
   const [mongoUrl, setMongoUrl] = useState<string>(localStorage.getItem('mongoUrl') || 'mongodb://localhost:27017/restaurant-app');
   const [port, setPort] = useState<string>(localStorage.getItem('apiPort') || '5000');
   const [testStatus, setTestStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [offlineMode, setOfflineMode] = useState<boolean>(localStorage.getItem('offlineMode') === 'true');
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
   const { toast } = useToast();
 
   useEffect(() => {
@@ -30,6 +33,7 @@ const ApiSettings = () => {
       localStorage.setItem('apiBaseUrl', apiUrl);
       localStorage.setItem('mongoUrl', mongoUrl);
       localStorage.setItem('apiPort', port);
+      localStorage.setItem('offlineMode', offlineMode.toString());
       
       toast({
         description: "API settings saved successfully. Please restart your Node.js server with these settings.",
@@ -48,9 +52,11 @@ const ApiSettings = () => {
   const testConnection = async () => {
     setTestStatus('loading');
     try {
-      const healthCheckUrl = apiUrl.endsWith('/') 
-        ? `${apiUrl}health-check` 
-        : `${apiUrl}/health-check`;
+      const healthCheckUrl = offlineMode 
+        ? 'http://localhost:' + port + '/api/health-check'
+        : apiUrl.endsWith('/') 
+          ? `${apiUrl}health-check` 
+          : `${apiUrl}/health-check`;
       
       const response = await fetch(healthCheckUrl, { 
         method: 'GET',
@@ -61,14 +67,14 @@ const ApiSettings = () => {
         setTestStatus('success');
         localStorage.setItem('connectionTested', 'true');
         toast({
-          description: "Connection successful! Your Node.js/MongoDB backend is running.",
+          description: `Connection successful! Your ${offlineMode ? 'local' : 'remote'} MongoDB backend is running.`,
         });
       } else {
         setTestStatus('error');
         localStorage.setItem('connectionTested', 'false');
         toast({
           title: "Connection Error",
-          description: "Could not connect to the API server. Please check your server is running.",
+          description: `Could not connect to the ${offlineMode ? 'local' : 'remote'} API server. Please check your server is running.`,
           variant: "destructive",
         });
       }
@@ -77,9 +83,59 @@ const ApiSettings = () => {
       localStorage.setItem('connectionTested', 'false');
       toast({
         title: "Connection Error",
-        description: "Could not connect to the API server. Please check the URL and ensure your server is running.",
+        description: `Could not connect to the ${offlineMode ? 'local' : 'remote'} API server. Please check the URL and ensure your server is running.`,
         variant: "destructive",
       });
+    }
+  };
+
+  const toggleOfflineMode = (value: boolean) => {
+    setOfflineMode(value);
+    localStorage.setItem('offlineMode', value.toString());
+    
+    toast({
+      description: `Switched to ${value ? 'offline' : 'online'} mode. Settings will apply after saving.`,
+    });
+  };
+
+  const syncDatabases = async () => {
+    setSyncStatus('syncing');
+    try {
+      const syncEndpoint = apiUrl.endsWith('/') 
+        ? `${apiUrl}sync-databases` 
+        : `${apiUrl}/sync-databases`;
+      
+      const response = await fetch(syncEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          localMongoUrl: 'mongodb://localhost:27017/restaurant-app',
+          remoteMongoUrl: mongoUrl 
+        })
+      });
+      
+      if (response.ok) {
+        setSyncStatus('success');
+        toast({
+          description: "Databases synchronized successfully!",
+        });
+      } else {
+        setSyncStatus('error');
+        toast({
+          title: "Sync Error",
+          description: "Failed to synchronize databases. Check server logs for details.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      setSyncStatus('error');
+      toast({
+        title: "Sync Error",
+        description: "Failed to synchronize databases. Make sure both servers are running.",
+        variant: "destructive",
+      });
+    } finally {
+      setTimeout(() => setSyncStatus('idle'), 3000);
     }
   };
 
@@ -106,29 +162,60 @@ const ApiSettings = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="flex items-center justify-between space-x-2 p-4 border rounded-md bg-muted/20">
+                <div className="space-y-0.5">
+                  <div className="flex items-center">
+                    {offlineMode ? (
+                      <CloudOff className="mr-2 h-4 w-4 text-amber-500" />
+                    ) : (
+                      <Globe className="mr-2 h-4 w-4 text-green-500" />
+                    )}
+                    <Label htmlFor="offline-mode" className="font-medium">
+                      {offlineMode ? 'Offline Mode' : 'Online Mode'}
+                    </Label>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    {offlineMode 
+                      ? 'Working with local MongoDB database only' 
+                      : 'Connected to remote MongoDB database'}
+                  </p>
+                </div>
+                <Switch
+                  id="offline-mode"
+                  checked={offlineMode}
+                  onCheckedChange={toggleOfflineMode}
+                />
+              </div>
+
               <div className="space-y-2">
-                <Label htmlFor="api-url">API Base URL</Label>
+                <Label htmlFor="api-url">
+                  {offlineMode ? 'Local API Base URL' : 'Remote API Base URL'}
+                </Label>
                 <Input
                   id="api-url"
-                  placeholder="http://localhost:5000/api"
+                  placeholder={offlineMode ? "http://localhost:5000/api" : "https://your-remote-server.com/api"}
                   value={apiUrl}
                   onChange={(e) => setApiUrl(e.target.value)}
                 />
                 <p className="text-sm text-muted-foreground">
-                  This is the base URL of your Node/Express backend API
+                  {offlineMode 
+                    ? 'The base URL of your local Node/Express backend API'
+                    : 'The base URL of your remote Node/Express backend API'}
                 </p>
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="mongo-url">MongoDB Connection String</Label>
+                <Label htmlFor="mongo-url">
+                  {offlineMode ? 'Local MongoDB Connection String' : 'Remote MongoDB Connection String'}
+                </Label>
                 <Input
                   id="mongo-url"
-                  placeholder="mongodb://localhost:27017/restaurant-app"
+                  placeholder={offlineMode ? "mongodb://localhost:27017/restaurant-app" : "mongodb+srv://username:password@cluster.mongodb.net/restaurant-app"}
                   value={mongoUrl}
                   onChange={(e) => setMongoUrl(e.target.value)}
                 />
                 <p className="text-sm text-muted-foreground">
-                  The MongoDB connection URL for your Node.js server (this is stored locally for your reference)
+                  The MongoDB connection URL for your {offlineMode ? 'local' : 'remote'} Node.js server
                 </p>
               </div>
               
@@ -163,9 +250,58 @@ const ApiSettings = () => {
                   className="flex-1"
                   disabled={testStatus === 'loading'}
                 >
-                  <RefreshCw className="mr-2 h-4 w-4" />
+                  <RefreshCw className={`mr-2 h-4 w-4 ${testStatus === 'loading' ? 'animate-spin' : ''}`} />
                   Test Connection
                 </Button>
+              </div>
+
+              <div className="border-t pt-4 mt-4">
+                <h3 className="font-medium mb-2 flex items-center">
+                  <CloudSync className="mr-2 h-5 w-5" />
+                  Database Synchronization
+                </h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Synchronize data between your local and remote MongoDB databases
+                </p>
+                
+                <div className="bg-muted/30 p-4 rounded-md">
+                  <div className="mb-4">
+                    <p className="text-sm">
+                      When working offline, your data is stored locally. Use synchronization to push local changes to your remote database or pull remote changes to your local database.
+                    </p>
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <div>
+                      {syncStatus === 'syncing' && (
+                        <span className="flex items-center text-amber-500">
+                          <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                          Synchronizing...
+                        </span>
+                      )}
+                      {syncStatus === 'success' && (
+                        <span className="flex items-center text-green-500">
+                          <CheckCircle className="mr-2 h-4 w-4" />
+                          Sync completed
+                        </span>
+                      )}
+                      {syncStatus === 'error' && (
+                        <span className="flex items-center text-destructive">
+                          <XCircle className="mr-2 h-4 w-4" />
+                          Sync failed
+                        </span>
+                      )}
+                    </div>
+                    <Button 
+                      onClick={syncDatabases}
+                      variant="outline"
+                      disabled={syncStatus === 'syncing' || testStatus !== 'success'}
+                    >
+                      <CloudSync className="mr-2 h-4 w-4" />
+                      Sync Databases
+                    </Button>
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -191,8 +327,8 @@ const ApiSettings = () => {
                   <div className="p-4 border rounded-md">
                     <h3 className="font-medium mb-2">API Mode</h3>
                     <div className="flex items-center">
-                      <div className={`w-3 h-3 rounded-full mr-2 ${localStorage.getItem('connectionTested') === 'true' ? 'bg-green-500' : 'bg-amber-500'}`}></div>
-                      <span>{localStorage.getItem('connectionTested') === 'true' ? 'Live API' : 'Mock Data'}</span>
+                      <div className={`w-3 h-3 rounded-full mr-2 ${offlineMode ? 'bg-amber-500' : localStorage.getItem('connectionTested') === 'true' ? 'bg-green-500' : 'bg-gray-500'}`}></div>
+                      <span>{offlineMode ? 'Offline Mode' : localStorage.getItem('connectionTested') === 'true' ? 'Online Mode' : 'Not Connected'}</span>
                     </div>
                   </div>
                 </div>
