@@ -11,12 +11,14 @@ type ThemeContextType = {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  // Initialize with a default theme to avoid undefined
   const [theme, setTheme] = useState<Theme>('light');
 
   useEffect(() => {
     // Check if user has a saved theme preference
     const savedTheme = localStorage.getItem('theme') as Theme;
-    if (savedTheme) {
+    
+    if (savedTheme && (savedTheme === 'light' || savedTheme === 'dark')) {
       setTheme(savedTheme);
     } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
       // If no saved preference, use system preference
@@ -31,11 +33,25 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     } else {
       document.documentElement.classList.remove('dark');
     }
-    localStorage.setItem('theme', theme);
+    
+    // Only save valid theme values
+    if (theme === 'light' || theme === 'dark') {
+      localStorage.setItem('theme', theme);
+    }
   }, [theme]);
 
+  // Ensure we always pass a valid theme value to consumers
+  const contextValue = {
+    theme,
+    setTheme: (newTheme: Theme) => {
+      if (newTheme === 'light' || newTheme === 'dark') {
+        setTheme(newTheme);
+      }
+    }
+  };
+
   return (
-    <ThemeContext.Provider value={{ theme, setTheme }}>
+    <ThemeContext.Provider value={contextValue}>
       {children}
     </ThemeContext.Provider>
   );
