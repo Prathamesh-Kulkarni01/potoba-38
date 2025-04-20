@@ -21,7 +21,7 @@ const ScanLanding = () => {
           <div className="mb-4 bg-white/20 p-3 rounded-full inline-block">
             <QrCode className="h-12 w-12 mx-auto" />
           </div>
-          <h1 className="text-3xl font-bold">TableMaster</h1>
+          <h1 className="text-3xl font-bold">Potoba</h1>
           <p className="mt-2 text-white/80">The Ultimate Digital Dining Experience</p>
         </div>
         
@@ -84,7 +84,7 @@ const ScanLanding = () => {
       </div>
       
       <p className="mt-8 text-sm text-center text-muted-foreground">
-        Powered by TableMaster - The Digital Menu Solution
+        Powered by Potoba - The Digital Menu Solution
       </p>
     </div>
   );

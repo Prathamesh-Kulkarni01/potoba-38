@@ -57,7 +57,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
   const currentRestaurant = user ? getCurrentRestaurant() : undefined;
 
   const isActive = (path: string) => {
-    return location.pathname === path;
+    return location.pathname.startsWith(path);
   };
 
   const handleLogout = () => {
@@ -200,7 +200,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
                   </span>
                 </div>
                 <h2 className="text-lg font-bold text-sidebar-foreground">
-                  TableMaster
+                  Potoba
                 </h2>
               </div>
               <ThemeToggle />
@@ -359,7 +359,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
         <SidebarInset>
           <div className="container mx-auto p-4 relative">{children}</div>
         </SidebarInset>
-        <div className="fixed bottom-0 left-0 right-0 md:hidden  bg-restaurant-background bg-pattern text-white z-30">
+        <div className="fixed bottom-0 left-0 right-0 md:hidden  bg-restaurant-primary shadow-md text-white z-30">
           <div className="flex justify-around items-center p-3">
             {[
               ...filteredMainMenuItems,

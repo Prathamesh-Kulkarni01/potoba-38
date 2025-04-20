@@ -26,7 +26,7 @@ export default function WhatsAppBot() {
   const [isAutoReply, setIsAutoReply] = useState(true);
   
   const mockConversation = [
-    { id: 1, sender: 'bot', message: 'Hello! Welcome to TableMaster Restaurant. How can I help you today?', time: '10:25 AM' },
+    { id: 1, sender: 'bot', message: 'Hello! Welcome to Potoba Restaurant. How can I help you today?', time: '10:25 AM' },
     { id: 2, sender: 'user', message: 'I want to make a reservation for tonight', time: '10:26 AM' },
     { id: 3, sender: 'bot', message: 'Great! I\'d be happy to help you with that. For how many people would you like to make the reservation?', time: '10:26 AM' },
     { id: 4, sender: 'user', message: '4 people', time: '10:27 AM' },

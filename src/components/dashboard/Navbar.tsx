@@ -48,7 +48,7 @@ const Navbar = ({ currentTenant }: NavbarProps) => {
     <nav className="bg-restaurant-primary text-white p-4 shadow-md">
       <div className="container mx-auto flex justify-between items-center">
         <div className="flex items-center space-x-2">
-          <Link to="/" className="text-xl font-bold">TableMaster</Link>
+          <Link to="/" className="text-xl font-bold">Potoba</Link>
           {user && <RestaurantSelector />}
         </div>
 

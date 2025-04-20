@@ -72,7 +72,7 @@ const Hero = () => {
             <div className="bg-gradient-to-r from-food-primary to-food-accent text-white p-3 font-semibold flex items-center justify-between">
               <div className="flex items-center">
                 <Sparkles className="h-4 w-4 mr-2" />
-                <span>TableMaster Dashboard</span>
+                <span>Potoba Dashboard</span>
               </div>
               <div className="flex space-x-2">
                 <div className="w-2 h-2 rounded-full bg-white/30"></div>
