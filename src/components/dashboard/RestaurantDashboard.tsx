@@ -54,16 +54,16 @@ const RestaurantDashboard = () => {
         const tablesResponse = await api.table.get(restaurantId);
         const ordersResponse = await api.order.get(restaurantId);
         
-        if (menuResponse.success) {
-          setMenuItems(menuResponse.data || []);
+        if (menuResponse) {
+          setMenuItems(menuResponse || []);
         }
         
-        if (tablesResponse.success) {
-          setTables(tablesResponse.data || []);
+        if (tablesResponse) {
+          setTables(tablesResponse || []);
         }
         
-        if (ordersResponse.success) {
-          setOrders(ordersResponse.data || []);
+        if (ordersResponse) {
+          setOrders(ordersResponse || []);
         }
       } catch (error) {
         console.error('Error loading restaurant data:', error);
@@ -101,16 +101,16 @@ const RestaurantDashboard = () => {
       const tablesResponse = await api.table.get(restaurantId);
       const ordersResponse = await api.order.get(restaurantId);
       
-      if (menuResponse.success) {
-        setMenuItems(menuResponse.data || []);
+      if (menuResponse) {
+        setMenuItems(menuResponse || []);
       }
       
-      if (tablesResponse.success) {
-        setTables(tablesResponse.data || []);
+      if (tablesResponse) {
+        setTables(tablesResponse || []);
       }
       
-      if (ordersResponse.success) {
-        setOrders(ordersResponse.data || []);
+      if (ordersResponse) {
+        setOrders(ordersResponse || []);
       }
     } catch (error) {
       console.error('Error creating demo data:', error);
