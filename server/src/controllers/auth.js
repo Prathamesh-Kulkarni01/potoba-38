@@ -1,11 +1,11 @@
-require('dotenv').config({ path: `${__dirname}/../.env` }); // Explicitly specify the .env file path
+require('dotenv').config({ path: `${__dirname}/../.env` }); 
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
 // Generate JWT
 const generateToken = (userId) => {
-  const secretKey = process.env.JWT_SECRET || 'your-secret-key-here';
-  console.log('JWT Secret (Generation):', secretKey); // Log the secret key for debugging
+  const secretKey = process.env.JWT_SECRET ;
+  console.log('JWT Secret (Generation):', secretKey); 
   const token = jwt.sign({ userId }, secretKey, {
     expiresIn: '30d'
   });

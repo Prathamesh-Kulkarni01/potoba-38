@@ -10,10 +10,10 @@ export default defineConfig(({ mode }) => ({
     port: parseInt(process.env.VITE_PORT || "8080", 10),
     proxy: {
       '/api': {
-        target: 'https://potoba-38.onrender.com',
+        target: 'http://localhost:5000',
         changeOrigin: true,
         secure: false,
-        rewrite: (path) => path.replace(/^\/api/, ''),
+        // rewrite: (path) => path.replace(/^\/api/, ''),
            
         configure: (proxy, options) => {
            proxy.on('error', (err, _req, _res) => {

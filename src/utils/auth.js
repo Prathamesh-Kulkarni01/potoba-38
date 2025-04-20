@@ -6,17 +6,17 @@ const API_URL = '/api';
 
 // Store token in localStorage
 export const storeToken = (token) => {
-  localStorage.setItem('authToken', token);
+  localStorage.setItem('token', token);
 };
 
 // Get token from localStorage
 export const getToken = () => {
-  return localStorage.getItem('authToken');
+  return localStorage.getItem('token');
 };
 
 // Remove token from localStorage
 export const removeToken = () => {
-  localStorage.removeItem('authToken');
+  localStorage.removeItem('token');
 };
 
 // Check if user is authenticated

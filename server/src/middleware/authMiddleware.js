@@ -1,4 +1,4 @@
-require('dotenv').config({ path: `${__dirname}/../.env` }); // Explicitly specify the .env file path
+// require('dotenv').config({ path: `${__dirname}/../.env` }); // Explicitly specify the .env file path - moved to application entry point
 
 
 const jwt = require('jsonwebtoken');
@@ -28,14 +28,14 @@ exports.authenticate = async (req, res, next) => {
 
     // Verify token
     const secretKey = process.env.JWT_SECRET;
-    console.log('JWT Secret (Verification):', secretKey); // Log the secret key for debugging
+    console.log('JWT Secret (Verification):', secretKey); // Log the secret key for debugging - FOR DEBUGGING ONLY
 
     // try {
-      // const decoded = jwt.verify(token, secretKey);
-      // console.log('Decoded Token Payload:', decoded); // Log the decoded payload for debugging
+      const decoded = jwt.verify(token, secretKey);
+      console.log('Decoded Token Payload:', decoded); // Log the decoded payload for debugging
 
       // Find user by id and get fresh data (including any role changes)
-      const user = await User.findById('67fbf88fabf6dccc347eec28');
+      const user = await User.findById(decoded.userId); // or decoded._id, depending on your payload
       
       if (!user) {
         console.error('Auth middleware error: User not found');
@@ -45,14 +45,10 @@ exports.authenticate = async (req, res, next) => {
       // Add user to request object
       req.user = user;
       next();
-    // } catch (verifyError) {
-    //   console.error('Auth middleware error: Invalid token signature or payload');
-    //   console.error('Token:', token); // Log the token for debugging
-    //   console.error('Expected JWT Secret:', secretKey); // Log the expected secret key
-    //   console.error('Environment:', process.env.NODE_ENV || 'development'); // Log the current environment
-    //   console.error('Verification Error Message:', verifyError.message); // Log the specific error message
-    //   return res.status(401).json({ message: 'Token is not valid' });
-    // }
+  //   } catch (verifyError) {
+  //     console.error('Auth middleware error: Invalid token signature or payload', verifyError);
+  //     return res.status(401).json({ message: 'Token is not valid' });
+  //   }
   // } catch (error) {
   //   console.error('Auth middleware error:', error.message);
   //   res.status(500).json({ message: 'Internal server error' });
