@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Navigate, Outlet, useLocation, Route, Routes } from 'react-router-dom';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import RestaurantDashboard from '../../components/dashboard/RestaurantDashboard';
-import TableManagement from '../../components/table/TableManagement';
+import TableManagement from '../table/TableManagement';
 import MenuManagement from '../../components/menu/MenuManagement';
 import OrderTable from '../../components/order/OrderTable';
 import MarketingCampaigns from '../../components/marketing/MarketingCampaigns';
@@ -21,7 +21,6 @@ const Dashboard = () => {
   const { user, isLoading, updateUser } = useAuth();
   const [showFoodIcon, setShowFoodIcon] = useState(false);
 
-  // Fetch user and update auth context on mount
   useEffect(() => {
     const fetchUser = async () => {
       try {
@@ -36,9 +35,7 @@ const Dashboard = () => {
   }, [updateUser]);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setShowFoodIcon(true);
-    }, 1000);
+    const timer = setTimeout(() => setShowFoodIcon(true), 1000);
     return () => clearTimeout(timer);
   }, []);
 
@@ -48,30 +45,25 @@ const Dashboard = () => {
     exit: { opacity: 0, y: -20 }
   };
 
-  // Route configuration using a Map for efficient lookups
-  const routeMap = new Map([
-    ['/dashboard', <RestaurantDashboard />],
-    ['/dashboard/tables', <TableManagement />],
-    ['/dashboard/menu', <MenuManagement />],
-    ['/dashboard/orders', <OrderTable />],
-    ['/dashboard/marketing/campaigns', <MarketingCampaigns />],
-    ['/dashboard/marketing/whatsapp', <WhatsAppBot />],
-    ['/dashboard/marketing/ai-assistant', <AiAssistant />],
-    ['/dashboard/loyalty/rewards', <RewardsManagement />],
-    ['/dashboard/loyalty/promotions', <PromotionsManagement />],
-    ['/dashboard/loyalty/members', <MembersManagement />],
-    ['/dashboard/menu/add', <AddMenuItem />],
-    ['/dashboard/menu/edit', <AddMenuItem />]
-  ]);
+  const dashboardRoutes = {
+    '/dashboard': <RestaurantDashboard />,
+    '/dashboard/tables': <TableManagement />,
+    '/dashboard/menu': <MenuManagement />,
+    '/dashboard/orders': <OrderTable />,
+    '/dashboard/marketing/campaigns': <MarketingCampaigns />,
+    '/dashboard/marketing/whatsapp': <WhatsAppBot />,
+    '/dashboard/marketing/ai-assistant': <AiAssistant />,
+    '/dashboard/loyalty/rewards': <RewardsManagement />,
+    '/dashboard/loyalty/promotions': <PromotionsManagement />,
+    '/dashboard/loyalty/members': <MembersManagement />,
+    '/dashboard/menu/add': <AddMenuItem />
+  };
 
-  // Determine which component to render based on the current route
   const renderDashboardContent = () => {
-    for (const [path, component] of routeMap) {
-      if (location.pathname.startsWith(path)) {
-        return component;
-      }
+    if (location.pathname.startsWith('/dashboard/menu/edit')) {
+      return <AddMenuItem />;
     }
-    return <Outlet />;
+    return dashboardRoutes[location.pathname] || <Outlet />;
   };
 
   if (isLoading) {
@@ -85,17 +77,17 @@ const Dashboard = () => {
     );
   }
 
-  if (!user && !isLoading) {
+  if (!user) {
     return <Navigate to="/login" replace />;
   }
 
-  if (!isLoading&&user.restaurants?.length === 0) {
+  if (user.restaurants?.length === 0) {
     return <Navigate to="/onboarding" replace />;
   }
 
   return (
     <DashboardShell>
-      <motion.main 
+      <motion.main
         className="w-full"
         initial="initial"
         animate="animate"
@@ -105,7 +97,6 @@ const Dashboard = () => {
       >
         {renderDashboardContent()}
       </motion.main>
-      
       {/* Decorative food illustrations */}
       <div className="fixed -bottom-16 -left-16 w-64 h-64 opacity-10 pointer-events-none">
         <img src="/images/food-doodle-1.svg" alt="" className="w-full h-full animate-spin-slow" />
