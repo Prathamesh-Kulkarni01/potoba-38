@@ -1,0 +1,13 @@
+# netlify.toml
+
+[[redirects]]
+  from = "/api/*"
+  to = "https://potoba-38.onrender.com/api/:splat"
+  status = 200
+  force = true
+
+# Handle React SPA routing
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
