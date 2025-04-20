@@ -18,15 +18,15 @@ import AddMenuItem from '../menu/AddMenuItem';
 
 const Dashboard = () => {
   const location = useLocation();
-  const { user, isLoading, updateUser } = useAuth(); // Added updateUser from context
+  const { user, isLoading, updateUser } = useAuth();
   const [showFoodIcon, setShowFoodIcon] = useState(false);
 
   // Fetch user and update auth context on mount
   useEffect(() => {
     const fetchUser = async () => {
       try {
-        const userData = await authService.getCurrentUser(); // Replace with actual API endpoint
-        updateUser(userData); // Update user in auth context
+        const userData = await authService.getCurrentUser();
+        updateUser(userData);
       } catch (error) {
         console.error('Failed to fetch user:', error);
       }
@@ -35,68 +35,45 @@ const Dashboard = () => {
     fetchUser();
   }, [updateUser]);
 
-  // Always initialize hooks before any conditional returns
   useEffect(() => {
     const timer = setTimeout(() => {
       setShowFoodIcon(true);
     }, 1000);
-    
     return () => clearTimeout(timer);
   }, []);
-  
-  // Animation variants
+
   const pageVariants = {
     initial: { opacity: 0, y: 20 },
     animate: { opacity: 1, y: 0 },
     exit: { opacity: 0, y: -20 }
   };
-  
+
+  // Route configuration using a Map for efficient lookups
+  const routeMap = new Map([
+    ['/dashboard', <RestaurantDashboard />],
+    ['/dashboard/tables', <TableManagement />],
+    ['/dashboard/menu', <MenuManagement />],
+    ['/dashboard/orders', <OrderTable />],
+    ['/dashboard/marketing/campaigns', <MarketingCampaigns />],
+    ['/dashboard/marketing/whatsapp', <WhatsAppBot />],
+    ['/dashboard/marketing/ai-assistant', <AiAssistant />],
+    ['/dashboard/loyalty/rewards', <RewardsManagement />],
+    ['/dashboard/loyalty/promotions', <PromotionsManagement />],
+    ['/dashboard/loyalty/members', <MembersManagement />],
+    ['/dashboard/menu/add', <AddMenuItem />],
+    ['/dashboard/menu/edit', <AddMenuItem />]
+  ]);
+
   // Determine which component to render based on the current route
   const renderDashboardContent = () => {
-    const path = location.pathname;
-    
-    // Main navigation routes
-    if (path === '/dashboard') {
-      return <RestaurantDashboard />;
-    } else if (path === '/dashboard/tables') {
-      return <TableManagement />;
-    } else if (path === '/dashboard/menu') {
-      return <MenuManagement />;
-    } else if (path === '/dashboard/orders') {
-      return <OrderTable />;
+    for (const [path, component] of routeMap) {
+      if (location.pathname.startsWith(path)) {
+        return component;
+      }
     }
-    
-    // Marketing routes
-    else if (path === '/dashboard/marketing/campaigns') {
-      return <MarketingCampaigns />;
-    } else if (path === '/dashboard/marketing/whatsapp') {
-      return <WhatsAppBot />;
-    } else if (path === '/dashboard/marketing/ai-assistant') {
-      return <AiAssistant />;
-    }
-    
-    // Loyalty routes
-    else if (path === '/dashboard/loyalty/rewards') {
-      return <RewardsManagement />;
-    } else if (path === '/dashboard/loyalty/promotions') {
-      return <PromotionsManagement />;
-    } else if (path === '/dashboard/loyalty/members') {
-      return <MembersManagement />;
-    }
-
-    // Menu sub-routes
-    else if (path === '/dashboard/menu/add') {
-      return <AddMenuItem />;
-    }
-    else if (path.startsWith('/dashboard/menu/edit')) {
-      return <AddMenuItem />;
-    }
-    
-    // Render the Outlet for any other sub-routes
     return <Outlet />;
   };
-  
-  // If still loading, show a simple loading state
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-restaurant-background flex items-center justify-center">
@@ -107,17 +84,15 @@ const Dashboard = () => {
       </div>
     );
   }
-  
-  // Redirect to login if not authenticated
-  if (!user) {
+
+  if (!user && !isLoading) {
     return <Navigate to="/login" replace />;
   }
-  
-  // Redirect to onboarding if user has no restaurants
-  if (user.restaurants?.length === 0) {
+
+  if (!isLoading&&user.restaurants?.length === 0) {
     return <Navigate to="/onboarding" replace />;
   }
-  
+
   return (
     <DashboardShell>
       <motion.main 
