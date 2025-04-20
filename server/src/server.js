@@ -28,6 +28,7 @@ const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:8080',
   'https://potoba-pos.netlify.app',
+  'https://potoba-38.onrender.com',
   process.env.CORS_ORIGIN, // e.g., https://your-prod-domain.com
 ].filter(Boolean); // Remove undefined/null values
 
