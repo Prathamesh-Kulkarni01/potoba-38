@@ -7,19 +7,20 @@ const {
   updateMenuItem,
   deleteMenuItem
 } = require('../controllers/menu');
+const { authenticate } = require('../middleware/authMiddleware');
 
 const router = express.Router({ mergeParams: true });
 
-const { protect, authorize } = require('../middleware/auth');
+
 
 // All menu routes require authentication
 router.route('/')
-  .get(protect, getMenuItems)
-  .post(protect, createMenuItem);
+  .get(authenticate, getMenuItems)
+  .post(authenticate, createMenuItem);
 
 router.route('/:id')
-  .get(protect, getMenuItem)
-  .put(protect, updateMenuItem)
-  .delete(protect, deleteMenuItem);
+  .get(authenticate, getMenuItem)
+  .put(authenticate, updateMenuItem)
+  .delete(authenticate, deleteMenuItem);
 
 module.exports = router;

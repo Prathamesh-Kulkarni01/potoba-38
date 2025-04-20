@@ -1,4 +1,3 @@
-
 const Order = require('../models/Order');
 const Restaurant = require('../models/Restaurant');
 const Table = require('../models/Table');
@@ -18,7 +17,7 @@ exports.getOrders = async (req, res) => {
     }
 
     // Make sure user owns the restaurant
-    if (restaurant.user.toString() !== req.user.id) {
+    if (restaurant.owner.toString() !== req.user._id.toString()) {
       return res.status(401).json({
         success: false,
         error: 'Not authorized to access this restaurant'
@@ -56,7 +55,7 @@ exports.getOrder = async (req, res) => {
     const restaurant = await Restaurant.findById(order.restaurant);
 
     // Make sure user owns the restaurant
-    if (restaurant.user.toString() !== req.user.id) {
+    if (restaurant.owner.toString() !== req.user._id.toString()) {
       return res.status(401).json({
         success: false,
         error: 'Not authorized to access this order'
@@ -102,7 +101,7 @@ exports.createOrder = async (req, res) => {
     }
 
     // Make sure user owns the restaurant or it's a customer order
-    if (req.user && restaurant.user.toString() !== req.user.id) {
+    if (req.user && restaurant.owner.toString() !== req.user._id.toString()) {
       return res.status(401).json({
         success: false,
         error: 'Not authorized to create orders for this restaurant'
@@ -151,7 +150,7 @@ exports.updateOrder = async (req, res) => {
     }
 
     // Make sure user owns the restaurant
-    if (restaurant.user.toString() !== req.user.id) {
+    if (restaurant.owner.toString() !== req.user._id.toString()) {
       return res.status(401).json({
         success: false,
         error: 'Not authorized to update orders for this restaurant'
@@ -200,7 +199,7 @@ exports.updateOrderStatus = async (req, res) => {
     }
 
     // Make sure user owns the restaurant
-    if (restaurant.user.toString() !== req.user.id) {
+    if (restaurant.owner.toString() !== req.user._id.toString()) {
       return res.status(401).json({
         success: false,
         error: 'Not authorized to update orders for this restaurant'
@@ -257,7 +256,7 @@ exports.deleteOrder = async (req, res) => {
     }
 
     // Make sure user owns the restaurant
-    if (restaurant.user.toString() !== req.user.id) {
+    if (restaurant.owner.toString() !== req.user._id.toString()) {
       return res.status(401).json({
         success: false,
         error: 'Not authorized to delete orders from this restaurant'

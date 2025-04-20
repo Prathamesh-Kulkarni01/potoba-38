@@ -1,4 +1,3 @@
-
 const MenuItem = require('../models/MenuItem');
 const Restaurant = require('../models/Restaurant');
 
@@ -17,7 +16,7 @@ exports.getMenuItems = async (req, res) => {
     }
 
     // Make sure user owns the restaurant
-    if (restaurant.user.toString() !== req.user.id) {
+    if (restaurant.owner.toString() !== req.user._id.toString()) {
       return res.status(401).json({
         success: false,
         error: 'Not authorized to access this restaurant'
@@ -55,7 +54,7 @@ exports.getMenuItem = async (req, res) => {
     const restaurant = await Restaurant.findById(menuItem.restaurant);
 
     // Make sure user owns the restaurant
-    if (restaurant.user.toString() !== req.user.id) {
+    if (restaurant.owner.toString() !== req.user._id.toString()) {
       return res.status(401).json({
         success: false,
         error: 'Not authorized to access this menu item'
@@ -92,7 +91,7 @@ exports.createMenuItem = async (req, res) => {
     }
 
     // Make sure user owns the restaurant
-    if (restaurant.user.toString() !== req.user.id) {
+    if (restaurant.owner.toString() !== req.user._id.toString()) {
       return res.status(401).json({
         success: false,
         error: 'Not authorized to add menu items to this restaurant'
@@ -138,7 +137,7 @@ exports.updateMenuItem = async (req, res) => {
     }
 
     // Make sure user owns the restaurant
-    if (restaurant.user.toString() !== req.user.id) {
+    if (restaurant.owner.toString() !== req.user._id.toString()) {
       return res.status(401).json({
         success: false,
         error: 'Not authorized to update menu items for this restaurant'
@@ -187,7 +186,7 @@ exports.deleteMenuItem = async (req, res) => {
     }
 
     // Make sure user owns the restaurant
-    if (restaurant.user.toString() !== req.user.id) {
+    if (restaurant.owner.toString() !== req.user._id.toString()) {
       return res.status(401).json({
         success: false,
         error: 'Not authorized to delete menu items from this restaurant'
