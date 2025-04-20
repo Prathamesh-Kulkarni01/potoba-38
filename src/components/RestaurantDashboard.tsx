@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import React from 'react';
 import { Link } from 'react-router-dom';
 import { 
   Users, 
@@ -9,6 +9,7 @@ import {
   ArrowUpRight
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 
 // Sample data - in a real application, this would come from an API
 const dashboardData = {
