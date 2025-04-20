@@ -1,7 +1,8 @@
 
 import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import CustomerMenu from '../components/CustomerMenu';
+import { Loader2 } from 'lucide-react';
 
 // Sample data - in a real application, this would come from an API
 const tableData = [
@@ -18,6 +19,7 @@ const restaurantData = [
 
 const CustomerOrder = () => {
   const { tableId } = useParams<{ tableId: string }>();
+  const navigate = useNavigate();
   const [table, setTable] = useState<{ id: number; number: number; restaurantId: number } | null>(null);
   const [restaurant, setRestaurant] = useState<{ id: number; name: string; address: string } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -66,7 +68,7 @@ const CustomerOrder = () => {
     return (
       <div className="min-h-screen flex items-center justify-center bg-restaurant-background">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-restaurant-primary mx-auto"></div>
+          <Loader2 className="h-12 w-12 animate-spin text-restaurant-primary mx-auto" />
           <p className="mt-4 text-muted-foreground">Loading menu...</p>
         </div>
       </div>

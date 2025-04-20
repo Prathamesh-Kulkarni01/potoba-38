@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
@@ -193,10 +192,15 @@ const TableManagement = () => {
           </DialogHeader>
           <div className="flex flex-col items-center justify-center py-4">
             {selectedTableId && (
-              <QRCodeGenerator
-                value={`${window.location.origin}/order/${selectedTableId}`}
-                size={200}
-              />
+              <div className="space-y-4">
+                <QRCodeGenerator
+                  value={`${window.location.origin}/order/${selectedTableId}`}
+                  size={200}
+                />
+                <p className="text-sm text-center text-muted-foreground">
+                  Direct order link: {window.location.origin}/order/{selectedTableId}
+                </p>
+              </div>
             )}
             <p className="mt-4 text-sm text-center">
               Table {selectedTable?.number} - Capacity: {selectedTable?.capacity}
@@ -206,7 +210,14 @@ const TableManagement = () => {
             <Button variant="outline" onClick={() => setQrDialogOpen(false)}>
               Close
             </Button>
-            <Button>Download QR Code</Button>
+            <Button 
+              onClick={() => {
+                // In a real app, this would download the QR code
+                alert('QR code download functionality would be implemented here');
+              }}
+            >
+              Download QR Code
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

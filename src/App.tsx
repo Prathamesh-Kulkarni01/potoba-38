@@ -9,6 +9,7 @@ import Index from "./pages/Index";
 import Dashboard from "./pages/Dashboard";
 import TableDetail from "./pages/TableDetail";
 import CustomerOrder from "./pages/CustomerOrder";
+import ScanLanding from "./pages/ScanLanding";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -26,6 +27,7 @@ const App = () => (
           <Route path="/dashboard/menu" element={<Dashboard />} />
           <Route path="/dashboard/orders" element={<Dashboard />} />
           <Route path="/dashboard/tables/:tableId" element={<TableDetail />} />
+          <Route path="/scan" element={<ScanLanding />} />
           <Route path="/order/:tableId" element={<CustomerOrder />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
