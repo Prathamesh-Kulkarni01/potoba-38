@@ -17,7 +17,7 @@ import { DashboardShell } from '@/components/DashboardShell';
 
 const Dashboard = () => {
   const location = useLocation();
-  const { user, loading } = useAuth();
+  const { user, isLoading } = useAuth();
   const [showFoodIcon, setShowFoodIcon] = useState(false);
   
   // Always initialize hooks before any conditional returns
@@ -74,7 +74,7 @@ const Dashboard = () => {
   };
   
   // If still loading, show a simple loading state
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-restaurant-background flex items-center justify-center">
         <div className="text-center">

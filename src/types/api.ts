@@ -1,107 +1,61 @@
 
-// API Response types
+import { Restaurant } from '@/types/auth';
+
 export interface ApiResponse<T> {
   success: boolean;
   data?: T;
   error?: string;
 }
 
-// Auth types
-export interface User {
-  id: string;
-  name: string;
-  email: string;
-  restaurants: Restaurant[];
-}
-
-export interface AuthResponse {
-  user: User;
-  token: string;
-}
-
-// Restaurant types
-export interface Restaurant {
-  id: string;
-  name: string;
-  logo?: string;
-  description?: string;
-  address?: string;
-  phone?: string;
-  cuisine?: string;
-  tables?: number;
-}
-
-export interface CreateRestaurantDto {
-  name: string;
-  logo?: string;
-  description?: string;
-  address?: string;
-  phone?: string;
-  cuisine?: string;
-  tables?: number;
-}
-
-// Menu types
 export interface MenuItem {
   id: string;
+  _id?: string;
   name: string;
   description: string;
   price: number;
   category: string;
   image?: string;
+  available: boolean;
+  preparationTime?: number;
   restaurantId: string;
 }
 
-export interface CreateMenuItemDto {
-  name: string;
-  description: string;
-  price: number;
-  category: string;
-  image?: string;
-}
-
-// Table types
 export interface Table {
   id: string;
+  _id?: string;
+  name: string;
   number: number;
   capacity: number;
-  status: 'available' | 'occupied' | 'reserved';
+  status: 'available' | 'occupied' | 'reserved' | 'maintenance';
   restaurantId: string;
   qrCode?: string;
 }
 
-export interface CreateTableDto {
-  number: number;
-  capacity: number;
-  status?: 'available' | 'occupied' | 'reserved';
+export interface Order {
+  id: string;
+  _id?: string;
+  tableId: string;
+  table?: Table;
+  items: OrderItem[];
+  status: 'pending' | 'preparing' | 'ready' | 'served' | 'paid' | 'cancelled';
+  total: number;
+  createdAt: string;
+  updatedAt: string;
+  restaurantId: string;
+  customer?: {
+    name: string;
+    email?: string;
+    phone?: string;
+  };
 }
 
-// Order types
 export interface OrderItem {
+  id: string;
   menuItemId: string;
   name: string;
   price: number;
   quantity: number;
+  notes?: string;
 }
 
-export interface Order {
-  id: string;
-  tableId: string;
-  status: 'new' | 'in-progress' | 'completed' | 'cancelled';
-  items: OrderItem[];
-  total: number;
-  createdAt: string;
-  completedAt?: string;
-  restaurantId: string;
-  customerName?: string;
-}
-
-export interface CreateOrderDto {
-  items: OrderItem[];
-  total: number;
-  customerName?: string;
-}
-
-export interface UpdateOrderStatusDto {
-  status: 'new' | 'in-progress' | 'completed' | 'cancelled';
-}
+export { Restaurant };

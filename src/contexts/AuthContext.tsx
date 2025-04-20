@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/components/ui/use-toast';
 import { Restaurant } from '@/types/auth';
 
@@ -30,12 +29,16 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+interface AuthProviderProps {
+  children: ReactNode;
+  navigate: (path: string) => void;
+}
+
+export const AuthProvider: React.FC<AuthProviderProps> = ({ children, navigate }) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [currentRestaurantId, setCurrentRestaurantId] = useState<string | null>(null);
-  const navigate = useNavigate();
   const { toast } = useToast();
 
   useEffect(() => {

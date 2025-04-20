@@ -4,7 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useNavigate } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ThemeProvider } from "./components/theme/ThemeProvider";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -32,15 +32,25 @@ const queryClient = new QueryClient({
   },
 });
 
+// Create a wrapper component to provide navigate function
+const AuthProviderWithRouter: React.FC<{children: React.ReactNode}> = ({ children }) => {
+  const navigate = useNavigate();
+  
+  return (
+    <AuthProvider navigate={navigate}>
+      {children}
+    </AuthProvider>
+  );
+};
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider>
-      <AuthProvider>
+      <BrowserRouter>
         <TooltipProvider>
           <Toaster />
           <Sonner />
-          <BrowserRouter>
+          <AuthProviderWithRouter>
             <div className="app-container theme-transition">
               <Routes>
                 <Route path="/" element={<Index />} />
@@ -174,9 +184,9 @@ const App = () => (
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </div>
-          </BrowserRouter>
+          </AuthProviderWithRouter>
         </TooltipProvider>
-      </AuthProvider>
+      </BrowserRouter>
     </ThemeProvider>
   </QueryClientProvider>
 );
