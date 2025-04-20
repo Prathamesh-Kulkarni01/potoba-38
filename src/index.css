@@ -1,5 +1,5 @@
 
-@import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -16,30 +16,30 @@
     --popover: 0 0% 100%;
     --popover-foreground: 219 46% 20%;
 
-    --primary: 219 46% 20%;
-    --primary-foreground: 47 38% 98%;
+    --primary: 16 100% 60%; /* Bright orange */
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 24 100% 62%;
-    --secondary-foreground: 219 46% 20%;
+    --secondary: 173 63% 45%; /* Teal */
+    --secondary-foreground: 0 0% 100%;
 
     --muted: 215 25% 94%;
     --muted-foreground: 215 16% 46%;
 
-    --accent: 173 54% 39%;
-    --accent-foreground: 47 38% 98%;
+    --accent: 35 100% 55%; /* Warm orange */
+    --accent-foreground: 0 0% 100%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 210 40% 98%;
 
     --border: 214 32% 91%;
     --input: 214 32% 91%;
-    --ring: 222 84% 5%;
+    --ring: 16 100% 60%;
 
-    --radius: 0.5rem;
+    --radius: 0.75rem;
 
     --sidebar-background: 0 0% 100%;
     --sidebar-foreground: 215 16% 46%;
-    --sidebar-primary: 219 46% 20%;
+    --sidebar-primary: 16 100% 60%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 173 54% 39%;
     --sidebar-accent-foreground: 0 0% 100%;
@@ -52,12 +52,12 @@
   }
 
   body {
-    @apply bg-restaurant-background text-foreground;
+    @apply bg-restaurant-background text-restaurant-dark;
     font-family: 'Open Sans', sans-serif;
   }
 
   h1, h2, h3, h4, h5, h6 {
-    @apply font-semibold;
+    @apply font-display font-semibold;
   }
 }
 
@@ -75,18 +75,87 @@
   }
 
   .menu-item-card {
-    @apply bg-white rounded-lg shadow p-4 hover:shadow-md transition-all duration-200;
+    @apply bg-white rounded-lg shadow p-4 hover:shadow-md transition-all duration-300 hover:scale-[1.02];
   }
 
   .btn-primary {
-    @apply bg-restaurant-primary text-white hover:bg-restaurant-primary/90 px-4 py-2 rounded-md;
+    @apply bg-restaurant-primary text-white hover:bg-restaurant-primary/90 px-4 py-2 rounded-md transform transition-all duration-200 hover:-translate-y-1 hover:shadow-md;
   }
 
   .btn-secondary {
-    @apply bg-restaurant-secondary text-white hover:bg-restaurant-secondary/90 px-4 py-2 rounded-md;
+    @apply bg-restaurant-secondary text-white hover:bg-restaurant-secondary/90 px-4 py-2 rounded-md transform transition-all duration-200 hover:-translate-y-1 hover:shadow-md;
   }
 
   .btn-accent {
-    @apply bg-restaurant-accent text-white hover:bg-restaurant-accent/90 px-4 py-2 rounded-md;
+    @apply bg-restaurant-accent text-white hover:bg-restaurant-accent/90 px-4 py-2 rounded-md transform transition-all duration-200 hover:-translate-y-1 hover:shadow-md;
   }
+  
+  /* New food-themed styles */
+  .card-dish {
+    @apply rounded-xl border border-restaurant-secondary/20 shadow-md hover:shadow-lg transition-all duration-300 overflow-hidden bg-white relative;
+  }
+  
+  .bg-pattern {
+    @apply relative;
+  }
+  
+  .bg-pattern::before {
+    content: '';
+    @apply absolute inset-0 bg-food-pattern opacity-[0.03] pointer-events-none;
+  }
+  
+  .potoba-gradient-text {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-restaurant-primary to-restaurant-accent;
+  }
+  
+  .card-hover-effect {
+    @apply transition-all duration-300 hover:scale-[1.02] hover:shadow-lg;
+  }
+  
+  .food-icon {
+    @apply inline-block mr-2 animate-bounce-subtle;
+  }
+  
+  .dashboard-card {
+    @apply bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden transition-all duration-300 hover:shadow-lg;
+  }
+  
+  .dashboard-card-header {
+    @apply p-4 border-b border-gray-100 flex justify-between items-center;
+  }
+  
+  .page-title {
+    @apply text-3xl font-display font-bold potoba-gradient-text;
+  }
+  
+  .section-title {
+    @apply text-xl font-display font-semibold text-restaurant-dark;
+  }
+}
+
+/* Animations for page transitions */
+.page-enter {
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+.page-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 400ms, transform 400ms;
+}
+
+.page-exit {
+  opacity: 1;
+}
+
+.page-exit-active {
+  opacity: 0;
+  transform: translateY(-20px);
+  transition: opacity 300ms, transform 300ms;
+}
+
+/* App specific styles */
+#root {
+  @apply w-full max-w-none m-0 p-0;
 }

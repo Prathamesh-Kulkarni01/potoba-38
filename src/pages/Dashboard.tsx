@@ -6,10 +6,18 @@ import RestaurantDashboard from '../components/RestaurantDashboard';
 import TableManagement from '../components/TableManagement';
 import MenuManagement from '../components/MenuManagement';
 import OrderTable from '../components/OrderTable';
+import { motion } from 'framer-motion';
 
 const Dashboard = () => {
   const location = useLocation();
-  const [currentRestaurant] = useState("Demo Restaurant");
+  const [currentRestaurant] = useState("Potoba Restaurant");
+  
+  // Animation variants
+  const pageVariants = {
+    initial: { opacity: 0, y: 20 },
+    animate: { opacity: 1, y: 0 },
+    exit: { opacity: 0, y: -20 }
+  };
   
   // Determine which component to render based on the current route
   const renderDashboardContent = () => {
@@ -30,12 +38,27 @@ const Dashboard = () => {
   };
   
   return (
-    <div className="min-h-screen bg-restaurant-background">
+    <div className="min-h-screen bg-restaurant-background bg-pattern">
       <Navbar currentTenant={currentRestaurant} />
       
-      <main className="container mx-auto px-4 py-6">
+      <motion.main 
+        className="container mx-auto px-4 py-6"
+        initial="initial"
+        animate="animate"
+        exit="exit"
+        variants={pageVariants}
+        transition={{ duration: 0.4 }}
+      >
         {renderDashboardContent()}
-      </main>
+      </motion.main>
+      
+      {/* Decorative food illustrations */}
+      <div className="fixed -bottom-16 -left-16 w-64 h-64 opacity-10 pointer-events-none">
+        <img src="/images/food-doodle-1.svg" alt="" className="w-full h-full animate-spin-slow" />
+      </div>
+      <div className="fixed -top-16 -right-16 w-64 h-64 opacity-10 pointer-events-none">
+        <img src="/images/food-doodle-2.svg" alt="" className="w-full h-full animate-spin-slow" />
+      </div>
     </div>
   );
 };
