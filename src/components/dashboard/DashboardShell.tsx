@@ -38,9 +38,9 @@ import { Button } from "@/components/ui/button";
 import { Toaster } from "sonner";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import RestaurantSelector from "./RestaurantSelector";
-import { ThemeToggle } from "./theme/ThemeToggle";
-import { Separator } from "./ui/separator";
-import { Badge } from "./ui/badge";
+import { ThemeToggle } from "../theme/ThemeToggle";
+import { Separator } from "../ui/separator";
+import { Badge } from "../ui/badge";
 
 interface DashboardShellProps {
   children: React.ReactNode;

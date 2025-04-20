@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { DashboardShell } from '@/components/DashboardShell';
+import { DashboardShell } from '@/components/dashboard/DashboardShell';
 import { useToast } from "@/hooks/use-toast";
 import {
   Select,
@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ApiConnectionStatus } from '@/components/ApiConnectionStatus';
+import { ApiConnectionStatus } from '@/components/settings/ApiConnectionStatus';
 import { CloudCog, Database, Cloud, Server } from 'lucide-react';
 
 const ApiSettings = () => {

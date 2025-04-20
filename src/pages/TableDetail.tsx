@@ -27,8 +27,8 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import QRCodeGenerator from '../components/QRCodeGenerator';
-import Navbar from '../components/Navbar';
+import QRCodeGenerator from '../components/table/QRCodeGenerator';
+import Navbar from '../components/dashboard/Navbar';
 import { useToast } from "@/hooks/use-toast";
 
 // Sample data - in a real application, this would come from an API

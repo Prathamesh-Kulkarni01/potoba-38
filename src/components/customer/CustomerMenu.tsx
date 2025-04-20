@@ -18,7 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import AiRecommendations from './AiRecommendations';
+import AiRecommendations from '../menu/AiRecommendations';
 import GroupOrder from './GroupOrder';
 
 // Sample data - in a real application, this would come from an API
