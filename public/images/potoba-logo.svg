@@ -1,11 +1,23 @@
 
 <svg width="200" height="80" viewBox="0 0 200 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Main Logo Shape -->
   <path d="M30 20C30 20 20 30 20 40C20 50 30 60 40 60C50 60 60 50 60 40C60 30 50 20 40 20C30 20 30 20 30 20Z" fill="#FF6B35"/>
   <path d="M35 30C35 30 30 35 30 40C30 45 35 50 40 50C45 50 50 45 50 40C50 35 45 30 40 30C35 30 35 30 35 30Z" fill="white"/>
+  
+  <!-- Text Elements with Improved Styling -->
   <path d="M80 20H70V60H80V45H90C95 45 100 40 100 35C100 30 95 25 90 25H80V20Z" fill="#FF6B35"/>
   <path d="M80 30H90C92 30 94 32 94 35C94 38 92 40 90 40H80V30Z" fill="white"/>
   <path d="M110 20V60H120V45H130V60H140V20H130V35H120V20H110Z" fill="#2EC4B6"/>
   <path d="M150 20V60H180V50H160V45H175V35H160V30H180V20H150Z" fill="#FF9F1C"/>
   <path d="M190 20V60H200V20H190Z" fill="#FF6B35"/>
+  
+  <!-- Food element decorations -->
   <path d="M40 65C40 65 35 70 40 75C45 80 50 70 45 65H40Z" fill="#2EC4B6"/>
+  
+  <!-- Steam/aroma swirls coming from the logo -->
+  <path d="M45 15C45 15 48 10 52 13C56 16 50 18 50 18" stroke="#FF9F1C" stroke-width="2" stroke-linecap="round"/>
+  <path d="M35 14C35 14 32 8 28 12C24 16 30 19 30 19" stroke="#2EC4B6" stroke-width="2" stroke-linecap="round"/>
+  
+  <!-- Plate-like circular underline -->
+  <ellipse cx="40" cy="60" rx="30" ry="5" stroke="#FF6B35" stroke-width="1" stroke-dasharray="2 2"/>
 </svg>

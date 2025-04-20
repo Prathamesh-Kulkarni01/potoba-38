@@ -90,7 +90,7 @@
     @apply bg-restaurant-accent text-white hover:bg-restaurant-accent/90 px-4 py-2 rounded-md transform transition-all duration-200 hover:-translate-y-1 hover:shadow-md;
   }
   
-  /* New food-themed styles */
+  /* Food-themed styles */
   .card-dish {
     @apply rounded-xl border border-restaurant-secondary/20 shadow-md hover:shadow-lg transition-all duration-300 overflow-hidden bg-white relative;
   }
@@ -131,9 +131,76 @@
   .section-title {
     @apply text-xl font-display font-semibold text-restaurant-dark;
   }
+  
+  /* New professional styles */
+  .status-badge {
+    @apply rounded-full px-3 py-1 text-xs font-medium inline-flex items-center gap-1;
+  }
+  
+  .dashboard-status-card {
+    @apply flex-1 bg-white rounded-lg p-4 border border-gray-100 shadow-sm hover:shadow transition-all duration-300;
+  }
+  
+  .food-themed-header {
+    @apply relative overflow-hidden rounded-t-lg bg-gradient-to-r from-restaurant-primary/90 to-restaurant-accent/90 text-white;
+  }
+  
+  .food-themed-header::before {
+    content: '';
+    @apply absolute inset-0 bg-food-pattern opacity-10 pointer-events-none;
+  }
+  
+  .table-hover-row {
+    @apply hover:bg-restaurant-primary/5 transition-colors duration-200;
+  }
+  
+  .animated-dish {
+    animation: float 6s ease-in-out infinite;
+  }
+  
+  .order-notification {
+    animation: pulse-border 2s infinite;
+  }
+  
+  .shimmer-effect {
+    @apply relative overflow-hidden;
+  }
+  
+  .shimmer-effect::after {
+    content: '';
+    @apply absolute top-0 left-0 h-full w-full;
+    background: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.2) 50%,
+      rgba(255, 255, 255, 0) 100%
+    );
+    animation: shimmer 2s infinite;
+  }
 }
 
-/* Animations for page transitions */
+/* Enhanced animations */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes pulse-border {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 107, 53, 0.4); }
+  50% { box-shadow: 0 0 0 4px rgba(255, 107, 53, 0.2); }
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+@keyframes steam {
+  0%, 100% { opacity: 0.3; transform: translateY(0) scale(1); }
+  50% { opacity: 0.7; transform: translateY(-10px) scale(1.2); }
+}
+
+/* Page transitions */
 .page-enter {
   opacity: 0;
   transform: translateY(20px);
