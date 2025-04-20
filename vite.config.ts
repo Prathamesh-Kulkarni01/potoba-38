@@ -10,10 +10,9 @@ export default defineConfig(({ mode }) => ({
     port: 8080,
     proxy: {
       '/api': {
-        target: 'https://potoba-38.onrender.com/',
+        target: 'http://localhost:5000/',
         changeOrigin: true,
         secure: false,
-        rewrite: path => path.replace(/^\/api/, '')
       },
     },
   },

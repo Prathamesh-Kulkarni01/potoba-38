@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
 import { useToast } from '@/components/ui/use-toast';
 import { Restaurant } from '@/types/auth';
 import authService from '@/services/authService';
@@ -66,7 +66,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, navigate }
     }
   }, [currentRestaurantId]);
 
-  const fetchCurrentUser = async (authToken: string) => {
+  const fetchCurrentUser = useCallback(async (authToken: string) => {
     setIsLoading(true);
     try {
       const user = await authService.getCurrentUser();
@@ -94,9 +94,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, navigate }
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [currentRestaurantId]);
 
-  const login = async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string) => {
     setIsLoading(true);
     try {
       const { token, user } = await authService.login(email, password);
@@ -138,9 +138,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, navigate }
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [toast]);
 
-  const register = async (name: string, email: string, password: string) => {
+  const register = useCallback(async (name: string, email: string, password: string) => {
     setIsLoading(true);
     try {
       await authService.register(email, password, name);
@@ -159,9 +159,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, navigate }
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [navigate, toast]);
 
-  const signup = async (name: string, email: string, password: string, role: string = 'user') => {
+  const signup = useCallback(async (name: string, email: string, password: string, role: string = 'user') => {
     setIsLoading(true);
     try {
       const { token, user } = await authService.register(email, password, name, role);
@@ -191,9 +191,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, navigate }
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [navigate, toast]);
 
-  const logout = () => {
+  const logout = useCallback(() => {
     localStorage.removeItem('token');
     localStorage.removeItem('currentRestaurantId');
     setUser(null);
@@ -204,13 +204,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, navigate }
       description: "You've been logged out successfully",
     });
     navigate('/login');
-  };
+  }, [navigate, toast]);
   
-  const isAuthenticated = () => {
+  const isAuthenticated = useCallback(() => {
     return !!token && !!user;
-  };
+  }, [token, user]);
   
-  const getCurrentRestaurant = (): Restaurant | undefined => {
+  const getCurrentRestaurant = useCallback((): Restaurant | undefined => {
     if (!user || !user.restaurants || user.restaurants.length === 0) {
       return undefined;
     }
@@ -225,9 +225,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, navigate }
     }
     
     return user.restaurants[0];
-  };
+  }, [user, currentRestaurantId]);
   
-  const hasPermission = (permission: string): boolean => {
+  const hasPermission = useCallback((permission: string): boolean => {
     if (!user) return false;
     
     if (user.role === 'admin') return true;
@@ -235,7 +235,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, navigate }
     if (!user.permissions) return false;
     
     return user.permissions.includes(permission);
-  };
+  }, [user]);
   
   const getDefaultPermissions = (role: string): string[] => {
     switch (role) {
@@ -271,20 +271,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, navigate }
     }
   };
 
-  const updateUser = (updatedUser: User) => {
+  const updateUser = useCallback((updatedUser: User) => {
     setUser((prevUser) => ({
       ...prevUser,
       ...updatedUser,
     }));
-  };
+  }, []);
 
-  return (
-    <AuthContext.Provider value={{ 
-      user, 
+  const contextValue = useMemo(
+    () => ({
+      user,
       token,
-      isAuthenticated, 
+      isAuthenticated,
       isLoading,
-      login, 
+      login,
       register,
       signup,
       logout,
@@ -293,8 +293,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, navigate }
       setCurrentRestaurantId,
       hasPermission,
       setUser,
-      updateUser // Include updateUser in the context value
-    }}>
+      updateUser,
+    }),
+    [user, token, isAuthenticated, isLoading, login, register, signup, logout, getCurrentRestaurant, currentRestaurantId, hasPermission, updateUser]
+  );
+
+  return (
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );

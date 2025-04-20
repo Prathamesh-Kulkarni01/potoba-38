@@ -13,6 +13,7 @@ import MembersManagement from '../components/loyalty/MembersManagement';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import { DashboardShell } from '@/components/DashboardShell';
+import authService from '@/services/authService';
 
 const Dashboard = () => {
   const location = useLocation();
@@ -23,8 +24,7 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchUser = async () => {
       try {
-        const response = await fetch('/api/auth/me'); // Replace with actual API endpoint
-        const userData = await response.json();
+        const userData = await authService.getCurrentUser(); // Replace with actual API endpoint
         updateUser(userData); // Update user in auth context
       } catch (error) {
         console.error('Failed to fetch user:', error);
