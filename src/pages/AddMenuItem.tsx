@@ -1,14 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { api } from '@/services/api';
+import { useAuth } from '@/contexts/AuthContext';
 
 const AddMenuItem = () => {
+  const [categories, setCategories] = useState([]);
+  const {currentRestaurantId,token}=useAuth()
+  
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -16,9 +21,30 @@ const AddMenuItem = () => {
     category: '',
     image: '',
   });
+  const [newCategory, setNewCategory] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState(''); // State to handle errors
   const { toast } = useToast();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const response = await api.categories.getCategories(currentRestaurantId,token);
+        console.log({response})
+        if (Array.isArray(response.data)) {
+          setCategories(response.data);
+        } else {
+          throw new Error('Invalid categories data');
+        }
+      } catch (error) {
+        console.error('Failed to fetch categories:', error);
+        setError('Failed to load categories. Please try again later.');
+      }
+    };
+
+    fetchCategories();
+  }, [currentRestaurantId]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -54,6 +80,23 @@ const AddMenuItem = () => {
     }
   };
 
+  const handleCreateCategory = async () => {
+    try {
+      if (!newCategory.trim()) {
+        toast({ title: "Error", description: "Category name is required", variant: "destructive" });
+        return;
+      }
+
+      const response = await api.categories.createCategory(currentRestaurantId,{ name: newCategory },token);
+      setCategories((prev) => [...prev, response.data]);
+      setNewCategory('');
+      toast({ title: "Success", description: "Category created successfully" });
+    } catch (error) {
+      console.error("Failed to create category:", error);
+      toast({ title: "Error", description: "Failed to create category", variant: "destructive" });
+    }
+  };
+
   return (
     <div className="container mx-auto py-6">
       <Card className="max-w-lg mx-auto">
@@ -61,6 +104,7 @@ const AddMenuItem = () => {
           <CardTitle>Add New Menu Item</CardTitle>
         </CardHeader>
         <CardContent>
+          {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label htmlFor="name" className="block text-sm font-medium">Name</label>
@@ -81,12 +125,37 @@ const AddMenuItem = () => {
                   <SelectValue placeholder="Select a category" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Appetizers">Appetizers</SelectItem>
-                  <SelectItem value="Main Course">Main Course</SelectItem>
-                  <SelectItem value="Desserts">Desserts</SelectItem>
-                  <SelectItem value="Drinks">Drinks</SelectItem>
+                  {Array.isArray(categories) && categories.length > 0 ? (
+                    categories.map((category) => (
+                      <SelectItem key={category._id} value={category._id}>
+                        {category.name}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem disabled>No categories available</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button variant="link" className="mt-2 text-sm text-restaurant-primary">Create New Category</Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Create Category</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <Input
+                      placeholder="Category name"
+                      value={newCategory}
+                      onChange={(e) => setNewCategory(e.target.value)}
+                    />
+                    <Button onClick={handleCreateCategory} className="w-full bg-restaurant-primary hover:bg-restaurant-primary/90">
+                      Create
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
             </div>
             <div>
               <label htmlFor="image" className="block text-sm font-medium">Image URL (optional)</label>

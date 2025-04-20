@@ -14,6 +14,7 @@ import { motion } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import { DashboardShell } from '@/components/DashboardShell';
 import authService from '@/services/authService';
+import AddMenuItem from './AddMenuItem';
 
 const Dashboard = () => {
   const location = useLocation();
@@ -81,6 +82,11 @@ const Dashboard = () => {
       return <PromotionsManagement />;
     } else if (path === '/dashboard/loyalty/members') {
       return <MembersManagement />;
+    }
+
+    // Menu sub-routes
+    else if (path === '/dashboard/menu/add') {
+      return <AddMenuItem />;
     }
     
     // Render the Outlet for any other sub-routes

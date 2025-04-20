@@ -37,6 +37,7 @@ app.use('/api/sync', require('./routes/sync')); // Add the new sync route
 app.use('/api/restaurants/:restaurantId/menu', require('./routes/menu')); // Add menu route
 app.use('/api/restaurants/:restaurantId/tables', tableRoutes);
 app.use('/api/restaurants/:restaurantId/orders', orderRoutes);
+app.use('/api/restaurants/:restaurantId/categories', require('./routes/categories'));
 // Add other routes here
 
 // Health check endpoint

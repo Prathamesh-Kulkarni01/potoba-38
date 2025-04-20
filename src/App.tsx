@@ -1,4 +1,3 @@
-
 import React from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -20,6 +19,7 @@ import ScanLanding from "./pages/ScanLanding";
 import NotFound from "./pages/NotFound";
 import ApiSettings from "./pages/ApiSettings";
 import ApiDocs from "./components/ApiDocs";
+import AddMenuItem from "./pages/AddMenuItem";
 import "./App.css";
 import { toast } from "./hooks/use-toast";
 
@@ -81,19 +81,27 @@ const App = () => (
                     <ProtectedRoute requiredPermission="manage_tables">
                       <Dashboard />
                     </ProtectedRoute>
-                  } 
-                />
-                <Route 
-                  path="/dashboard/menu" 
-                  element={
+                    } 
+                  />
+                  <Route 
+                    path="/dashboard/menu" 
+                    element={
                     <ProtectedRoute requiredPermission="manage_menu">
                       <Dashboard />
                     </ProtectedRoute>
-                  } 
-                />
-                <Route 
-                  path="/dashboard/orders" 
-                  element={
+                    } 
+                  />
+                  <Route 
+                    path="/dashboard/menu/add" 
+                    element={
+                    <ProtectedRoute requiredPermission="manage_menu">
+                   <Dashboard />
+                    </ProtectedRoute>
+                    } 
+                  />
+                  <Route 
+                    path="/dashboard/orders" 
+                    element={
                     <ProtectedRoute requiredPermission="manage_orders">
                       <Dashboard />
                     </ProtectedRoute>

@@ -1,5 +1,6 @@
 const MenuItem = require('../models/MenuItem');
 const Restaurant = require('../models/Restaurant');
+const Category = require('../models/Category');
 
 // @desc    Get all menu items for a restaurant
 // @route   GET /api/restaurants/:restaurantId/menu
@@ -78,37 +79,26 @@ exports.getMenuItem = async (req, res) => {
 // @access  Private
 exports.createMenuItem = async (req, res) => {
   try {
-    // Add restaurant to req.body
     req.body.restaurant = req.params.restaurantId;
 
     const restaurant = await Restaurant.findById(req.params.restaurantId);
-
     if (!restaurant) {
-      return res.status(404).json({
-        success: false,
-        error: 'Restaurant not found'
-      });
+      return res.status(404).json({ success: false, error: 'Restaurant not found' });
     }
 
-    // Make sure user owns the restaurant
     if (restaurant.owner.toString() !== req.user._id.toString()) {
-      return res.status(401).json({
-        success: false,
-        error: 'Not authorized to add menu items to this restaurant'
-      });
+      return res.status(401).json({ success: false, error: 'Not authorized' });
+    }
+
+    const category = await Category.findById(req.body.category);
+    if (!category || category.restaurant.toString() !== req.params.restaurantId) {
+      return res.status(400).json({ success: false, error: 'Invalid category' });
     }
 
     const menuItem = await MenuItem.create(req.body);
-
-    res.status(201).json({
-      success: true,
-      data: menuItem
-    });
+    res.status(201).json({ success: true, data: menuItem });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
+    res.status(500).json({ success: false, error: error.message });
   }
 };
 
