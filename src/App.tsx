@@ -55,6 +55,16 @@ const App = () => (
                 <Route path="/dashboard/api-docs" element={<ApiDocs />} />
                 <Route path="/dashboard/tables/:tableId" element={<TableDetail />} />
                 
+                {/* Marketing routes */}
+                <Route path="/dashboard/marketing/campaigns" element={<Dashboard />} />
+                <Route path="/dashboard/marketing/whatsapp" element={<Dashboard />} />
+                <Route path="/dashboard/marketing/ai-assistant" element={<Dashboard />} />
+                
+                {/* Loyalty routes */}
+                <Route path="/dashboard/loyalty/rewards" element={<Dashboard />} />
+                <Route path="/dashboard/loyalty/promotions" element={<Dashboard />} />
+                <Route path="/dashboard/loyalty/members" element={<Dashboard />} />
+                
                 {/* Customer facing routes */}
                 <Route path="/scan" element={<ScanLanding />} />
                 <Route path="/order/:tableId" element={<CustomerOrder />} />
