@@ -41,6 +41,7 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
             } else if (response.data.user.restaurants.length > 0) {
               // Set first restaurant as default if none selected
               setCurrentRestaurantId(response.data.user.restaurants[0].id);
+              localStorage.setItem('currentRestaurantId', response.data.user.restaurants[0].id);
             }
           }
         } catch (error) {
@@ -88,6 +89,30 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
       toast.success("Logged in successfully!");
     } catch (error) {
       console.error("Login error:", error);
+      
+      // Try using mock API as fallback in development
+      try {
+        const mockResponse = await mockApi.auth.login(email, password);
+        if (mockResponse.success && mockResponse.data) {
+          const { user, token } = mockResponse.data;
+          
+          // Save token to localStorage
+          localStorage.setItem('token', token);
+          
+          setUser(user);
+          
+          // Set current restaurant to first one if available
+          if (user.restaurants && user.restaurants.length > 0) {
+            setCurrentRestaurantId(user.restaurants[0].id);
+          }
+          
+          toast.success("Logged in successfully with mock data!");
+          return;
+        }
+      } catch (mockError) {
+        console.error("Mock login also failed:", mockError);
+      }
+      
       toast.error("Login failed. Please check your credentials.");
       throw error;
     } finally {
@@ -113,6 +138,24 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
       toast.success("Account created successfully!");
     } catch (error) {
       console.error("Signup error:", error);
+      
+      // Try mock API as fallback
+      try {
+        const mockResponse = await mockApi.auth.register({ name, email, password });
+        if (mockResponse.success && mockResponse.data) {
+          const { user, token } = mockResponse.data;
+          
+          // Save token to localStorage
+          localStorage.setItem('token', token);
+          
+          setUser(user);
+          toast.success("Account created successfully with mock data!");
+          return;
+        }
+      } catch (mockError) {
+        console.error("Mock signup also failed:", mockError);
+      }
+      
       toast.error("Failed to create account.");
       throw error;
     } finally {
@@ -163,6 +206,33 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
       return newRestaurant;
     } catch (error) {
       console.error("Error adding restaurant:", error);
+      
+      // Try mock API as fallback
+      try {
+        const mockResponse = await mockApi.restaurants.create(restaurant, "mock-jwt-token");
+        if (mockResponse.success && mockResponse.data) {
+          const newRestaurant = mockResponse.data;
+          
+          // Update user with new restaurant
+          const updatedUser = {
+            ...user,
+            restaurants: [...(user.restaurants || []), newRestaurant]
+          };
+          
+          setUser(updatedUser);
+          
+          // Set as current restaurant if it's the first one
+          if (!updatedUser.restaurants || updatedUser.restaurants.length === 1) {
+            setCurrentRestaurantId(newRestaurant.id);
+          }
+          
+          toast.success("Restaurant added successfully (mock mode)");
+          return newRestaurant;
+        }
+      } catch (mockError) {
+        console.error("Mock API also failed:", mockError);
+      }
+      
       toast.error("Failed to add restaurant");
       throw error;
     }

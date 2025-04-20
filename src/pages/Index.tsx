@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Header,
   Hero,
@@ -31,7 +31,9 @@ const Index = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  React.useEffect(() => {
+  const [useMockApi, setUseMockApi] = useState(false);
+
+  useEffect(() => {
     const ws = new WebSocket('ws://localhost:8081');
     
     ws.onmessage = (event) => {
@@ -50,6 +52,15 @@ const Index = () => {
 
     return () => ws.close();
   }, []);
+
+  const handleToggleMockApi = () => {
+    const current = localStorage.getItem('useMockApi') === 'true';
+    localStorage.setItem('useMockApi', (!current).toString());
+    setUseMockApi(!current);
+    toast(`Mock API ${!current ? 'enabled' : 'disabled'}`, {
+      variant: "default"
+    });
+  };
 
   return (
     <div className="min-h-screen">
