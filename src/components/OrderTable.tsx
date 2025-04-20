@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import {
   CheckCircle,
@@ -358,10 +357,7 @@ const OrderTable = () => {
                               <DropdownMenuLabel>Actions</DropdownMenuLabel>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem onClick={() => {
-                                toast({
-                                  title: `Order #${order.id} Details`,
-                                  description: `${order.items.length} items - $${order.total.toFixed(2)}`,
-                                });
+                                toast(`Order #${order.id} Details - ${order.items.length} items - $${order.total.toFixed(2)}`);
                               }}>
                                 View Details
                               </DropdownMenuItem>
