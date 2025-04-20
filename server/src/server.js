@@ -2,95 +2,44 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const connectDB = require('./config/db');
-const WebSocket = require('ws');
+const mongoose = require('mongoose');
+const path = require('path');
 
-// Connect to MongoDB
-connectDB();
+// Import routes
+const authRoutes = require('./routes/auth');
+const restaurantRoutes = require('./routes/restaurants');
 
+// Initialize express app
 const app = express();
 
 // Middleware
-app.use(cors({
-  origin: (origin, callback) => {
-    const allowedOrigins = [/^https?:\/\/.*\.lovable\.app$/, 'http://localhost:8080', 'http://localhost:5173'];
-    if (!origin || allowedOrigins.some((allowed) => allowed instanceof RegExp ? allowed.test(origin) : allowed === origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'], // Allowed HTTP methods
-  allowedHeaders: ['Content-Type', 'Authorization'], // Allowed headers
-  credentials: true, // Allow credentials (cookies, authorization headers, etc.)
-}));
-
+app.use(cors());
 app.use(express.json());
 
-// Debugging CORS
-app.use((req, res, next) => {
-  console.log(`CORS Debug: Origin - ${req.headers.origin}`);
-  console.log(`Auth Header: ${req.headers.authorization ? 'Present' : 'Not present'}`);
-  next();
-});
+// Connect to MongoDB
+mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/restaurant-app')
+  .then(() => console.log('MongoDB connected'))
+  .catch(err => console.error('MongoDB connection error:', err));
 
-// Routes
-app.use('/api/auth', require('./routes/auth'));
-app.use('/api/restaurants', require('./routes/restaurants'));
-app.use('/api/sync', require('./routes/sync')); // Add the new sync route
-// Add other routes here
+// Define routes
+app.use('/api/auth', authRoutes);
+app.use('/api/restaurants', restaurantRoutes);
 
-// Health check endpoint
-app.get('/api/health-check', (req, res) => {
-  res.status(200).json({ status: 'ok' });
-});
-
-// Sync databases endpoint - easier to access without authentication during development
-app.post('/api/sync-databases', async (req, res) => {
-  try {
-    const syncController = require('./controllers/sync');
-    await syncController.syncDatabases(req, res);
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-const PORT = process.env.PORT || 5000;
-const MONGO_URI = process.env.MONGO_URI || 'Unknown MongoDB URI';
-
-// Initialize WebSocket server
-const wss = new WebSocket.Server({ port: 8081 });
-
-wss.on('connection', (ws) => {
-  console.log('Frontend connected to WebSocket');
+// Serve static assets in production
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(path.join(__dirname, '../../dist')));
   
-  // Send connection details to the frontend
-  ws.send(`Backend connected successfully to port ${PORT} and MongoDB at ${MONGO_URI}`);
-
-  ws.on('close', () => {
-    console.log('Frontend disconnected from WebSocket');
-    // Notify all clients about the disconnection
-    wss.clients.forEach((client) => {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send('Frontend disconnected from WebSocket');
-      }
-    });
-  });
-});
-
-function logToFrontend(message) {
-  wss.clients.forEach((client) => {
-    if (client.readyState === WebSocket.OPEN) {
-      client.send(message); 
-    }
+  app.get('*', (req, res) => {
+    res.sendFile(path.resolve(__dirname, '../../dist', 'index.html'));
   });
 }
 
-// Export WebSocket for use in other modules
-module.exports.wss = wss;
-module.exports.logToFrontend = logToFrontend;
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({ message: 'Something went wrong on the server' });
+});
 
-// Example: Log a message to the frontend
-logToFrontend('Backend is running');
-
+// Set port and start server
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
