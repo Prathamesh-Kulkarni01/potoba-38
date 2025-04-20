@@ -18,14 +18,70 @@ const cuisineTypes = [
   "Spanish", "Vietnamese", "Greek", "Turkish", "Fusion"
 ];
 
+// StepIndicator Component
+const StepIndicator = ({ currentStep, totalSteps }: { currentStep: number; totalSteps: number }) => (
+  <div className="flex justify-between items-center mb-2">
+    <div className="flex space-x-2">
+      {Array.from({ length: totalSteps }, (_, index) => (
+        <div
+          key={index}
+          className={`w-8 h-8 rounded-full flex items-center justify-center ${
+            currentStep > index ? 'bg-restaurant-primary text-white' : 'bg-muted text-muted-foreground'
+          }`}
+        >
+          {index + 1}
+        </div>
+      ))}
+    </div>
+    <div className="text-sm text-muted-foreground">Step {currentStep} of {totalSteps}</div>
+  </div>
+);
+
+// Logo Component
+const Logo = () => (
+  <motion.div
+    initial={{ scale: 0.8, opacity: 0 }}
+    animate={{ scale: 1, opacity: 1 }}
+    transition={{ duration: 0.5 }}
+    className="inline-flex items-center justify-center p-2 bg-white rounded-full shadow-md mb-4"
+  >
+    <img src="/images/potoba-logo.svg" alt="TableMaster" className="h-16" />
+  </motion.div>
+);
+
+// TitleSection Component
+const TitleSection = ({ isAddingAdditionalRestaurant }: { isAddingAdditionalRestaurant: boolean }) => (
+  <div className="text-center mb-8">
+    <Logo />
+    <motion.h1
+      className="text-3xl font-bold text-restaurant-primary"
+      initial={{ y: -20, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      transition={{ delay: 0.1, duration: 0.4 }}
+    >
+      {isAddingAdditionalRestaurant ? "Add New Restaurant" : "Set Up Your Restaurant"}
+    </motion.h1>
+    <motion.p
+      className="text-muted-foreground"
+      initial={{ y: -10, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      transition={{ delay: 0.2, duration: 0.4 }}
+    >
+      {isAddingAdditionalRestaurant
+        ? "Add another restaurant to your account"
+        : "Just a few steps to get your restaurant online"}
+    </motion.p>
+  </div>
+);
+
 const RestaurantOnboarding = () => {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [createDemoData, setCreateDemoData] = useState(false);
   const { user, currentRestaurantId, setCurrentRestaurantId } = useAuth();
-  const api=useApi()
+  const api = useApi();
   const navigate = useNavigate();
-  
+
   // Form data
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -33,17 +89,16 @@ const RestaurantOnboarding = () => {
   const [phone, setPhone] = useState('');
   const [cuisine, setCuisine] = useState('');
   const [tableCount, setTableCount] = useState('10');
-  
+
   // Check if the user is authenticated
   useEffect(() => {
-    // If there's no token, redirect to login
     const token = localStorage.getItem('token');
     if (!token) {
       toast.error("You must be logged in to create a restaurant");
       navigate('/login', { state: { returnUrl: '/onboarding' } });
     }
   }, [navigate]);
-  
+
   const handleContinue = () => {
     if (step === 1) {
       if (!name || !description) {
@@ -53,17 +108,16 @@ const RestaurantOnboarding = () => {
       setStep(2);
     }
   };
-  
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !description || !address || !phone || !cuisine) {
       toast.error("Please fill in all required fields");
       return;
     }
-    
+
     setLoading(true);
     try {
-      // Create the restaurant
       const newRestaurant = await api.restaurant.create({
         name,
         description,
@@ -78,20 +132,17 @@ const RestaurantOnboarding = () => {
 
       const restaurantId = newRestaurant.id || newRestaurant._id;
 
-      // Set as current restaurant
       if (setCurrentRestaurantId) {
         setCurrentRestaurantId(newRestaurant.id);
       }
-      
-      // Create default tables
+
       await api.table.createDefault(restaurantId, parseInt(tableCount) || 10);
-      
-      // If demo data is requested, create it
+
       if (createDemoData) {
         await api.restaurant.createDemoData(restaurantId);
         toast.success("Demo data created successfully!");
       }
-      
+
       toast.success("Restaurant created successfully!");
       navigate('/dashboard');
     } catch (error: any) {
@@ -101,44 +152,13 @@ const RestaurantOnboarding = () => {
       setLoading(false);
     }
   };
-  
-  // If user already has restaurants, redirect to add restaurant page
+
   const isAddingAdditionalRestaurant = user?.restaurants?.length > 0;
-  
+
   return (
     <div className="min-h-screen bg-restaurant-background bg-pattern flex items-center justify-center p-4">
       <div className="w-full max-w-lg">
-        <div className="text-center mb-8">
-          <motion.div
-            initial={{ scale: 0.8, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ duration: 0.5 }}
-            className="inline-flex items-center justify-center p-2 bg-white rounded-full shadow-md mb-4"
-          >
-            <img src="/images/potoba-logo.svg" alt="TableMaster" className="h-16" />
-          </motion.div>
-          
-          <motion.h1 
-            className="text-3xl font-bold text-restaurant-primary"
-            initial={{ y: -20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ delay: 0.1, duration: 0.4 }}
-          >
-            {isAddingAdditionalRestaurant ? "Add New Restaurant" : "Set Up Your Restaurant"}
-          </motion.h1>
-          
-          <motion.p 
-            className="text-muted-foreground"
-            initial={{ y: -10, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ delay: 0.2, duration: 0.4 }}
-          >
-            {isAddingAdditionalRestaurant 
-              ? "Add another restaurant to your account" 
-              : "Just a few steps to get your restaurant online"}
-          </motion.p>
-        </div>
-        
+        <TitleSection isAddingAdditionalRestaurant={isAddingAdditionalRestaurant} />
         <motion.div
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
@@ -146,30 +166,16 @@ const RestaurantOnboarding = () => {
         >
           <Card>
             <CardHeader>
-              <div className="flex justify-between items-center mb-2">
-                <div className="flex space-x-2">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step >= 1 ? 'bg-restaurant-primary text-white' : 'bg-muted text-muted-foreground'}`}>
-                    1
-                  </div>
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step >= 2 ? 'bg-restaurant-primary text-white' : 'bg-muted text-muted-foreground'}`}>
-                    2
-                  </div>
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  Step {step} of 2
-                </div>
-              </div>
-              
+              <StepIndicator currentStep={step} totalSteps={2} />
               <CardTitle>
                 {step === 1 ? "Restaurant Basics" : "Location & Details"}
               </CardTitle>
               <CardDescription>
-                {step === 1 
-                  ? "Tell us about your restaurant" 
+                {step === 1
+                  ? "Tell us about your restaurant"
                   : "Where is your restaurant located?"}
               </CardDescription>
             </CardHeader>
-            
             <CardContent>
               <form id="onboardingForm" onSubmit={handleSubmit} className="space-y-4">
                 {step === 1 ? (
@@ -267,7 +273,6 @@ const RestaurantOnboarding = () => {
                 )}
               </form>
             </CardContent>
-            
             <CardFooter className="flex justify-between">
               {step === 1 ? (
                 <Button 
