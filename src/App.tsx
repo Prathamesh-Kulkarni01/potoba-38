@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -112,42 +112,61 @@ const protectedRoutes = [
   },
 ];
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <ThemeProvider>
-      <BrowserRouter>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <AuthProviderWithRouter>
-            <div className="app-container theme-transition">
-              <Routes>
-                {/* Public Routes */}
-                {publicRoutes.map(({ path, element }) => (
-                  <Route key={path} path={path} element={element} />
-                ))}
+const App = () => {
+  useEffect(() => {
+    const checkApiHealth = async () => {
+      try {
+        const response = await fetch("/api/health-check");
+        if (!response.ok) {
+          console.error("API health check failed:", response.statusText);
+        } else {
+          console.log("API health check successful");
+        }
+      } catch (error) {
+        console.error("Error during API health check:", error);
+      }
+    };
 
-                {/* Protected Routes */}
-                {protectedRoutes.map(({ permission, routes }) =>
-                  routes.map(({ path, element }) => (
-                    <Route
-                      key={path}
-                      path={path}
-                      element={
-                        <ProtectedRouteWrapper permission={permission}>
-                          {element}
-                        </ProtectedRouteWrapper>
-                      }
-                    />
-                  ))
-                )}
-              </Routes>
-            </div>
-          </AuthProviderWithRouter>
-        </TooltipProvider>
-      </BrowserRouter>
-    </ThemeProvider>
-  </QueryClientProvider>
-);
+    checkApiHealth();
+  }, []);
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider>
+        <BrowserRouter>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <AuthProviderWithRouter>
+              <div className="app-container theme-transition">
+                <Routes>
+                  {/* Public Routes */}
+                  {publicRoutes.map(({ path, element }) => (
+                    <Route key={path} path={path} element={element} />
+                  ))}
+
+                  {/* Protected Routes */}
+                  {protectedRoutes.map(({ permission, routes }) =>
+                    routes.map(({ path, element }) => (
+                      <Route
+                        key={path}
+                        path={path}
+                        element={
+                          <ProtectedRouteWrapper permission={permission}>
+                            {element}
+                          </ProtectedRouteWrapper>
+                        }
+                      />
+                    ))
+                  )}
+                </Routes>
+              </div>
+            </AuthProviderWithRouter>
+          </TooltipProvider>
+        </BrowserRouter>
+      </ThemeProvider>
+    </QueryClientProvider>
+  );
+};
 
 export default App;

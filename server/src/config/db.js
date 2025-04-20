@@ -1,4 +1,4 @@
-
+require('dotenv').config({ path: `${__dirname}/../.env` }); // Explicitly specify the .env file path
 const mongoose = require('mongoose');
 
 const connectDB = async () => {

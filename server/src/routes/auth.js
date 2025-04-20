@@ -1,4 +1,4 @@
-
+require('dotenv').config({ path: `${__dirname}/../.env` }); // Explicitly specify the .env file path
 const express = require('express');
 const router = express.Router();
 const { register, login, logout, refreshToken, getMe, updateUserRole } = require('../controllers/auth')

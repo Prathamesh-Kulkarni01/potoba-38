@@ -1,3 +1,4 @@
+require('dotenv').config({ path: `${__dirname}/../.env` }); // Explicitly specify the .env file path
 const Restaurant = require('../models/Restaurant');
 const User = require('../models/User');
 const MenuItem = require('../models/MenuItem');

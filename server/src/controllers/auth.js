@@ -1,3 +1,4 @@
+require('dotenv').config({ path: `${__dirname}/../.env` }); // Explicitly specify the .env file path
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
