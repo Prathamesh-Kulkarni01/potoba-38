@@ -37,7 +37,7 @@ export interface Order {
   tableId: string;
   table?: Table;
   items: OrderItem[];
-  status: 'pending' | 'preparing' | 'ready' | 'served' | 'paid' | 'cancelled';
+  status: 'pending' | 'preparing' | 'ready' | 'served' | 'paid' | 'cancelled' | 'completed' | 'in-progress' | 'new';
   total: number;
   createdAt: string;
   updatedAt: string;
@@ -58,4 +58,5 @@ export interface OrderItem {
   notes?: string;
 }
 
-export { Restaurant };
+// Use export type for re-exporting types when isolatedModules is enabled
+export type { Restaurant };

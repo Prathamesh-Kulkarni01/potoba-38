@@ -125,11 +125,15 @@ const RestaurantDashboard = () => {
   };
 
   // Calculate dashboard stats
-  const activeOrders = orders.filter(order => order.status !== 'completed' && order.status !== 'cancelled').length;
+  const activeOrders = orders.filter(order => 
+    order.status !== 'completed' && 
+    order.status !== 'cancelled' && 
+    order.status !== 'paid'
+  ).length;
   
   // Fix the arithmetic operation error - calculate total revenue properly
   const totalRevenue = orders
-    .filter(order => order.status === 'completed')
+    .filter(order => order.status === 'paid' || order.status === 'completed')
     .reduce((sum, order) => {
       // Convert to number if it's a string, or use 0 if undefined
       const orderTotal = typeof order.total === 'string' 
@@ -238,8 +242,8 @@ const RestaurantDashboard = () => {
                     <div className="flex items-center gap-2">
                       <div>${typeof order.total === 'number' ? order.total.toFixed(2) : order.total}</div>
                       <Badge variant={
-                        order.status === 'completed' ? 'default' : 
-                        order.status === 'in-progress' ? 'secondary' : 
+                        order.status === 'paid' || order.status === 'completed' ? 'default' : 
+                        order.status === 'preparing' || order.status === 'ready' || order.status === 'in-progress' ? 'secondary' : 
                         order.status === 'cancelled' ? 'destructive' : 'outline'
                       }>
                         {order.status}
