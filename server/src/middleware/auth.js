@@ -31,10 +31,10 @@ const protect = async (req, res, next) => {
       next();
     } catch (error) {
       console.error('Auth error:', error);
-      res.status(401).json({ success: false, error: 'Not authorized, token failed' });
+      return res.status(401).json({ success: false, error: 'Not authorized, token failed' });
     }
-  } else if (!token) {
-    res.status(401).json({ success: false, error: 'Not authorized, no token' });
+  } else {
+    return res.status(401).json({ success: false, error: 'Not authorized, no token' });
   }
 };
 

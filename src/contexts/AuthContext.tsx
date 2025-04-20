@@ -81,7 +81,7 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
       setUser(user);
       
       // Set current restaurant to first one if available
-      if (user.restaurants.length > 0) {
+      if (user.restaurants && user.restaurants.length > 0) {
         setCurrentRestaurantId(user.restaurants[0].id);
       }
       
@@ -150,13 +150,13 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
       // Update user with new restaurant
       const updatedUser = {
         ...user,
-        restaurants: [...user.restaurants, newRestaurant]
+        restaurants: [...(user.restaurants || []), newRestaurant]
       };
       
       setUser(updatedUser);
       
       // Set as current restaurant if it's the first one
-      if (updatedUser.restaurants.length === 1) {
+      if (!updatedUser.restaurants || updatedUser.restaurants.length === 1) {
         setCurrentRestaurantId(newRestaurant.id);
       }
       
@@ -169,22 +169,25 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
   };
   
   const getCurrentRestaurant = () => {
-    if (!user || !currentRestaurantId) return undefined;
+    if (!user || !currentRestaurantId || !user.restaurants) return undefined;
     return user.restaurants.find(r => r.id === currentRestaurantId);
   };
   
+  // Make sure all context values are always provided - no conditionals!
+  const contextValue = {
+    user,
+    loading,
+    login,
+    signup,
+    logout,
+    addRestaurant,
+    getCurrentRestaurant,
+    setCurrentRestaurantId,
+    currentRestaurantId
+  };
+  
   return (
-    <AuthContext.Provider value={{
-      user,
-      loading,
-      login,
-      signup,
-      logout,
-      addRestaurant,
-      getCurrentRestaurant,
-      setCurrentRestaurantId,
-      currentRestaurantId
-    }}>
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );

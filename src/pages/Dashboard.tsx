@@ -14,17 +14,7 @@ const Dashboard = () => {
   const { user, loading } = useAuth();
   const [showFoodIcon, setShowFoodIcon] = useState(false);
   
-  // Redirect to login if not authenticated
-  if (!loading && !user) {
-    return <Navigate to="/login" replace />;
-  }
-  
-  // Redirect to onboarding if user has no restaurants
-  if (!loading && user && user.restaurants.length === 0) {
-    return <Navigate to="/onboarding" replace />;
-  }
-  
-  // Random food icons for decoration
+  // Always initialize hooks before any conditional returns
   useEffect(() => {
     const timer = setTimeout(() => {
       setShowFoodIcon(true);
@@ -68,6 +58,16 @@ const Dashboard = () => {
         </div>
       </div>
     );
+  }
+  
+  // Redirect to login if not authenticated
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+  
+  // Redirect to onboarding if user has no restaurants
+  if (user.restaurants?.length === 0) {
+    return <Navigate to="/onboarding" replace />;
   }
   
   return (

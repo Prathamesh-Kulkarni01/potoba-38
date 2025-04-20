@@ -31,7 +31,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout, getCurrentRestaurant } = useAuth();
-  const currentRestaurant = getCurrentRestaurant();
+  const currentRestaurant = user ? getCurrentRestaurant() : undefined;
 
   const isActive = (path: string) => {
     return location.pathname === path;
@@ -49,6 +49,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
     return (names[0].charAt(0) + names[names.length - 1].charAt(0)).toUpperCase();
   };
 
+  // All hooks are guaranteed to be called regardless of conditional rendering
   const menuItems = [
     {
       title: "Dashboard",

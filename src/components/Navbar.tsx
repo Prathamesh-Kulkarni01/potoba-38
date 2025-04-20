@@ -34,7 +34,8 @@ const Navbar = ({ currentTenant }: NavbarProps) => {
     navigate('/login');
   };
   
-  const currentRestaurant = getCurrentRestaurant();
+  // Ensure we don't call getCurrentRestaurant if user is null
+  const currentRestaurant = user ? getCurrentRestaurant() : undefined;
   
   const getUserInitials = () => {
     if (!user) return "U";

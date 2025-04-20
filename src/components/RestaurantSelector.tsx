@@ -18,7 +18,11 @@ const RestaurantSelector = () => {
   const handleRestaurantChange = (restaurantId: string) => {
     setCurrentRestaurantId(restaurantId);
     setOpen(false);
-    toast.success(`Switched to ${user.restaurants.find(r => r.id === restaurantId)?.name}`);
+    
+    const selectedRestaurant = user.restaurants?.find(r => r.id === restaurantId);
+    if (selectedRestaurant) {
+      toast.success(`Switched to ${selectedRestaurant.name}`);
+    }
   };
   
   return (
@@ -40,20 +44,26 @@ const RestaurantSelector = () => {
           Your Restaurants
         </div>
         <div className="flex flex-col">
-          {user.restaurants.map((restaurant) => (
-            <Button
-              key={restaurant.id}
-              variant="ghost"
-              className={`justify-start px-2 py-1.5 text-sm cursor-pointer ${
-                restaurant.id === currentRestaurantId
-                  ? "bg-muted font-medium"
-                  : ""
-              }`}
-              onClick={() => handleRestaurantChange(restaurant.id)}
-            >
-              <span className="truncate">{restaurant.name}</span>
-            </Button>
-          ))}
+          {user.restaurants && user.restaurants.length > 0 ? (
+            user.restaurants.map((restaurant) => (
+              <Button
+                key={restaurant.id}
+                variant="ghost"
+                className={`justify-start px-2 py-1.5 text-sm cursor-pointer ${
+                  restaurant.id === currentRestaurantId
+                    ? "bg-muted font-medium"
+                    : ""
+                }`}
+                onClick={() => handleRestaurantChange(restaurant.id)}
+              >
+                <span className="truncate">{restaurant.name}</span>
+              </Button>
+            ))
+          ) : (
+            <div className="px-2 py-1.5 text-sm text-muted-foreground">
+              No restaurants yet
+            </div>
+          )}
         </div>
         <div className="border-t border-border px-2 py-2">
           <Button

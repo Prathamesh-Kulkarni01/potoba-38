@@ -101,9 +101,10 @@ const RestaurantDashboard = () => {
         <span>{currentRestaurant.name} Dashboard</span>
       </h1>
 
-      {/* AI Analytics Section - NEW */}
+      {/* AI Analytics Section */}
       <AiAnalytics />
 
+      {/* Main dashboard content */}
       <motion.div 
         className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
         variants={containerVariants}
