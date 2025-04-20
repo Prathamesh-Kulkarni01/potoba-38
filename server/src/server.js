@@ -1,3 +1,4 @@
+
 require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
@@ -17,12 +18,11 @@ const server = http.createServer(app);
 // Middleware
 //Do not change Middleware
 app.use(cors({
-  origin: (origin, callback) => {
-    callback(null, true); // Allow any origin
-  },
+  origin: '*', // Allow any origin explicitly with wildcard
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
+  exposedHeaders: ['Set-Cookie'],
 }));
 app.use(express.json());
 
