@@ -111,12 +111,13 @@ const protectedRoutes = [
     ],
   },
 ];
+const API_URL = import.meta.env.VITE_API_URL;
 
 const App = () => {
   useEffect(() => {
     const checkApiHealth = async () => {
       try {
-        const response = await fetch("/api/health-check");
+        const response = await fetch(`${API_URL}/api/health-check`);
         if (!response.ok) {
           console.error("API health check failed:", response.statusText);
         } else {
