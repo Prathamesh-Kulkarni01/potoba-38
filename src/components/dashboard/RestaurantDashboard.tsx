@@ -14,6 +14,7 @@ import useApi from '@/services/api';
 const RestaurantDashboard = () => {
   const { user } = useAuth();
   const api = useApi();
+  const { currentRestaurantId } = useAuth()
   const navigate = useNavigate();
 
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
@@ -32,9 +33,8 @@ const RestaurantDashboard = () => {
           return;
         }
 
-        const restaurantId = user.restaurants[0].id || user.restaurants[0]._id || '';
         const token = localStorage.getItem('token');
-        
+
         if (!token) {
           toast({
             title: "Authentication Error",
@@ -44,24 +44,24 @@ const RestaurantDashboard = () => {
           navigate('/login');
           return;
         }
-        
+
         // Fetch restaurant data
-        const restaurantData = await api.restaurant.getById(restaurantId);
+        const restaurantData = await api.restaurant.getById(currentRestaurantId);
         setRestaurant(restaurantData);
-        
+
         // Fetch menu items, tables, and orders
-        const menuResponse = await api.menu.get(restaurantId);
-        const tablesResponse = await api.table.get(restaurantId);
-        const ordersResponse = await api.order.get(restaurantId);
-        
+        const menuResponse = await api.menu.get(currentRestaurantId);
+        const tablesResponse = await api.table.get(currentRestaurantId);
+        const ordersResponse = await api.order.get(currentRestaurantId);
+
         if (menuResponse) {
           setMenuItems(menuResponse || []);
         }
-        
+
         if (tablesResponse) {
           setTables(tablesResponse || []);
         }
-        
+
         if (ordersResponse) {
           setOrders(ordersResponse || []);
         }
@@ -78,37 +78,37 @@ const RestaurantDashboard = () => {
     };
 
     loadData();
-  }, [user, navigate]);
+  }, [user, navigate, currentRestaurantId]);
 
   const createDemoData = async () => {
     if (!restaurant) return;
-    console.log({restaurant})
+    console.log({ restaurant })
     try {
       setCreatingDemoData(true);
       await api.restaurant.createDemoData(restaurant.id || restaurant._id || '');
-      
+
       toast({
         title: "Demo Data Created",
         description: "Sample menu items, tables and orders have been created for your restaurant.",
       });
-      
+
       // Reload data
       const token = localStorage.getItem('token');
       if (!token) return;
-      
+
       const restaurantId = restaurant.id || restaurant._id || '';
       const menuResponse = await api.menu.get(restaurantId);
       const tablesResponse = await api.table.get(restaurantId);
       const ordersResponse = await api.order.get(restaurantId);
-      
+
       if (menuResponse) {
         setMenuItems(menuResponse || []);
       }
-      
+
       if (tablesResponse) {
         setTables(tablesResponse || []);
       }
-      
+
       if (ordersResponse) {
         setOrders(ordersResponse || []);
       }
@@ -125,24 +125,24 @@ const RestaurantDashboard = () => {
   };
 
   // Calculate dashboard stats
-  const activeOrders = orders.filter(order => 
-    order.status !== 'completed' && 
-    order.status !== 'cancelled' && 
+  const activeOrders = orders.filter(order =>
+    order.status !== 'completed' &&
+    order.status !== 'cancelled' &&
     order.status !== 'paid'
   ).length;
-  
+
   // Fix the arithmetic operation error - calculate total revenue properly
   const totalRevenue = orders
     .filter(order => order.status === 'paid' || order.status === 'completed')
     .reduce((sum, order) => {
       // Convert to number if it's a string, or use 0 if undefined
-      const orderTotal = typeof order.total === 'string' 
-        ? parseFloat(order.total) 
+      const orderTotal = typeof order.total === 'string'
+        ? parseFloat(order.total)
         : (typeof order.total === 'number' ? order.total : 0);
-      
+
       return sum + orderTotal;
     }, 0);
-  
+
   const totalTables = tables.length;
   const availableTables = tables.filter(table => table.status === 'available').length;
 
@@ -167,10 +167,10 @@ const RestaurantDashboard = () => {
           <h2 className="text-2xl font-bold">{restaurant?.name || 'Restaurant Dashboard'}</h2>
           <p className="text-muted-foreground">{restaurant?.description}</p>
         </div>
-        
+
         <div className="flex gap-2">
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             onClick={createDemoData}
             disabled={creatingDemoData}
           >
@@ -189,7 +189,7 @@ const RestaurantDashboard = () => {
             <div className="text-2xl font-bold">{activeOrders}</div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Revenue</CardTitle>
@@ -199,7 +199,7 @@ const RestaurantDashboard = () => {
             <div className="text-2xl font-bold">₹{totalRevenue.toFixed(2)}</div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Menu Items</CardTitle>
@@ -209,7 +209,7 @@ const RestaurantDashboard = () => {
             <div className="text-2xl font-bold">{menuItems.length}</div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Tables</CardTitle>
@@ -220,7 +220,7 @@ const RestaurantDashboard = () => {
           </CardContent>
         </Card>
       </div>
-      
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card>
           <CardHeader>
@@ -242,9 +242,9 @@ const RestaurantDashboard = () => {
                     <div className="flex items-center gap-2">
                       <div>₹{typeof order.total === 'number' ? order.total.toFixed(2) : order.total}</div>
                       <Badge variant={
-                        order.status === 'paid' || order.status === 'completed' ? 'default' : 
-                        order.status === 'preparing' || order.status === 'ready' || order.status === 'in-progress' ? 'secondary' : 
-                        order.status === 'cancelled' ? 'destructive' : 'outline'
+                        order.status === 'paid' || order.status === 'completed' ? 'default' :
+                          order.status === 'preparing' || order.status === 'ready' || order.status === 'in-progress' ? 'secondary' :
+                            order.status === 'cancelled' ? 'destructive' : 'outline'
                       }>
                         {order.status}
                       </Badge>
@@ -255,7 +255,7 @@ const RestaurantDashboard = () => {
             )}
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader>
             <CardTitle>Popular Menu Items</CardTitle>

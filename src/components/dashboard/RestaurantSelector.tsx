@@ -20,7 +20,7 @@ const RestaurantSelector = () => {
     setCurrentRestaurantId(restaurantId);
     setOpen(false);
     
-    const selectedRestaurant = user.restaurants?.find(r => r.id === restaurantId);
+    const selectedRestaurant = user.restaurants?.find(r => r._id === restaurantId);
     if (selectedRestaurant) {
       toast.success(`Switched to ${selectedRestaurant.name}`);
     }
@@ -67,7 +67,7 @@ const RestaurantSelector = () => {
                     ? "bg-accent text-accent-foreground font-medium"
                     : ""
                 )}
-                onClick={() => handleRestaurantChange(restaurant.id)}
+                onClick={() => handleRestaurantChange(restaurant._id)}
               >
                 {restaurant.logo ? (
                   <img 
