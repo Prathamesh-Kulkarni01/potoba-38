@@ -3,7 +3,7 @@ import axios from 'axios';
 import { Restaurant } from '../types/auth';
 import authService from './authService';
 
-const API_URL = 'http://localhost:5000/api';
+const API_URL = '/api';
 
 export const restaurantService = {
   async getRestaurants() {

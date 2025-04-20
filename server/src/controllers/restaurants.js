@@ -87,15 +87,15 @@ exports.getRestaurant = async (req, res) => {
     if (!restaurant) {
       return res.status(404).json({
         success: false,
-        error: 'Restaurant not found'
+        error: 'The requested restaurant does not exist.'
       });
     }
 
     // Make sure user owns the restaurant
     if (restaurant.user.toString() !== req.user.id) {
-      return res.status(401).json({
+      return res.status(403).json({
         success: false,
-        error: 'Not authorized to access this restaurant'
+        error: 'You do not have permission to access this restaurant.'
       });
     }
 
@@ -184,15 +184,15 @@ exports.updateRestaurant = async (req, res) => {
     if (!restaurant) {
       return res.status(404).json({
         success: false,
-        error: 'Restaurant not found'
+        error: 'The requested restaurant does not exist.'
       });
     }
 
     // Make sure user owns the restaurant
     if (restaurant.user.toString() !== req.user.id) {
-      return res.status(401).json({
+      return res.status(403).json({
         success: false,
-        error: 'Not authorized to update this restaurant'
+        error: 'You do not have permission to access this restaurant.'
       });
     }
 
@@ -232,15 +232,15 @@ exports.deleteRestaurant = async (req, res) => {
     if (!restaurant) {
       return res.status(404).json({
         success: false,
-        error: 'Restaurant not found'
+        error: 'The requested restaurant does not exist.'
       });
     }
 
     // Make sure user owns the restaurant
     if (restaurant.user.toString() !== req.user.id) {
-      return res.status(401).json({
+      return res.status(403).json({
         success: false,
-        error: 'Not authorized to delete this restaurant'
+        error: 'You do not have permission to access this restaurant.'
       });
     }
 
@@ -276,15 +276,15 @@ exports.createDemoData = async (req, res) => {
     if (!restaurant) {
       return res.status(404).json({
         success: false,
-        error: 'Restaurant not found'
+        error: 'The requested restaurant does not exist.'
       });
     }
 
     // Make sure user owns the restaurant
     if (restaurant.user.toString() !== req.user.id) {
-      return res.status(401).json({
+      return res.status(403).json({
         success: false,
-        error: 'Not authorized to modify this restaurant'
+        error: 'You do not have permission to access this restaurant.'
       });
     }
 

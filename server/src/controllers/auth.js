@@ -1,4 +1,3 @@
-
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
@@ -80,20 +79,22 @@ exports.login = async (req, res) => {
     // Check for user
     const user = await User.findOne({ email }).select('+password');
 
+    // Updated error messages for better clarity
     if (!user) {
       return res.status(401).json({
         success: false,
-        error: 'Invalid credentials'
+        error: 'Invalid email or password. Please try again.'
       });
     }
 
     // Check if password matches
-    const isMatch = await user.matchPassword(password);
+    const isMatch = await user.comparePassword(password);
 
+    // Updated error messages for better clarity
     if (!isMatch) {
       return res.status(401).json({
         success: false,
-        error: 'Invalid credentials'
+        error: 'Invalid email or password. Please try again.'
       });
     }
 
@@ -250,5 +251,32 @@ const getDefaultPermissions = (role) => {
     case 'user':
     default:
       return ['view_dashboard'];
+  }
+};
+
+// @desc    Refresh token
+// @route   POST /api/auth/refresh-token
+// @access  Private
+exports.refreshToken = async (req, res) => {
+  try {
+    // User is already attached to req by the auth middleware
+    const user = req.user;
+
+    // Generate a new token with current user data (including any role changes)
+    const payload = user.getJwtPayload();
+    const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '24h' });
+
+    res.json({
+      token,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role
+      }
+    });
+  } catch (error) {
+    console.error('Token refresh error:', error);
+    res.status(500).json({ message: 'Server error' });
   }
 };

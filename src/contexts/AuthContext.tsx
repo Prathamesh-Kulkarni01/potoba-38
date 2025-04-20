@@ -1,9 +1,11 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useToast } from '@/components/ui/use-toast';
 import { Restaurant } from '@/types/auth';
+import authService from '@/services/authService';
 
+// Adjust the User type to make _id optional
 interface User {
-  _id: string;
+  _id?: string; // Made optional to match the userWithDefaults object
   id: string;
   name: string;
   email: string;
@@ -65,36 +67,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, navigate }
   const fetchCurrentUser = async (authToken: string) => {
     setIsLoading(true);
     try {
-      const response = await fetch('http://localhost:5000/api/auth/me', {
-        headers: {
-          'Authorization': `Bearer ${authToken}`
-        },
-        credentials: 'include'
-      });
+      const user = await authService.getCurrentUser();
+      console.log("Fetched user data:", user);
 
-      if (response.ok) {
-        const userData = await response.json();
-        console.log("Fetched user data:", userData);
-        
-        const userWithDefaults = {
-          ...userData.data.user,
-          role: userData.data.user.role || 'user',
-          permissions: userData.data.user.permissions || getDefaultPermissions(userData.data.user.role || 'user')
-        };
-        
-        console.log("User with defaults:", userWithDefaults);
-        setUser(userWithDefaults);
-        
-        if (userWithDefaults.restaurants && userWithDefaults.restaurants.length > 0) {
-          const firstRestaurant = userWithDefaults.restaurants[0];
-          if (!currentRestaurantId && firstRestaurant) {
-            setCurrentRestaurantId(firstRestaurant.id || firstRestaurant._id);
-          }
+      const userWithDefaults = {
+        ...user,
+        role: user.role || 'user',
+        permissions: user.permissions || getDefaultPermissions(user.role || 'user')
+      };
+
+      console.log("User with defaults:", userWithDefaults);
+      setUser(userWithDefaults);
+
+      if (userWithDefaults.restaurants && userWithDefaults.restaurants.length > 0) {
+        const firstRestaurant = userWithDefaults.restaurants[0];
+        if (!currentRestaurantId && firstRestaurant) {
+          setCurrentRestaurantId(firstRestaurant.id || firstRestaurant._id);
         }
-      } else {
-        console.error("Failed to fetch current user:", await response.text());
-        localStorage.removeItem('token');
-        setToken(null);
       }
     } catch (error) {
       console.error('Error fetching user data:', error);
@@ -108,53 +97,34 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, navigate }
   const login = async (email: string, password: string) => {
     setIsLoading(true);
     try {
-      const response = await fetch('http://localhost:5000/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ email, password }),
-        credentials: 'include'
-      });
+      const { token, user } = await authService.login(email, password);
+      localStorage.setItem('token', token);
+      setToken(token);
 
-      const data = await response.json();
-      console.log("Login response:", data);
+      const userRole = user.role || 'user';
+      console.log("User role from server:", userRole);
 
-      if (response.ok) {
-        localStorage.setItem('token', data.token);
-        setToken(data.token);
-        
-        const userRole = data.user?.role || 'user';
-        console.log("User role from server:", userRole);
-        
-        const userWithDefaults = {
-          ...data.user,
-          role: userRole,
-          permissions: data.user?.permissions || getDefaultPermissions(userRole)
-        };
-        
-        console.log("User with defaults:", userWithDefaults);
-        setUser(userWithDefaults);
-        
-        if (userWithDefaults.restaurants && userWithDefaults.restaurants.length > 0) {
-          const firstRestaurant = userWithDefaults.restaurants[0];
-          const restaurantId = firstRestaurant.id || firstRestaurant._id;
-          if (restaurantId) {
-            setCurrentRestaurantId(restaurantId);
-          }
+      const userWithDefaults = {
+        ...user,
+        role: userRole,
+        permissions: user.permissions || getDefaultPermissions(userRole)
+      };
+
+      console.log("User with defaults:", userWithDefaults);
+      setUser(userWithDefaults);
+
+      if (userWithDefaults.restaurants && userWithDefaults.restaurants.length > 0) {
+        const firstRestaurant = userWithDefaults.restaurants[0];
+        const restaurantId = firstRestaurant.id || firstRestaurant._id;
+        if (restaurantId) {
+          setCurrentRestaurantId(restaurantId);
         }
-        
-        toast({
-          title: "Login successful",
-          description: "You've been logged in",
-        });
-      } else {
-        toast({
-          title: "Login failed",
-          description: data.message || "Invalid credentials",
-          variant: "destructive",
-        });
       }
+
+      toast({
+        title: "Login successful",
+        description: "You've been logged in",
+      });
     } catch (error) {
       console.error('Login error:', error);
       toast({
@@ -171,30 +141,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, navigate }
   const register = async (name: string, email: string, password: string) => {
     setIsLoading(true);
     try {
-      const response = await fetch('http://localhost:5000/api/auth/register', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ name, email, password }),
-        credentials: 'include'
+      await authService.register(email, password, name);
+      toast({
+        title: "Registration successful",
+        description: "Your account has been created. Please log in.",
       });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        toast({
-          title: "Registration successful",
-          description: "Your account has been created. Please log in.",
-        });
-        navigate('/login');
-      } else {
-        toast({
-          title: "Registration failed",
-          description: data.message || "Could not create account",
-          variant: "destructive",
-        });
-      }
+      navigate('/login');
     } catch (error) {
       console.error('Registration error:', error);
       toast({
@@ -206,45 +158,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, navigate }
       setIsLoading(false);
     }
   };
-  
+
   const signup = async (name: string, email: string, password: string, role: string = 'user') => {
     setIsLoading(true);
     try {
-      const response = await fetch('http://localhost:5000/api/auth/register', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ name, email, password, role }),
-        credentials: 'include'
+      const { token, user } = await authService.register(email, password, name, role);
+      localStorage.setItem('token', token);
+      setToken(token);
+
+      const userWithDefaults = {
+        ...user,
+        role: user.role || 'user',
+        permissions: user.permissions || getDefaultPermissions(user.role || 'user')
+      };
+
+      setUser(userWithDefaults);
+
+      toast({
+        title: "Registration successful",
+        description: "Your account has been created.",
       });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        localStorage.setItem('token', data.data.token);
-        setToken(data.data.token);
-        
-        const userWithDefaults = {
-          ...data.data.user,
-          role: data.data.user.role || 'user',
-          permissions: data.data.user.permissions || getDefaultPermissions(data.data.user.role || 'user')
-        };
-        
-        setUser(userWithDefaults);
-        
-        toast({
-          title: "Registration successful",
-          description: "Your account has been created.",
-        });
-        navigate('/onboarding');
-      } else {
-        toast({
-          title: "Registration failed",
-          description: data.message || "Could not create account",
-          variant: "destructive",
-        });
-      }
+      navigate('/onboarding');
     } catch (error) {
       console.error('Signup error:', error);
       toast({
@@ -355,7 +289,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, navigate }
   );
 };
 
-export const useAuth = () => {
+// Ensure consistent export for useAuth
+export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
   if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');

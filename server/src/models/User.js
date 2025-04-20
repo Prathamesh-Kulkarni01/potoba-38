@@ -1,4 +1,3 @@
-
 const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
 
@@ -27,6 +26,10 @@ const userSchema = new mongoose.Schema({
   createdAt: {
     type: Date,
     default: Date.now
+  },
+  restaurants: {
+    type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Restaurant' }],
+    default: []
   }
 });
 

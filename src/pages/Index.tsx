@@ -35,7 +35,7 @@ const Index = () => {
   const [useMockApi, setUseMockApi] = useState(false);
 
   useEffect(() => {
-    const ws = new WebSocket('ws://localhost:8081');
+    const ws = new WebSocket('ws://localhost:8080');
     
     ws.onmessage = (event) => {
       toast({

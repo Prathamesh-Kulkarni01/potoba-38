@@ -3,7 +3,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { ApiResponse, Restaurant, MenuItem, Table, Order } from '@/types/api';
 
 // Base API URL
-const API_URL = 'http://localhost:5000/api';
+const API_URL = '/api';
 
 // API client that doesn't use hooks (for use in components that can't use hooks)
 export const api = {
