@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import {
   Edit,
@@ -6,7 +5,8 @@ import {
   PlusCircle,
   Filter,
   MoreHorizontal,
-  Image
+  Image,
+  Sparkles
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import {
@@ -42,6 +42,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { toast } from "sonner";
 
 // Sample data - in a real application, this would come from an API
 const categories = [
@@ -182,6 +183,15 @@ const MenuManagement = () => {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
   const [addItemDialogOpen, setAddItemDialogOpen] = useState(false);
+  const [aiDialogOpen, setAiDialogOpen] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiSuggestions, setAiSuggestions] = useState<{
+    name: string;
+    description: string;
+    category: string;
+    price: number;
+  } | null>(null);
   
   const filteredItems = activeCategory === 'All' 
     ? menuItems 
@@ -194,6 +204,67 @@ const MenuManagement = () => {
 
   const selectedItem = menuItems.find(item => item.id === selectedItemId);
   
+  const generateAiSuggestion = async () => {
+    if (!aiPrompt.trim()) {
+      toast.error("Please enter a description for the AI to work with");
+      return;
+    }
+
+    setAiGenerating(true);
+    
+    // Simulate AI generation - in a real app, this would be an API call
+    setTimeout(() => {
+      // Generate a mock response based on the prompt
+      const words = aiPrompt.toLowerCase().split(' ');
+      
+      let suggestedCategory = 'Main Courses';
+      if (words.some(w => ['salad', 'appetizer', 'starter'].includes(w))) {
+        suggestedCategory = 'Starters';
+      } else if (words.some(w => ['dessert', 'sweet', 'cake', 'ice cream'].includes(w))) {
+        suggestedCategory = 'Desserts';
+      } else if (words.some(w => ['side', 'fries', 'rice'].includes(w))) {
+        suggestedCategory = 'Sides';
+      } else if (words.some(w => ['drink', 'beverage', 'coffee', 'tea', 'juice'].includes(w))) {
+        suggestedCategory = 'Drinks';
+      }
+      
+      // Generate a price between $5.99 and $24.99
+      const price = Math.round((5.99 + Math.random() * 19) * 100) / 100;
+      
+      // Generate a name based on key ingredients or descriptors in the prompt
+      const nameWords = words.filter(w => 
+        !['a', 'the', 'and', 'with', 'in', 'on', 'of', 'for', 'to', 'by', 'from'].includes(w)
+      ).slice(0, 3);
+      
+      const firstWord = nameWords[0] ? nameWords[0].charAt(0).toUpperCase() + nameWords[0].slice(1) : 'Signature';
+      const suggestion = {
+        name: nameWords.length > 1 
+          ? `${firstWord} ${nameWords.slice(1).join(' ')}` 
+          : `${firstWord} Special`,
+        description: aiPrompt,
+        category: suggestedCategory,
+        price: price
+      };
+      
+      setAiSuggestions(suggestion);
+      setAiGenerating(false);
+      toast.success("AI suggestion generated!");
+    }, 1500);
+  };
+
+  const applyAiSuggestion = () => {
+    if (aiSuggestions) {
+      // In a real app, you would update your form state here
+      // For this example, we'll just close the AI dialog and open the regular add item dialog
+      setAiDialogOpen(false);
+      
+      // Open the add dialog with pre-filled values
+      // In a more complex app, you'd pass the AI suggestions to the add dialog
+      setAddItemDialogOpen(true);
+      toast.success("AI suggestion applied to the form");
+    }
+  };
+  
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -202,13 +273,23 @@ const MenuManagement = () => {
           <p className="text-muted-foreground">Manage your restaurant menu items</p>
         </div>
         
-        <Button 
-          onClick={() => setAddItemDialogOpen(true)} 
-          className="bg-restaurant-primary hover:bg-restaurant-primary/90"
-        >
-          <PlusCircle className="mr-2 h-4 w-4" />
-          Add Menu Item
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline"
+            onClick={() => setAiDialogOpen(true)}
+            className="flex items-center gap-2"
+          >
+            <Sparkles className="h-4 w-4 text-restaurant-primary" />
+            AI Suggestions
+          </Button>
+          <Button 
+            onClick={() => setAddItemDialogOpen(true)} 
+            className="bg-restaurant-primary hover:bg-restaurant-primary/90"
+          >
+            <PlusCircle className="mr-2 h-4 w-4" />
+            Add Menu Item
+          </Button>
+        </div>
       </div>
       
       <Tabs value={activeCategory} onValueChange={setActiveCategory} className="w-full">
@@ -358,6 +439,66 @@ const MenuManagement = () => {
               onClick={() => setAddItemDialogOpen(false)}
             >
               Add Item
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {/* AI Suggestion Dialog */}
+      <Dialog open={aiDialogOpen} onOpenChange={setAiDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>AI Menu Item Suggestions</DialogTitle>
+            <DialogDescription>
+              Describe what you'd like to add to your menu, and our AI will suggest a complete menu item
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="aiPrompt">Describe your dish</Label>
+              <Textarea 
+                id="aiPrompt"
+                placeholder="A creamy mushroom pasta with truffle oil and parmesan"
+                value={aiPrompt}
+                onChange={(e) => setAiPrompt(e.target.value)}
+                rows={4}
+              />
+              <Button 
+                onClick={generateAiSuggestion}
+                className="mt-2"
+                disabled={aiGenerating}
+              >
+                {aiGenerating ? (
+                  <>Generating<span className="animate-pulse">...</span></>
+                ) : (
+                  <>
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    Generate Suggestion
+                  </>
+                )}
+              </Button>
+            </div>
+            
+            {aiSuggestions && (
+              <div className="border rounded-md p-4 bg-muted/30 mt-4">
+                <h3 className="font-medium text-lg">{aiSuggestions.name}</h3>
+                <p className="text-sm text-muted-foreground mt-1">{aiSuggestions.description}</p>
+                <div className="flex justify-between mt-3">
+                  <span className="text-sm">{aiSuggestions.category}</span>
+                  <span className="font-semibold">${aiSuggestions.price.toFixed(2)}</span>
+                </div>
+                <Button 
+                  onClick={applyAiSuggestion}
+                  className="w-full mt-4 bg-restaurant-primary hover:bg-restaurant-primary/90"
+                >
+                  Use This Suggestion
+                </Button>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAiDialogOpen(false)}>
+              Cancel
             </Button>
           </DialogFooter>
         </DialogContent>
