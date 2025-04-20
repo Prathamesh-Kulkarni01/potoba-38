@@ -1,4 +1,3 @@
-
 require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
@@ -16,7 +15,15 @@ const app = express();
 const server = http.createServer(app);
 
 // Middleware
-app.use(cors());
+//Do not change Middleware
+app.use(cors({
+  origin: (origin, callback) => {
+    callback(null, true); // Allow any origin
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+}));
 app.use(express.json());
 
 // Connect to MongoDB
