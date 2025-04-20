@@ -1,52 +1,73 @@
 
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import React from "react";
 import { Toaster } from "@/components/ui/toaster";
-import { AuthProvider } from '@/contexts/AuthContext';
-import ProtectedRoute from '@/components/ProtectedRoute';
+import { Toaster as Sonner } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { AuthProvider } from "./contexts/AuthContext";
+import { ThemeProvider } from "./components/theme/ThemeProvider";
+import Index from "./pages/Index";
+import Login from "./pages/Login";
+import Signup from "./pages/Signup";
+import RestaurantOnboarding from "./pages/RestaurantOnboarding";
+import Dashboard from "./pages/Dashboard";
+import TableDetail from "./pages/TableDetail";
+import CustomerOrder from "./pages/CustomerOrder";
+import ScanLanding from "./pages/ScanLanding";
+import NotFound from "./pages/NotFound";
+import ApiSettings from "./pages/ApiSettings";
+import ApiDocs from "./components/ApiDocs";
+import "./App.css";
+import { toast } from "./hooks/use-toast";
 
-// Pages
-import HomePage from '@/pages/HomePage';
-import LoginPage from '@/pages/LoginPage';
-import RegisterPage from '@/pages/RegisterPage';
-import DashboardPage from '@/pages/DashboardPage';
-import CreateRestaurantPage from '@/pages/CreateRestaurantPage';
-import RestaurantDetailsPage from '@/pages/RestaurantDetailsPage';
-import NotFoundPage from '@/pages/NotFoundPage';
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      staleTime: 5 * 60 * 1000, // 5 minutes
+    },
+  },
+});
 
-function App() {
-  return (
-    <Router>
+
+const App = () => (
+  <QueryClientProvider client={queryClient}>
+    <ThemeProvider>
       <AuthProvider>
-        <Routes>
-          {/* Public routes */}
-          <Route path="/" element={<HomePage />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
-          
-          {/* Protected routes */}
-          <Route path="/dashboard" element={
-            <ProtectedRoute>
-              <DashboardPage />
-            </ProtectedRoute>
-          } />
-          <Route path="/restaurants/create" element={
-            <ProtectedRoute>
-              <CreateRestaurantPage />
-            </ProtectedRoute>
-          } />
-          <Route path="/restaurants/:id" element={
-            <ProtectedRoute>
-              <RestaurantDetailsPage />
-            </ProtectedRoute>
-          } />
-          
-          {/* Fallback route */}
-          <Route path="*" element={<NotFoundPage />} />
-        </Routes>
-        <Toaster />
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <div className="app-container theme-transition">
+              <Routes>
+                <Route path="/" element={<Index />} />
+                <Route path="/login" element={<Login />} />
+                <Route path="/signup" element={<Signup />} />
+                <Route path="/onboarding" element={<RestaurantOnboarding />} />
+                
+                {/* Dashboard routes */}
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/dashboard/tables" element={<Dashboard />} />
+                <Route path="/dashboard/menu" element={<Dashboard />} />
+                <Route path="/dashboard/orders" element={<Dashboard />} />
+                <Route path="/dashboard/api-settings" element={<ApiSettings />} />
+                <Route path="/dashboard/api-docs" element={<ApiDocs />} />
+                <Route path="/dashboard/tables/:tableId" element={<TableDetail />} />
+                
+                {/* Customer facing routes */}
+                <Route path="/scan" element={<ScanLanding />} />
+                <Route path="/order/:tableId" element={<CustomerOrder />} />
+                
+                {/* Catch-all route */}
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </div>
+          </BrowserRouter>
+        </TooltipProvider>
       </AuthProvider>
-    </Router>
-  );
-}
+    </ThemeProvider>
+  </QueryClientProvider>
+);
 
 export default App;

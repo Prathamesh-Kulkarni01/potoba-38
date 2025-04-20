@@ -1,69 +1,193 @@
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
-
-interface User {
-  id: string;
-  name: string;
-  email: string;
-}
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { toast } from "sonner";
+import { api } from "@/services/api";
+import { User, Restaurant } from "@/types/api";
 
 interface AuthContextType {
   user: User | null;
-  token: string | null;
-  isAuthenticated: boolean;
-  login: (token: string, user: User) => void;
+  loading: boolean;
+  login: (email: string, password: string) => Promise<void>;
+  signup: (name: string, email: string, password: string) => Promise<void>;
   logout: () => void;
+  addRestaurant: (restaurant: Omit<Restaurant, 'id'>) => Promise<Restaurant>;
+  getCurrentRestaurant: () => Restaurant | undefined;
+  setCurrentRestaurantId: (id: string) => void;
+  currentRestaurantId: string | null;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthContext = createContext<AuthContextType>({} as AuthContextType);
 
-export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const navigate = useNavigate();
-
-  // Initialize from localStorage on app startup
+  const [loading, setLoading] = useState(true);
+  const [currentRestaurantId, setCurrentRestaurantId] = useState<string | null>(null);
+  
+  // Check for existing session on mount
   useEffect(() => {
-    const storedToken = localStorage.getItem('token');
-    const storedUser = localStorage.getItem('user');
+    const checkAuthStatus = async () => {
+      const token = localStorage.getItem('token');
+      const storedRestaurantId = localStorage.getItem('currentRestaurantId');
+      
+      if (token) {
+        try {
+          const response = await api.auth.getCurrentUser(token);
+          
+          if (response.success && response.data) {
+            setUser(response.data.user);
+            
+            if (storedRestaurantId) {
+              setCurrentRestaurantId(storedRestaurantId);
+            } else if (response.data.user.restaurants.length > 0) {
+              // Set first restaurant as default if none selected
+              setCurrentRestaurantId(response.data.user.restaurants[0].id);
+            }
+          }
+        } catch (error) {
+          console.error("Failed to restore session:", error);
+          localStorage.removeItem('token');
+        }
+      }
+      
+      setLoading(false);
+    };
     
-    if (storedToken && storedUser) {
-      setToken(storedToken);
-      setUser(JSON.parse(storedUser));
-      setIsAuthenticated(true);
-    }
+    checkAuthStatus();
   }, []);
-
-  const login = (token: string, user: User) => {
-    localStorage.setItem('token', token);
-    localStorage.setItem('user', JSON.stringify(user));
-    setToken(token);
-    setUser(user);
-    setIsAuthenticated(true);
+  
+  // Save current restaurant to localStorage whenever it changes
+  useEffect(() => {
+    if (currentRestaurantId) {
+      localStorage.setItem('currentRestaurantId', currentRestaurantId);
+    } else {
+      localStorage.removeItem('currentRestaurantId');
+    }
+  }, [currentRestaurantId]);
+  
+  const login = async (email: string, password: string) => {
+    setLoading(true);
+    try {
+      const response = await api.auth.login(email, password);
+      
+      if (!response.success || !response.data) {
+        throw new Error(response.error || "Login failed");
+      }
+      
+      const { user, token } = response.data;
+      
+      // Save token to localStorage
+      localStorage.setItem('token', token);
+      
+      setUser(user);
+      
+      // Set current restaurant to first one if available
+      if (user.restaurants.length > 0) {
+        setCurrentRestaurantId(user.restaurants[0].id);
+      }
+      
+      toast.success("Logged in successfully!");
+    } catch (error) {
+      console.error("Login error:", error);
+      toast.error("Login failed. Please check your credentials.");
+      throw error;
+    } finally {
+      setLoading(false);
+    }
   };
-
+  
+  const signup = async (name: string, email: string, password: string) => {
+    setLoading(true);
+    try {
+      const response = await api.auth.register({ name, email, password });
+      
+      if (!response.success || !response.data) {
+        throw new Error(response.error || "Registration failed");
+      }
+      
+      const { user, token } = response.data;
+      
+      // Save token to localStorage
+      localStorage.setItem('token', token);
+      
+      setUser(user);
+      toast.success("Account created successfully!");
+    } catch (error) {
+      console.error("Signup error:", error);
+      toast.error("Failed to create account.");
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+  
   const logout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    setToken(null);
+    api.auth.logout().catch(error => {
+      console.error("Logout error:", error);
+    });
+    
     setUser(null);
-    setIsAuthenticated(false);
-    navigate('/login');
+    setCurrentRestaurantId(null);
+    localStorage.removeItem('token');
+    localStorage.removeItem('currentRestaurantId');
+    toast.info("Logged out successfully");
   };
-
+  
+  const addRestaurant = async (restaurant: Omit<Restaurant, 'id'>) => {
+    if (!user) throw new Error("User must be logged in to add a restaurant");
+    
+    const token = localStorage.getItem('token');
+    if (!token) throw new Error("Authentication token not found");
+    
+    try {
+      const response = await api.restaurants.create(restaurant, token);
+      
+      if (!response.success || !response.data) {
+        throw new Error(response.error || "Failed to add restaurant");
+      }
+      
+      const newRestaurant = response.data;
+      
+      // Update user with new restaurant
+      const updatedUser = {
+        ...user,
+        restaurants: [...user.restaurants, newRestaurant]
+      };
+      
+      setUser(updatedUser);
+      
+      // Set as current restaurant if it's the first one
+      if (updatedUser.restaurants.length === 1) {
+        setCurrentRestaurantId(newRestaurant.id);
+      }
+      
+      return newRestaurant;
+    } catch (error) {
+      console.error("Error adding restaurant:", error);
+      toast.error("Failed to add restaurant");
+      throw error;
+    }
+  };
+  
+  const getCurrentRestaurant = () => {
+    if (!user || !currentRestaurantId) return undefined;
+    return user.restaurants.find(r => r.id === currentRestaurantId);
+  };
+  
   return (
-    <AuthContext.Provider value={{ user, token, isAuthenticated, login, logout }}>
+    <AuthContext.Provider value={{
+      user,
+      loading,
+      login,
+      signup,
+      logout,
+      addRestaurant,
+      getCurrentRestaurant,
+      setCurrentRestaurantId,
+      currentRestaurantId
+    }}>
       {children}
     </AuthContext.Provider>
   );
 };
 
-export const useAuth = (): AuthContextType => {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-};
+export const useAuth = () => useContext(AuthContext);
