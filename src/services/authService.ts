@@ -7,7 +7,7 @@ const API_URL = import.meta.env.VITE_API_URL; // Use the environment variable
 export const authService = {
   async login(email: string, password: string) {
     try {
-      const response = await axios.post<AuthResponse>(`${API_URL}/api/auth/login`, // Use the API_URL
+      const response = await axios.post<AuthResponse>(`/api/auth/login`, // Use the API_URL
         { email, password },
         { withCredentials: true }
       );
