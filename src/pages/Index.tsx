@@ -1,5 +1,5 @@
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { 
@@ -22,7 +22,12 @@ import {
   MonitorSmartphone,
   Smartphone,
   CloudLightning,
-  Gift
+  Gift,
+  Phone,
+  MapPin,
+  Rupee,
+  IndianRupee,
+  Scan
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { 
@@ -175,8 +180,47 @@ const FloatingElement = ({ children, duration = 4 }: { children: React.ReactNode
   </motion.div>
 );
 
+// Animated text component for the logo
+const AnimatedText = ({ text, className = "" }: { text: string, className?: string }) => {
+  return (
+    <motion.div
+      className={`flex items-center justify-center ${className}`}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.5 }}
+    >
+      {text.split("").map((char, index) => (
+        <motion.span
+          key={index}
+          className="inline-block text-5xl md:text-7xl font-bold text-white"
+          initial={{ y: -20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{
+            duration: 0.3,
+            delay: index * 0.05,
+            repeat: 0,
+            repeatType: "reverse",
+            repeatDelay: 10,
+          }}
+        >
+          {char === " " ? "\u00A0" : char}
+        </motion.span>
+      ))}
+    </motion.div>
+  );
+};
+
 const Index = () => {
   const { user } = useAuth();
+  const [isVisible, setIsVisible] = useState(false);
+  
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setIsVisible(true);
+    }, 500);
+    
+    return () => clearTimeout(timeout);
+  }, []);
   
   const features: FeatureProps[] = [
     {
@@ -209,8 +253,8 @@ const Index = () => {
     },
     {
       icon: CreditCard,
-      title: "Payment Processing",
-      description: "Integrated payment solutions with multi-currency support and split bill functionality.",
+      title: "Multiple Payment Options",
+      description: "Accept UPI, cards, and cash with multi-currency support and split bill functionality.",
       iconColor: "text-blue-600",
       bgColor: "bg-blue-100"
     },
@@ -226,7 +270,7 @@ const Index = () => {
   const pricingPlans = [
     {
       title: "Starter",
-      price: "$79",
+      price: "₹3,999",
       features: [
         "1 restaurant location",
         "Up to 5 POS terminals",
@@ -239,7 +283,7 @@ const Index = () => {
     },
     {
       title: "Professional",
-      price: "$149",
+      price: "₹7,499",
       features: [
         "Up to 3 restaurant locations",
         "Unlimited POS terminals",
@@ -270,31 +314,31 @@ const Index = () => {
 
   const testimonials = [
     {
-      quote: "Potoba POS transformed how we manage our restaurant chain. The multi-location features and real-time analytics helped us increase overall revenue by 32% in just six months.",
-      author: "Michael Rodriguez",
-      role: "CEO, Fusion Restaurant Group"
+      quote: "Potoba POS helped us serve customers 40% faster and reduced order errors by 95%. The custom features for Indian cuisine and multi-language menus are perfect for our business.",
+      author: "Rajesh Sharma",
+      role: "Owner, Spice Garden Restaurant, Mumbai"
     },
     {
-      quote: "The cloud-based system means I can check on business performance from anywhere. As someone who manages multiple locations, this flexibility has been game-changing.",
-      author: "Sarah Johnson",
-      role: "Operations Director, Coastal Restaurants"
+      quote: "The UPI and card integration is seamless. Our staff adapted to the system in just one day, and the QR ordering has been a hit with our tech-savvy customers in Bangalore.",
+      author: "Priya Nair",
+      role: "Operations Manager, Dosa Factory, Bangalore"
     },
     {
-      quote: "Our customers love the QR ordering system, and our staff loves how easy inventory management is. Potoba POS paid for itself within the first 3 months.",
-      author: "David Chen",
-      role: "Owner, Spice & Rice Franchise"
+      quote: "As a franchise owner with 6 locations across Delhi NCR, Potoba POS gives me real-time insights into all my restaurants. The ROI was visible within 2 months.",
+      author: "Vikram Singh",
+      role: "CEO, Urban Tadka Group, Delhi"
     },
     {
-      quote: "The level of customization available with Potoba POS is impressive. Their team helped us tailor the system perfectly to our unique business model and workflows.",
-      author: "Jessica Williams",
-      role: "CTO, Urban Plate Group"
+      quote: "The inventory management system is perfectly adapted for Indian kitchens. We've reduced food waste by 30% and the customer support team understands our unique requirements.",
+      author: "Ananya Desai",
+      role: "Head Chef, Coastal Flavors, Chennai"
     }
   ];
 
   return (
     <div className="min-h-screen overflow-x-hidden">
-      {/* Hero Section with Parallax */}
-      <section className="relative bg-gradient-to-br from-gray-900 to-gray-800 overflow-hidden">
+      {/* Hero Section with Parallax - Enhanced with more impressive design */}
+      <section className="relative bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 overflow-hidden min-h-screen flex items-center">
         <div className="absolute inset-0 overflow-hidden">
           <ParallaxSection speed={0.2}>
             <div className="absolute top-0 left-1/4 w-64 h-64 bg-restaurant-primary/20 rounded-full filter blur-3xl"></div>
@@ -306,17 +350,63 @@ const Index = () => {
             <div className="absolute bottom-0 right-1/4 w-80 h-80 bg-restaurant-accent/20 rounded-full filter blur-3xl"></div>
           </ParallaxSection>
         </div>
+        
+        {/* Animated background elements */}
+        <motion.div 
+          className="absolute inset-0 bg-[radial-gradient(circle_at_bottom_left,rgba(255,107,53,0.15),transparent_50%)]"
+          animate={{ 
+            opacity: [0.5, 0.7, 0.5],
+            scale: [1, 1.05, 1],
+          }}
+          transition={{ 
+            duration: 10, 
+            repeat: Infinity, 
+            repeatType: "reverse" 
+          }}
+        />
+        
+        <motion.div 
+          className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(46,196,182,0.15),transparent_50%)]"
+          animate={{ 
+            opacity: [0.5, 0.3, 0.5],
+            scale: [1, 1.1, 1],
+          }}
+          transition={{ 
+            duration: 8, 
+            repeat: Infinity, 
+            repeatType: "reverse",
+            delay: 1
+          }}
+        />
+        
         <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm"></div>
         <div className="container mx-auto px-4 py-24 md:py-36 relative z-10">
           <div className="max-w-4xl mx-auto">
             <div className="text-center mb-8">
+              {/* Animated Logo Text instead of image */}
               <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.5 }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.8 }}
+                className="mb-6"
               >
-                <img src="/images/potoba-logo.svg" alt="Potoba POS" className="h-20 mx-auto mb-6" />
+                <AnimatedText text="POTOBA POS" />
+                <motion.div 
+                  initial={{ width: 0 }}
+                  animate={{ width: "100%" }}
+                  transition={{ duration: 1, delay: 1 }}
+                  className="h-1 bg-gradient-to-r from-restaurant-primary via-restaurant-secondary to-restaurant-accent mx-auto mt-2"
+                />
+                <motion.p 
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.5, delay: 1.5 }}
+                  className="text-restaurant-accent mt-2 text-xl"
+                >
+                  Revolutionizing Indian Restaurants
+                </motion.p>
               </motion.div>
+
               <motion.h1 
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -331,7 +421,7 @@ const Index = () => {
                 transition={{ duration: 0.5, delay: 0.4 }}
                 className="text-xl text-white/90 mb-10 max-w-3xl mx-auto"
               >
-                Potoba POS combines powerful restaurant management tools with an intuitive interface to streamline operations, boost sales, and deliver exceptional customer experiences.
+                Potoba POS combines powerful restaurant management tools with an intuitive interface optimized for Indian restaurants, supporting local payment methods and multilingual menus.
               </motion.p>
               <motion.div 
                 initial={{ opacity: 0, y: 20 }}
@@ -387,13 +477,13 @@ const Index = () => {
             <div className="mt-20 flex flex-wrap justify-center gap-x-16 gap-y-8 text-white text-center">
               <ScrollReveal delay={0.1}>
                 <div className="flex flex-col items-center">
-                  <div className="text-4xl font-bold mb-2 bg-clip-text text-transparent bg-gradient-to-r from-restaurant-primary to-restaurant-accent">10k+</div>
-                  <div className="text-white/70">Active Restaurants</div>
+                  <div className="text-4xl font-bold mb-2 bg-clip-text text-transparent bg-gradient-to-r from-restaurant-primary to-restaurant-accent">5k+</div>
+                  <div className="text-white/70">Active Restaurants in India</div>
                 </div>
               </ScrollReveal>
               <ScrollReveal delay={0.2}>
                 <div className="flex flex-col items-center">
-                  <div className="text-4xl font-bold mb-2 bg-clip-text text-transparent bg-gradient-to-r from-restaurant-primary to-restaurant-accent">$2B+</div>
+                  <div className="text-4xl font-bold mb-2 bg-clip-text text-transparent bg-gradient-to-r from-restaurant-primary to-restaurant-accent">₹500Cr+</div>
                   <div className="text-white/70">Processed Annually</div>
                 </div>
               </ScrollReveal>
@@ -415,18 +505,18 @@ const Index = () => {
         <div className="absolute bottom-0 w-full h-20 bg-gradient-to-t from-white to-transparent"></div>
       </section>
 
-      {/* Trusted By Section */}
+      {/* Trusted By Section - Updated with Indian brands */}
       <section className="py-12 bg-white">
         <div className="container mx-auto px-4">
           <div className="text-center mb-10">
             <ScrollReveal>
-              <h2 className="text-xl text-gray-600 mb-8">Trusted by leading restaurant brands worldwide</h2>
+              <h2 className="text-xl text-gray-600 mb-8">Trusted by leading restaurant brands across India</h2>
             </ScrollReveal>
             <div className="flex flex-wrap justify-center items-center gap-x-12 gap-y-8">
               {[1, 2, 3, 4, 5, 6].map((i) => (
                 <ScrollReveal key={i} delay={i * 0.1}>
                   <div className="h-12 w-32 bg-gray-200 rounded-md flex items-center justify-center text-gray-400">
-                    LOGO {i}
+                    BRAND {i}
                   </div>
                 </ScrollReveal>
               ))}
@@ -454,7 +544,7 @@ const Index = () => {
             </ScrollReveal>
             <ScrollReveal delay={0.2}>
               <p className="text-xl text-muted-foreground">
-                A comprehensive suite of tools that gives you complete control over your restaurant operations
+                A comprehensive suite of tools specially designed for Indian restaurants and cafes
               </p>
             </ScrollReveal>
           </div>
@@ -476,11 +566,153 @@ const Index = () => {
         </div>
       </section>
 
-      {/* App Preview Section with Parallax */}
+      {/* QR Code Table Ordering Section - NEW */}
       <section className="py-24 bg-white overflow-hidden relative">
         <div className="container mx-auto px-4">
           <div className="flex flex-col lg:flex-row items-center gap-16">
-            <div className="lg:w-1/2 order-2 lg:order-1 relative">
+            <div className="lg:w-1/2 order-2 lg:order-1">
+              <ScrollReveal>
+                <span className="inline-block px-3 py-1 bg-restaurant-accent/10 text-restaurant-accent rounded-full text-sm font-medium mb-4">CONTACTLESS ORDERING</span>
+              </ScrollReveal>
+              <ScrollReveal delay={0.1}>
+                <h2 className="text-4xl font-bold mb-6">Seamless QR Code Table Ordering</h2>
+              </ScrollReveal>
+              <ScrollReveal delay={0.2}>
+                <p className="text-xl mb-8 text-muted-foreground">
+                  Transform the dining experience with our contactless ordering system. Customers simply scan, order, and pay - all from their mobile devices.
+                </p>
+              </ScrollReveal>
+              
+              <div className="space-y-6">
+                <ScrollReveal delay={0.3}>
+                  <div className="flex gap-4">
+                    <div className="h-10 w-10 bg-restaurant-primary text-white rounded-full flex items-center justify-center shrink-0">
+                      <Scan className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-semibold mb-2">Instant QR Scanning</h3>
+                      <p className="text-muted-foreground">
+                        Custom QR codes for each table enable efficient ordering and reduce wait times.
+                      </p>
+                    </div>
+                  </div>
+                </ScrollReveal>
+                
+                <ScrollReveal delay={0.4}>
+                  <div className="flex gap-4">
+                    <div className="h-10 w-10 bg-restaurant-secondary text-white rounded-full flex items-center justify-center shrink-0">
+                      <IndianRupee className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-semibold mb-2">Integrated Indian Payments</h3>
+                      <p className="text-muted-foreground">
+                        Support for UPI, credit/debit cards, and all popular Indian payment methods.
+                      </p>
+                    </div>
+                  </div>
+                </ScrollReveal>
+                
+                <ScrollReveal delay={0.5}>
+                  <div className="flex gap-4">
+                    <div className="h-10 w-10 bg-restaurant-accent text-white rounded-full flex items-center justify-center shrink-0">
+                      <Globe className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-semibold mb-2">Multilingual Support</h3>
+                      <p className="text-muted-foreground">
+                        Menus in Hindi, English, and regional Indian languages for a truly inclusive experience.
+                      </p>
+                    </div>
+                  </div>
+                </ScrollReveal>
+              </div>
+              
+              <ScrollReveal delay={0.6}>
+                <div className="mt-10">
+                  <Button asChild className="bg-restaurant-primary" size="lg">
+                    <Link to="/signup">
+                      Try QR Ordering Now
+                      <ChevronRight className="ml-1 h-4 w-4" />
+                    </Link>
+                  </Button>
+                </div>
+              </ScrollReveal>
+            </div>
+            
+            <div className="lg:w-1/2 order-1 lg:order-2 relative">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                whileInView={{ opacity: 1, scale: 1 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.6 }}
+                className="relative"
+              >
+                <div className="bg-restaurant-primary/5 rounded-2xl p-6 shadow-lg">
+                  <div className="grid grid-cols-2 gap-6">
+                    <motion.div
+                      whileHover={{ y: -5, scale: 1.02 }}
+                      transition={{ type: "spring", stiffness: 300 }}
+                      className="bg-white p-4 rounded-xl shadow-md"
+                    >
+                      <div className="rounded-lg overflow-hidden mb-3">
+                        <img src="/placeholder.svg" alt="QR Code Menu" className="w-full" />
+                      </div>
+                      <h3 className="text-lg font-bold">Table QR Code</h3>
+                      <p className="text-sm text-muted-foreground">Unique codes for each table</p>
+                    </motion.div>
+                    
+                    <motion.div
+                      whileHover={{ y: -5, scale: 1.02 }}
+                      transition={{ type: "spring", stiffness: 300 }}
+                      className="bg-white p-4 rounded-xl shadow-md"
+                    >
+                      <div className="rounded-lg overflow-hidden mb-3">
+                        <img src="/placeholder.svg" alt="Mobile Menu" className="w-full" />
+                      </div>
+                      <h3 className="text-lg font-bold">Digital Menu</h3>
+                      <p className="text-sm text-muted-foreground">Interactive browsing experience</p>
+                    </motion.div>
+                    
+                    <motion.div
+                      whileHover={{ y: -5, scale: 1.02 }}
+                      transition={{ type: "spring", stiffness: 300 }}
+                      className="bg-white p-4 rounded-xl shadow-md"
+                    >
+                      <div className="rounded-lg overflow-hidden mb-3">
+                        <img src="/placeholder.svg" alt="Payment Options" className="w-full" />
+                      </div>
+                      <h3 className="text-lg font-bold">UPI & Card Payments</h3>
+                      <p className="text-sm text-muted-foreground">All Indian payment methods</p>
+                    </motion.div>
+                    
+                    <motion.div
+                      whileHover={{ y: -5, scale: 1.02 }}
+                      transition={{ type: "spring", stiffness: 300 }}
+                      className="bg-white p-4 rounded-xl shadow-md"
+                    >
+                      <div className="rounded-lg overflow-hidden mb-3">
+                        <img src="/placeholder.svg" alt="Order Confirmation" className="w-full" />
+                      </div>
+                      <h3 className="text-lg font-bold">Order Tracking</h3>
+                      <p className="text-sm text-muted-foreground">Real-time status updates</p>
+                    </motion.div>
+                  </div>
+                </div>
+              </motion.div>
+              
+              {/* Decorative elements */}
+              <div className="absolute -z-10 -bottom-10 -left-10 w-80 h-80 bg-restaurant-secondary/10 rounded-full filter blur-3xl"></div>
+              <div className="absolute -z-10 -top-10 -right-10 w-80 h-80 bg-restaurant-accent/10 rounded-full filter blur-3xl"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* App Preview Section with Parallax - Fixed image display */}
+      <section className="py-24 bg-gray-50 overflow-hidden relative">
+        <div className="container mx-auto px-4">
+          <div className="flex flex-col lg:flex-row items-center gap-16">
+            <div className="lg:w-1/2 order-2 lg:order-2 relative">
               <ParallaxSection speed={-0.2}>
                 <motion.div
                   initial={{ opacity: 0, scale: 0.9 }}
@@ -493,7 +725,7 @@ const Index = () => {
                     <img 
                       src="/placeholder.svg" 
                       alt="Potoba POS Dashboard" 
-                      className="w-full rounded-xl"
+                      className="w-full rounded-xl object-cover aspect-video"
                     />
                     
                     <div className="mt-4 flex items-center justify-between">
@@ -510,7 +742,7 @@ const Index = () => {
               <div className="absolute -z-10 -top-10 -right-10 w-80 h-80 bg-restaurant-accent/10 rounded-full filter blur-3xl"></div>
             </div>
             
-            <div className="lg:w-1/2 order-1 lg:order-2">
+            <div className="lg:w-1/2 order-1 lg:order-1">
               <ScrollReveal>
                 <span className="inline-block px-3 py-1 bg-restaurant-secondary/10 text-restaurant-secondary rounded-full text-sm font-medium mb-4">INTELLIGENT SYSTEM</span>
               </ScrollReveal>
@@ -589,7 +821,7 @@ const Index = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 text-white">
             <ScrollReveal delay={0.1}>
               <div className="text-center">
-                <div className="text-5xl font-bold mb-2">10k+</div>
+                <div className="text-5xl font-bold mb-2">5k+</div>
                 <div className="text-white/80 text-lg">Active Restaurants</div>
               </div>
             </ScrollReveal>
@@ -615,7 +847,7 @@ const Index = () => {
         </div>
       </section>
 
-      {/* Testimonials Section */}
+      {/* Testimonials Section - Updated with Indian testimonials */}
       <section className="py-24 bg-gray-50 relative overflow-hidden">
         <ParallaxSection speed={0.1}>
           <div className="absolute top-1/3 right-0 w-1/4 h-1/4 bg-restaurant-primary/5 rounded-l-full"></div>
@@ -634,7 +866,7 @@ const Index = () => {
             </ScrollReveal>
             <ScrollReveal delay={0.2}>
               <p className="text-xl text-muted-foreground">
-                Join thousands of restaurant owners who have transformed their business with Potoba POS
+                Join thousands of restaurant owners across India who have transformed their business with Potoba POS
               </p>
             </ScrollReveal>
             <ScrollReveal delay={0.3}>
@@ -644,7 +876,7 @@ const Index = () => {
                 <Star className="h-6 w-6 text-yellow-400" fill="#FACC15" />
                 <Star className="h-6 w-6 text-yellow-400" fill="#FACC15" />
                 <Star className="h-6 w-6 text-yellow-400" fill="#FACC15" />
-                <span className="ml-2 text-lg font-medium">4.9/5 from 2,400+ reviews</span>
+                <span className="ml-2 text-lg font-medium">4.9/5 from 1,200+ reviews</span>
               </div>
             </ScrollReveal>
           </div>
@@ -665,7 +897,7 @@ const Index = () => {
         </div>
       </section>
 
-      {/* Pricing Section */}
+      {/* Pricing Section - Updated with Indian pricing */}
       <section className="py-24 bg-white relative overflow-hidden">
         <ParallaxSection speed={0.15}>
           <div className="absolute -top-20 -left-20 w-80 h-80 bg-gradient-to-br from-restaurant-primary/5 to-restaurant-secondary/5 rounded-full"></div>
@@ -748,7 +980,7 @@ const Index = () => {
                 </ScrollReveal>
                 <ScrollReveal delay={0.1}>
                   <p className="text-xl mb-10 text-white/90">
-                    Join thousands of successful restaurants using Potoba POS to increase efficiency, boost profits, and deliver exceptional customer experiences.
+                    Join thousands of successful restaurants across India using Potoba POS to increase efficiency, boost profits, and deliver exceptional customer experiences.
                   </p>
                 </ScrollReveal>
                 <ScrollReveal delay={0.2}>
@@ -766,20 +998,36 @@ const Index = () => {
                     No credit card required. 14-day free trial. Cancel anytime.
                   </p>
                 </ScrollReveal>
+                
+                {/* India-specific contact info */}
+                <ScrollReveal delay={0.4}>
+                  <div className="mt-10 flex flex-col md:flex-row items-center justify-center gap-6">
+                    <div className="flex items-center">
+                      <Phone className="h-5 w-5 mr-2 text-white/70" />
+                      <span>+91 1800-123-4567</span>
+                    </div>
+                    <div className="flex items-center">
+                      <MapPin className="h-5 w-5 mr-2 text-white/70" />
+                      <span>Offices: Mumbai, Delhi, Bangalore, Chennai</span>
+                    </div>
+                  </div>
+                </ScrollReveal>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Footer */}
+      {/* Footer - Updated with Indian contact info */}
       <footer className="bg-gray-900 text-white py-16">
         <div className="container mx-auto px-4">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-12">
             <div>
-              <img src="/images/potoba-logo.svg" alt="Potoba POS" className="h-12 mb-6" />
+              <div className="h-12 flex items-center mb-6">
+                <AnimatedText text="POTOBA POS" className="text-2xl" />
+              </div>
               <p className="text-white/70 mb-4">
-                Next-generation POS system revolutionizing restaurant management.
+                Next-generation POS system revolutionizing restaurant management across India.
               </p>
               <div className="flex space-x-4">
                 <a href="#" className="text-white/70 hover:text-white">
@@ -818,12 +1066,12 @@ const Index = () => {
               </ul>
             </div>
             <div>
-              <h3 className="text-lg font-semibold mb-4">Company</h3>
+              <h3 className="text-lg font-semibold mb-4">Contact</h3>
               <ul className="space-y-3">
-                <li><a href="#" className="text-white/70 hover:text-white">About</a></li>
-                <li><a href="#" className="text-white/70 hover:text-white">Careers</a></li>
-                <li><a href="#" className="text-white/70 hover:text-white">Contact</a></li>
-                <li><a href="#" className="text-white/70 hover:text-white">Partners</a></li>
+                <li className="flex items-center text-white/70"><Phone className="h-4 w-4 mr-2" /> +91 1800-123-4567</li>
+                <li className="flex items-center text-white/70"><MapPin className="h-4 w-4 mr-2" /> Mumbai, India</li>
+                <li><a href="#" className="text-white/70 hover:text-white">Support</a></li>
+                <li><a href="#" className="text-white/70 hover:text-white">Sales</a></li>
               </ul>
             </div>
           </div>
