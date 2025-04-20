@@ -13,6 +13,7 @@ export default defineConfig(({ mode }) => ({
         target: 'https://potoba-38.onrender.com/',
         changeOrigin: true,
         secure: false,
+        rewrite: path => path.replace(/^\/api/, '')
       },
     },
   },
