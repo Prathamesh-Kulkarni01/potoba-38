@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Clock, Users, QrCode, Edit, History, MoreHorizontal, ShoppingCart, LinkIcon } from 'lucide-react';
@@ -88,11 +87,19 @@ const orderStatusDisplay = {
   completed: { text: 'Completed', class: 'bg-restaurant-available/20 text-restaurant-available' }
 };
 
+interface CartItem {
+  id: number;
+  name: string;
+  quantity: number;
+  price: number;
+  addedBy?: string;
+}
+
 const TableDetail = () => {
   const { tableId } = useParams<{ tableId: string }>();
   const [qrDialogOpen, setQrDialogOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('info');
-  const [liveCart, setLiveCart] = useState<{id: number, name: string, quantity: number, price: number, addedBy?: string}[]>([]);
+  const [liveCart, setLiveCart] = useState<CartItem[]>([]);
   const [groupMembers, setGroupMembers] = useState<string[]>([]);
   const { toast } = useToast();
   
@@ -105,11 +112,14 @@ const TableDetail = () => {
         // In a real app, this would query the server for live updates
         const cartData = localStorage.getItem(`table-${tableId}-cart`);
         if (cartData) {
-          const parsedCart = JSON.parse(cartData);
+          const parsedCart = JSON.parse(cartData) as CartItem[];
           setLiveCart(parsedCart);
           
-          // Extract unique group members
-          const members = [...new Set(parsedCart.map((item: any) => item.addedBy).filter(Boolean))];
+          // Extract unique group members with proper type handling
+          const members = [...new Set(parsedCart
+            .map(item => item.addedBy)
+            .filter((name): name is string => name !== undefined && name !== null)
+          )];
           setGroupMembers(members);
         }
       } catch (e) {
