@@ -23,12 +23,21 @@ app.use((req, res, next) => {
 });
 
 // Middleware
+// List of allowed origins
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:8080',
+  'https://potoba-pos.netlify.app',
+  process.env.CORS_ORIGIN, // e.g., https://your-prod-domain.com
+].filter(Boolean); // Remove undefined/null values
+
+// Enhanced CORS middleware
 app.use(cors({
   origin: (origin, callback) => {
-    const allowedOrigins = ['http://localhost:5173', 'http://localhost:8080', process.env.CORS_ORIGIN];
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
+      console.warn(`Blocked by CORS: ${origin}`);
       callback(new Error('Not allowed by CORS'));
     }
   },
