@@ -40,14 +40,10 @@ import QRCodeGenerator from '../../components/table/QRCodeGenerator';
 import { useToast } from "@/hooks/use-toast";
 import useApi from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
+import { Table } from '@/types/api';
 
 interface TableCardProps {
-  table: {
-    id: number;
-    number: number;
-    capacity: number;
-    status: string;
-  };
+  table: Table
   onViewQR: (tableId: number) => void;
 }
 
@@ -73,7 +69,7 @@ const TableCard = ({ table, onViewQR }: TableCardProps) => {
       </div>
       
       <div className="mt-6 flex justify-between items-center">
-        <Link to={`/dashboard/tables/${table.id}`}>
+        <Link to={`/dashboard/tables/${table._id}`}>
           <Button variant="outline" size="sm">
             View Details
           </Button>
@@ -88,7 +84,7 @@ const TableCard = ({ table, onViewQR }: TableCardProps) => {
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>Actions</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => onViewQR(table.id)}>
+            <DropdownMenuItem onClick={() => onViewQR(+table._id)}>
               <QrCode className="mr-2 h-4 w-4" />
               View QR Code
             </DropdownMenuItem>
@@ -135,7 +131,7 @@ const TableManagement = () => {
     };
 
     fetchTableData();
-  }, [currentRestaurantId, api, toast]);
+  }, [currentRestaurantId]);
 
   const filteredTables = filter === 'all' 
     ? tableData 

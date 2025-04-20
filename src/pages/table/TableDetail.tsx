@@ -183,8 +183,7 @@ const TableDetail = () => {
 
             {/* Direct Customer Link - NEW */}
             <Button
-              variant="default"
-              className="bg-restaurant-primary hover:bg-restaurant-primary/90"
+              variant="link"
               onClick={() => window.open(`${window.location.origin}/order/${tableId}`, '_blank')}
             >
               <LinkIcon className="mr-2 h-4 w-4" />
@@ -351,7 +350,7 @@ const TableDetail = () => {
                     </Button>
                     <Button
                       variant="default"
-                      className="text-sm w-full bg-restaurant-primary hover:bg-restaurant-primary/90"
+                      className="text-sm w-full "
                       onClick={() => window.open(`${window.location.origin}/order/${tableId}`, '_blank')}
                     >
                       Open Order Page
@@ -442,7 +441,7 @@ const TableDetail = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {tableDetails.orderHistory.length > 0 ? (
+                {tableDetails?.orderHistory?.length > 0 ? (
                   <div className="space-y-6">
                     {tableDetails.orderHistory.map((order) => (
                       <div key={order.id} className="border rounded-lg p-4">
