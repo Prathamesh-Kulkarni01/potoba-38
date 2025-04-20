@@ -67,11 +67,11 @@ export const useApi = () => {
       getById: (restaurantId: string, id: string) =>
         request<MenuItem>('GET', `restaurants/${restaurantId}/menu/${id}`, {}, headers),
       create: (restaurantId: string, data: any) =>
-        request('POST', `restaurants/${restaurantId}/menu`, { data }, headers),
+        request<MenuItem>('POST', `restaurants/${restaurantId}/menu`, { data }, headers),
       update: (restaurantId: string, id: string, data: any) =>
-        request('PUT', `restaurants/${restaurantId}/menu/${id}`, { data }, headers),
+        request<MenuItem>('PUT', `restaurants/${restaurantId}/menu/${id}`, { data }, headers),
       delete: (restaurantId: string, id: string) =>
-        request('DELETE', `restaurants/${restaurantId}/menu/${id}`, {}, headers),
+        request<MenuItem>('DELETE', `restaurants/${restaurantId}/menu/${id}`, {}, headers),
     },
 
     table: {
@@ -122,22 +122,22 @@ export const useApi = () => {
       getById: (restaurantId: string, id: string) =>
         request<Order>('GET', `restaurants/${restaurantId}/orders/${id}`, {}, headers),
       create: (restaurantId: string, data: any) =>
-        request('POST', `restaurants/${restaurantId}/orders`, { data }, headers),
+        request<Order>('POST', `restaurants/${restaurantId}/orders`, { data }, headers),
       update: (restaurantId: string, id: string, data: any) =>
-        request('PUT', `restaurants/${restaurantId}/orders/${id}`, { data }, headers),
+        request<Order>('PUT', `restaurants/${restaurantId}/orders/${id}`, { data }, headers),
       delete: (restaurantId: string, id: string) =>
-        request('DELETE', `restaurants/${restaurantId}/orders/${id}`, {}, headers),
+        request<Order>('DELETE', `restaurants/${restaurantId}/orders/${id}`, {}, headers),
       updateStatus: (restaurantId: string, id: string, statusData: any) =>
-        request('PATCH', `restaurants/${restaurantId}/orders/${id}/status`, { data: statusData }, headers),
+        request<Order>('PATCH', `restaurants/${restaurantId}/orders/${id}/status`, { data: statusData }, headers),
     },
 
     restaurant: {
       get: () => request<Restaurant[]>('GET', 'restaurants', {}, headers),
       getById: (id: string) => request<Restaurant>('GET', `restaurants/${id}`, {}, headers),
-      create: (data: any) => request('POST', 'restaurants', { data }, headers),
+      create: (data: any) => request<Restaurant>('POST', 'restaurants', { data }, headers),
       update: (id: string, data: any) =>
-        request('PUT', `restaurants/${id}`, { data }, headers),
-      delete: (id: string) => request('DELETE', `restaurants/${id}`, {}, headers),
+        request<Restaurant>('PUT', `restaurants/${id}`, { data }, headers),
+      delete: (id: string) => request<Restaurant>('DELETE', `restaurants/${id}`, {}, headers),
       createDemoData: (id: string) =>
         request('POST', `restaurants/${id}/demo-data`, {}, headers),
     },
@@ -146,7 +146,7 @@ export const useApi = () => {
       get: (restaurantId: string) =>
         request<Category[]>('GET', `restaurants/${restaurantId}/categories`, {}, headers),
       create: (restaurantId: string, data: any) =>
-        request('POST', `restaurants/${restaurantId}/categories`, { data }, headers),
+        request<Category>('POST', `restaurants/${restaurantId}/categories`, { data }, headers),
     },
 
     sync: {
