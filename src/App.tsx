@@ -19,9 +19,7 @@ import ScanLanding from "./pages/customer/ScanLanding";
 import NotFound from "./pages/NotFound";
 import ApiSettings from "./pages/settings/ApiSettings";
 import ApiDocs from "./components/settings/ApiDocs";
-import AddMenuItem from "./pages/menu/AddMenuItem";
 import "./App.css";
-import { toast } from "./hooks/use-toast";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -43,6 +41,77 @@ const AuthProviderWithRouter: React.FC<{ children: React.ReactNode }> = ({ child
   );
 };
 
+// Helper component to reduce redundancy in ProtectedRoute usage
+const ProtectedRouteWrapper: React.FC<{
+  permission: string;
+  children: React.ReactNode;
+}> = ({ permission, children }) => (
+  <ProtectedRoute requiredPermission={permission}>{children}</ProtectedRoute>
+);
+
+// Define route configurations
+const publicRoutes = [
+  { path: "/", element: <Index /> },
+  { path: "/login", element: <Login /> },
+  { path: "/signup", element: <Signup /> },
+  { path: "/unauthorized", element: <Unauthorized /> },
+  { path: "/scan", element: <ScanLanding /> },
+  { path: "/order/:tableId", element: <CustomerOrder /> },
+  { path: "*", element: <NotFound /> },
+];
+
+const protectedRoutes = [
+  {
+    permission: "view_dashboard",
+    routes: [
+      { path: "/dashboard", element: <Dashboard /> },
+      { path: "/onboarding", element: <RestaurantOnboarding /> }
+    ],
+  },
+  {
+    permission: "manage_tables",
+    routes: [
+      { path: "/dashboard/tables", element: <Dashboard /> },
+      { path: "/dashboard/tables/:tableId", element: <TableDetail /> },
+    ],
+  },
+  {
+    permission: "manage_menu",
+    routes: [
+      { path: "/dashboard/menu", element: <Dashboard /> },
+      { path: "/dashboard/menu/add", element: <Dashboard /> },
+      { path: "/dashboard/menu/edit/:id", element: <Dashboard /> },
+    ],
+  },
+  {
+    permission: "manage_orders",
+    routes: [{ path: "/dashboard/orders", element: <Dashboard /> }],
+  },
+  {
+    permission: "manage_settings",
+    routes: [
+      { path: "/dashboard/api-settings", element: <ApiSettings /> },
+      { path: "/dashboard/api-docs", element: <ApiDocs /> },
+    ],
+  },
+  {
+    permission: "manage_marketing",
+    routes: [
+      { path: "/dashboard/marketing/campaigns", element: <Dashboard /> },
+      { path: "/dashboard/marketing/whatsapp", element: <Dashboard /> },
+      { path: "/dashboard/marketing/ai-assistant", element: <Dashboard /> },
+    ],
+  },
+  {
+    permission: "manage_loyalty",
+    routes: [
+      { path: "/dashboard/loyalty/rewards", element: <Dashboard /> },
+      { path: "/dashboard/loyalty/promotions", element: <Dashboard /> },
+      { path: "/dashboard/loyalty/members", element: <Dashboard /> },
+    ],
+  },
+];
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider>
@@ -53,151 +122,25 @@ const App = () => (
           <AuthProviderWithRouter>
             <div className="app-container theme-transition">
               <Routes>
-                <Route path="/" element={<Index />} />
-                <Route path="/login" element={<Login />} />
-                <Route path="/signup" element={<Signup />} />
-                <Route path="/unauthorized" element={<Unauthorized />} />
-                <Route
-                  path="/onboarding"
-                  element={
-                    <ProtectedRoute>
-                      <RestaurantOnboarding />
-                    </ProtectedRoute>
-                  }
-                />
+                {/* Public Routes */}
+                {publicRoutes.map(({ path, element }) => (
+                  <Route key={path} path={path} element={element} />
+                ))}
 
-                {/* Dashboard routes */}
-                <Route
-                  path="/dashboard"
-                  element={
-                    <ProtectedRoute requiredPermission="view_dashboard">
-                      <Dashboard />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/dashboard/tables"
-                  element={
-                    <ProtectedRoute requiredPermission="manage_tables">
-                      <Dashboard />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/dashboard/menu"
-                  element={
-                    <ProtectedRoute requiredPermission="manage_menu">
-                      <Dashboard />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/dashboard/menu/add"
-                  element={
-                    <ProtectedRoute requiredPermission="manage_menu">
-                      <Dashboard />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/dashboard/menu/edit/:id"
-                  element={
-                    <ProtectedRoute requiredPermission="manage_menu">
-                      <Dashboard />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/dashboard/orders"
-                  element={
-                    <ProtectedRoute requiredPermission="manage_orders">
-                      <Dashboard />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/dashboard/api-settings"
-                  element={
-                    <ProtectedRoute requiredPermission="manage_settings">
-                      <ApiSettings />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/dashboard/api-docs"
-                  element={
-                    <ProtectedRoute requiredPermission="manage_settings">
-                      <ApiDocs />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/dashboard/tables/:tableId"
-                  element={
-                    <ProtectedRoute requiredPermission="manage_tables">
-                      <TableDetail />
-                    </ProtectedRoute>
-                  }
-                />
-
-                {/* Marketing routes */}
-                <Route
-                  path="/dashboard/marketing/campaigns"
-                  element={
-                    <ProtectedRoute requiredPermission="manage_marketing">
-                      <Dashboard />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/dashboard/marketing/whatsapp"
-                  element={
-                    <ProtectedRoute requiredPermission="manage_marketing">
-                      <Dashboard />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/dashboard/marketing/ai-assistant"
-                  element={
-                    <ProtectedRoute requiredPermission="manage_marketing">
-                      <Dashboard />
-                    </ProtectedRoute>
-                  }
-                />
-
-                {/* Loyalty routes */}
-                <Route
-                  path="/dashboard/loyalty/rewards"
-                  element={
-                    <ProtectedRoute requiredPermission="manage_loyalty">
-                      <Dashboard />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/dashboard/loyalty/promotions"
-                  element={
-                    <ProtectedRoute requiredPermission="manage_loyalty">
-                      <Dashboard />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/dashboard/loyalty/members"
-                  element={
-                    <ProtectedRoute requiredPermission="manage_loyalty">
-                      <Dashboard />
-                    </ProtectedRoute>
-                  }
-                />
-
-                {/* Customer facing routes */}
-                <Route path="/scan" element={<ScanLanding />} />
-                <Route path="/order/:tableId" element={<CustomerOrder />} />
-
-                {/* Catch-all route */}
-                <Route path="*" element={<NotFound />} />
+                {/* Protected Routes */}
+                {protectedRoutes.map(({ permission, routes }) =>
+                  routes.map(({ path, element }) => (
+                    <Route
+                      key={path}
+                      path={path}
+                      element={
+                        <ProtectedRouteWrapper permission={permission}>
+                          {element}
+                        </ProtectedRouteWrapper>
+                      }
+                    />
+                  ))
+                )}
               </Routes>
             </div>
           </AuthProviderWithRouter>
