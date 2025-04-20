@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { CheckCircle, XCircle, AlertCircle, Loader2 } from 'lucide-react';
 
 type ConnectionStatusProps = {
   status: 'idle' | 'loading' | 'success' | 'error';
@@ -19,7 +19,7 @@ export const ApiConnectionStatus: React.FC<ConnectionStatusProps> = ({ status })
   if (status === 'loading') {
     return (
       <div className="flex items-center text-muted-foreground">
-        <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent"></div>
+        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
         <span>Testing connection...</span>
       </div>
     );
