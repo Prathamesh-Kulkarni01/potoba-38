@@ -204,7 +204,7 @@ const apiRequest = async <T>(
         case 'GET':
           if (id) {
             const item = await getFromIndexedDB<T>(storeName, id);
-            return { success: true, data: item };
+            return { success: true, data: item as T };
           } else {
             const items = await getFromIndexedDB<T[]>(storeName);
             return { success: true, data: items as unknown as T };

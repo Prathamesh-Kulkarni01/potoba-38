@@ -21,6 +21,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { LayoutDashboard, UtensilsCrossed, TableProperties, ReceiptText, Settings, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "sonner";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface DashboardShellProps {
   children: React.ReactNode;
@@ -132,15 +133,21 @@ export function DashboardShell({ children }: DashboardShellProps) {
                     </div>
                   </div>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleLogout}
-                  className="text-sidebar-foreground"
-                  tooltip="Logout"
-                >
-                  <LogOut className="h-4 w-4" />
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={handleLogout}
+                      className="text-sidebar-foreground"
+                    >
+                      <LogOut className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Logout</p>
+                  </TooltipContent>
+                </Tooltip>
               </div>
             )}
           </SidebarFooter>
