@@ -33,16 +33,21 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
       if (token) {
         try {
           const response = await api.auth.getCurrentUser(token);
+          console.log('Auth status response:', response);
           
           if (response.success && response.data) {
-            setUser(response.data.user);
+            // Extract user from potentially nested data structure
+            const userData = response.data.user || (response.data.data && response.data.data.user) || response.data;
+            console.log('Extracted user data:', userData);
+            
+            setUser(userData);
             
             if (storedRestaurantId) {
               setCurrentRestaurantId(storedRestaurantId);
-            } else if (response.data.user.restaurants.length > 0) {
+            } else if (userData.restaurants && userData.restaurants.length > 0) {
               // Set first restaurant as default if none selected
-              setCurrentRestaurantId(response.data.user.restaurants[0].id);
-              localStorage.setItem('currentRestaurantId', response.data.user.restaurants[0].id);
+              setCurrentRestaurantId(userData.restaurants[0].id);
+              localStorage.setItem('currentRestaurantId', userData.restaurants[0].id);
             }
           }
         } catch (error) {
@@ -69,15 +74,23 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
   const login = async (email: string, password: string) => {
     setLoading(true);
     try {
+      console.log('Attempting login...');
       const response = await api.auth.login(email, password);
+      console.log('Login response:', response);
       
       if (!response.success || !response.data) {
         throw new Error(response.error || "Login failed");
       }
       
-      const { user, token } = response.data;
+      // Extract data from potentially nested response
+      const responseData = response.data.data || response.data;
+      const { user, token } = responseData;
+      
+      console.log('Extracted user:', user);
+      console.log('Extracted token:', token);
       
       // Save token to localStorage
+      console.log('Saving token to localStorage:', token);
       localStorage.setItem('token', token);
       
       setUser(user);
@@ -108,12 +121,11 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
     try {
       console.log('Attempting signup with API...');
       const response = await api.auth.register({ name, email, password });
+      console.log('API signup response:', response);
       
       if (!response.success || !response.data) {
         throw new Error(response.error || "Registration failed");
       }
-      
-      console.log('API signup response:', response.data);
       
       // Handle the nested data structure in the response
       const userData = response.data.data || response.data;
@@ -189,12 +201,15 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
     
     try {
       const response = await api.restaurants.create(restaurant, token);
+      console.log('Add restaurant response:', response);
       
       if (!response.success || !response.data) {
         throw new Error(response.error || "Failed to add restaurant");
       }
       
-      const newRestaurant = response.data;
+      // Extract restaurant from potentially nested response
+      const newRestaurant = response.data.data || response.data;
+      console.log('Extracted restaurant:', newRestaurant);
       
       // Update user with new restaurant
       const updatedUser = {
