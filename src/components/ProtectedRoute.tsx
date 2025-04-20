@@ -1,45 +1,39 @@
 
 import React from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
+import { Navigate, Outlet } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 
 interface ProtectedRouteProps {
-  children: React.ReactNode;
-  requiredRole?: 'user' | 'admin' | 'manager' | 'staff';
   requiredPermission?: string;
+  requiredRole?: string;
+  children?: React.ReactNode;
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ 
-  children, 
-  requiredRole,
-  requiredPermission
+  requiredPermission, 
+  requiredRole, 
+  children 
 }) => {
   const { user, isAuthenticated } = useAuth();
-  const location = useLocation();
 
   // Check if user is authenticated
   if (!isAuthenticated()) {
-    // Redirect to login page with return URL
-    return <Navigate to={`/login?redirect=${encodeURIComponent(location.pathname)}`} replace />;
+    return <Navigate to="/login" replace />;
   }
 
-  // Check role if required
-  if (requiredRole && user?.role !== requiredRole && user?.role !== 'admin') {
-    // Admin bypasses role check
+  // If a specific role is required, check it
+  if (requiredRole && user?.role !== requiredRole) {
     return <Navigate to="/unauthorized" replace />;
   }
 
-  // Check permission if required
-  if (requiredPermission) {
-    const hasPermission = user?.role === 'admin' || // Admin has all permissions
-      (user?.permissions && user.permissions.includes(requiredPermission));
-    
-    if (!hasPermission) {
-      return <Navigate to="/unauthorized" replace />;
-    }
+  // If a specific permission is required, check it
+  if (requiredPermission && 
+      !user?.permissions?.includes(requiredPermission)) {
+    return <Navigate to="/unauthorized" replace />;
   }
 
-  return <>{children}</>;
+  // If children are provided, render them; otherwise, render Outlet
+  return children ? <>{children}</> : <Outlet />;
 };
 
 export default ProtectedRoute;
