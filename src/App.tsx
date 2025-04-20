@@ -43,6 +43,8 @@ const App = () => (
                 <Route path="/login" element={<Login />} />
                 <Route path="/signup" element={<Signup />} />
                 <Route path="/onboarding" element={<RestaurantOnboarding />} />
+                
+                {/* Dashboard routes */}
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/dashboard/tables" element={<Dashboard />} />
                 <Route path="/dashboard/menu" element={<Dashboard />} />
@@ -50,9 +52,12 @@ const App = () => (
                 <Route path="/dashboard/api-settings" element={<ApiSettings />} />
                 <Route path="/dashboard/api-docs" element={<ApiDocs />} />
                 <Route path="/dashboard/tables/:tableId" element={<TableDetail />} />
+                
+                {/* Customer facing routes */}
                 <Route path="/scan" element={<ScanLanding />} />
                 <Route path="/order/:tableId" element={<CustomerOrder />} />
-                {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                
+                {/* Catch-all route */}
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </div>
