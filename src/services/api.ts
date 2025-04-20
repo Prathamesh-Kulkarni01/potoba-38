@@ -1,5 +1,4 @@
 import { toast } from "@/hooks/use-toast";
-import { mockApi } from "./mockApi";
 import { 
   ApiResponse, 
   AuthResponse, 
@@ -265,101 +264,6 @@ const apiRequest = async <T>(
     }
   }
 
-  // If mock API is enabled, use it instead of making real HTTP requests
-  if (USE_MOCK_API) {
-    // Split the endpoint to determine which mock API method to call
-    const parts = endpoint.split('/').filter(part => part);
-    
-    // Handle auth endpoints
-    if (parts[0] === 'auth') {
-      switch (parts[1]) {
-        case 'login':
-          return mockApi.auth.login(data.email, data.password) as Promise<ApiResponse<T>>;
-        case 'register':
-          return mockApi.auth.register(data) as Promise<ApiResponse<T>>;
-        case 'logout':
-          return mockApi.auth.logout() as Promise<ApiResponse<T>>;
-        case 'me':
-          return mockApi.auth.getCurrentUser(token || '') as Promise<ApiResponse<T>>;
-        default:
-          return { success: false, error: 'Unknown auth endpoint' };
-      }
-    }
-    
-    // Handle restaurant endpoints
-    if (parts[0] === 'restaurants') {
-      if (parts.length === 1) {
-        // /restaurants
-        if (method === 'GET') return mockApi.restaurants.getAll() as Promise<ApiResponse<T>>;
-        if (method === 'POST') return mockApi.restaurants.create(data) as Promise<ApiResponse<T>>;
-      } else if (parts.length === 2 && !['menu', 'tables', 'orders'].includes(parts[2])) {
-        // /restaurants/:id
-        if (method === 'GET') return mockApi.restaurants.getById(parts[1]) as Promise<ApiResponse<T>>;
-        if (method === 'PUT') return mockApi.restaurants.update(parts[1], data) as Promise<ApiResponse<T>>;
-        if (method === 'DELETE') return mockApi.restaurants.delete(parts[1]) as Promise<ApiResponse<T>>;
-      } else if (parts.length >= 3) {
-        const restaurantId = parts[1];
-        
-        // Handle menu endpoints
-        if (parts[2] === 'menu') {
-          if (parts.length === 3) {
-            // /restaurants/:id/menu
-            if (method === 'GET') return mockApi.menu.getAll(restaurantId) as Promise<ApiResponse<T>>;
-            if (method === 'POST') return mockApi.menu.create(restaurantId, data) as Promise<ApiResponse<T>>;
-          } else if (parts.length === 4) {
-            // /restaurants/:id/menu/:menuItemId
-            const menuItemId = parts[3];
-            if (method === 'GET') return mockApi.menu.getById(restaurantId, menuItemId) as Promise<ApiResponse<T>>;
-            if (method === 'PUT') return mockApi.menu.update(restaurantId, menuItemId, data) as Promise<ApiResponse<T>>;
-            if (method === 'DELETE') return mockApi.menu.delete(restaurantId, menuItemId) as Promise<ApiResponse<T>>;
-          }
-        }
-        
-        // Handle table endpoints
-        if (parts[2] === 'tables') {
-          if (parts.length === 3) {
-            // /restaurants/:id/tables
-            if (method === 'GET') return mockApi.tables.getAll(restaurantId) as Promise<ApiResponse<T>>;
-            if (method === 'POST') return mockApi.tables.create(restaurantId, data) as Promise<ApiResponse<T>>;
-          } else if (parts.length === 4) {
-            // /restaurants/:id/tables/:tableId
-            const tableId = parts[3];
-            if (method === 'GET') return mockApi.tables.getById(restaurantId, tableId) as Promise<ApiResponse<T>>;
-            if (method === 'PUT') return mockApi.tables.update(restaurantId, tableId, data) as Promise<ApiResponse<T>>;
-            if (method === 'DELETE') return mockApi.tables.delete(restaurantId, tableId) as Promise<ApiResponse<T>>;
-          }
-        }
-        
-        // Handle order endpoints
-        if (parts[2] === 'orders') {
-          if (parts.length === 3) {
-            // /restaurants/:id/orders
-            if (method === 'GET') return mockApi.orders.getAll(restaurantId) as Promise<ApiResponse<T>>;
-          } else if (parts.length === 4) {
-            const orderId = parts[3];
-            if (parts[3] === 'status') {
-              // /restaurants/:id/orders/:orderId/status
-              if (method === 'PATCH') return mockApi.orders.updateStatus(restaurantId, orderId, data.status) as Promise<ApiResponse<T>>;
-            } else {
-              // /restaurants/:id/orders/:orderId
-              if (method === 'GET') return mockApi.orders.getById(restaurantId, orderId) as Promise<ApiResponse<T>>;
-              if (method === 'PUT') return mockApi.orders.update(restaurantId, orderId, data) as Promise<ApiResponse<T>>;
-              if (method === 'DELETE') return mockApi.orders.delete(restaurantId, orderId) as Promise<ApiResponse<T>>;
-            }
-          } else if (parts.length === 5 && parts[4] === 'status') {
-            // /restaurants/:id/orders/:orderId/status
-            const orderId = parts[3];
-            if (method === 'PATCH') return mockApi.orders.updateStatus(restaurantId, orderId, data.status) as Promise<ApiResponse<T>>;
-          }
-        }
-      }
-    }
-
-    // For any endpoints not handled by the mock
-    console.warn('Unhandled mock API endpoint:', endpoint, method);
-    return { success: false, error: 'Endpoint not implemented in mock API' };
-  }
-  
   // Real API implementation
   try {
     const url = `${getApiBaseUrl()}${endpoint}`;
