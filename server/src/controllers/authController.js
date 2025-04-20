@@ -5,7 +5,7 @@ const jwt = require('jsonwebtoken');
 // Register a new user
 exports.register = async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, role } = req.body;
     
     // Check if user already exists
     let user = await User.findOne({ email });
@@ -13,11 +13,12 @@ exports.register = async (req, res) => {
       return res.status(400).json({ message: 'User already exists' });
     }
     
-    // Create new user with default role 'user'
+    // Create new user with provided role or default to 'user'
     user = new User({
       name,
       email,
-      password
+      password,
+      role: role || 'user'
     });
     
     await user.save();
@@ -82,7 +83,15 @@ exports.getCurrentUser = async (req, res) => {
   try {
     // User is already attached to req by the auth middleware
     const user = await User.findById(req.user._id).select('-password');
-    res.json(user);
+    
+    res.json({
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role
+      }
+    });
   } catch (error) {
     console.error('Get current user error:', error);
     res.status(500).json({ message: 'Server error' });

@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useToast } from '@/components/ui/use-toast';
 import { Restaurant } from '@/types/auth';
@@ -77,6 +76,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, navigate }
 
       if (response.ok) {
         const userData = await response.json();
+        console.log("Fetched user data:", userData);
         
         // Ensure user data has role and permissions
         const userWithDefaults = {
@@ -85,6 +85,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, navigate }
           permissions: userData.data.user.permissions || getDefaultPermissions(userData.data.user.role || 'user')
         };
         
+        console.log("User with defaults:", userWithDefaults);
         setUser(userWithDefaults);
         
         // Safely check if restaurants exist before trying to set default restaurant
@@ -96,6 +97,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, navigate }
         }
       } else {
         // Token is invalid, remove it
+        console.error("Failed to fetch current user:", await response.text());
         localStorage.removeItem('token');
         setToken(null);
       }
@@ -120,18 +122,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, navigate }
       });
 
       const data = await response.json();
+      console.log("Login response:", data);
 
       if (response.ok) {
-        localStorage.setItem('token', data.data.token);
-        setToken(data.data.token);
+        localStorage.setItem('token', data.token);
+        setToken(data.token);
         
         // Ensure user data has role and permissions
+        const userRole = data.user?.role || 'user';
+        console.log("User role from server:", userRole);
+        
         const userWithDefaults = {
-          ...data.data.user,
-          role: data.data.user.role || 'user',
-          permissions: data.data.user.permissions || getDefaultPermissions(data.data.user.role || 'user')
+          ...data.user,
+          role: userRole,
+          permissions: data.user?.permissions || getDefaultPermissions(userRole)
         };
         
+        console.log("User with defaults:", userWithDefaults);
         setUser(userWithDefaults);
         
         // Safely check if restaurants exist and set default restaurant if available

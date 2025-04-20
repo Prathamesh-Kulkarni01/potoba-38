@@ -25,6 +25,10 @@ const Login = () => {
   // If user is already logged in, check if they have restaurants
   useEffect(() => {
     if (isAuthenticated() && user) {
+      console.log("User already authenticated:", user);
+      console.log("User role:", user.role);
+      console.log("User permissions:", user.permissions);
+      
       // Safely check if the user has restaurants
       if (!user.restaurants || user.restaurants.length === 0) {
         navigate('/onboarding');
@@ -44,15 +48,16 @@ const Login = () => {
       // Introduce a small delay to ensure user state is updated
       setTimeout(() => {
         if (isAuthenticated() && user) {
+          console.log("User authenticated:", user);
+          console.log("User role:", user.role || 'No role assigned');
+          console.log("User permissions:", user.permissions || 'No permissions assigned');
+          
           // Safely check if user has restaurants
           if (!user.restaurants || user.restaurants.length === 0) {
             navigate('/onboarding');
           } else {
             navigate(redirectPath);
           }
-          console.log("User authenticated:", user);
-          console.log("User role:", user.role);
-          console.log("User permissions:", user.permissions);
         } else {
           console.log("Authentication failed or user data not available");
         }
