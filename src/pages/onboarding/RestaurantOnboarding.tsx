@@ -289,7 +289,6 @@ const RestaurantOnboarding = () => {
                     type="submit"
                     form="onboardingForm" 
                     disabled={loading}
-                    className="bg-restaurant-primary hover:bg-restaurant-primary/90"
                   >
                     {loading ? (
                       <>

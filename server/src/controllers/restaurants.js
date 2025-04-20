@@ -322,7 +322,7 @@ exports.createDemoData = async (req, res) => {
     if (existingCategories.length === 0) {
       const categories = [
         { name: 'Appetizers', restaurant: req.params.id },
-        { name: 'Main Course', restaurant: req.params.id },
+        { name: 'Main', restaurant: req.params.id },
         { name: 'Desserts', restaurant: req.params.id },
         { name: 'Drinks', restaurant: req.params.id }
       ];
@@ -345,7 +345,7 @@ exports.createDemoData = async (req, res) => {
       console.error('Category map is invalid. Cannot create menu items.');
       return res.status(500).json({ success: false, error: 'Failed to create categories for demo data.' });
     }
-
+console.log({categoryMap})
     // Create demo menu items if none exist
     const existingMenuItems = await MenuItem.find({ restaurant: req.params.id });
     if (existingMenuItems.length === 0) {

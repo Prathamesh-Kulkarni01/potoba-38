@@ -101,7 +101,7 @@ export const useApi = () => {
         for (let i = 1; tables.length < count; i++) {
           if (!existingTableNumbers.has(i)) {
             tables.push({
-              number: i,
+              tableNumber: i,
               capacity: Math.floor(Math.random() * 3) + 2,
               status: 'available',
             });
