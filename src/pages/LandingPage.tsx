@@ -34,34 +34,26 @@ const Index = () => {
 
   const [useMockApi, setUseMockApi] = useState(false);
 
-  useEffect(() => {
-    const ws = new WebSocket('ws://localhost:8080');
+  // useEffect(() => {
+  //   const ws = new WebSocket('ws://localhost:8080');
     
-    ws.onmessage = (event) => {
-      toast({
-        description: event.data,
-        variant: event.data.includes('disconnected') ? 'destructive' : 'default',
-      });
-    };
+  //   ws.onmessage = (event) => {
+  //     toast({
+  //       description: event.data,
+  //       variant: event.data.includes('disconnected') ? 'destructive' : 'default',
+  //     });
+  //   };
 
-    ws.onclose = () => {
-      toast({
-        description: 'WebSocket connection closed',
-        variant: 'destructive',
-      });
-    };
+  //   ws.onclose = () => {
+  //     toast({
+  //       description: 'WebSocket connection closed',
+  //       variant: 'destructive',
+  //     });
+  //   };
 
-    return () => ws.close();
-  }, []);
+  //   return () => ws.close();
+  // }, []);
 
-  const handleToggleMockApi = () => {
-    const current = localStorage.getItem('useMockApi') === 'true';
-    localStorage.setItem('useMockApi', (!current).toString());
-    setUseMockApi(!current);
-    toast({
-      description: `Mock API ${!current ? 'enabled' : 'disabled'}`,
-    });
-  };
 
   return (
     <div className="min-h-screen">
