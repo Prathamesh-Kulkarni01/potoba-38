@@ -2,26 +2,82 @@
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Sparkles, Loader2 } from 'lucide-react';
-import { MenuItemPrompt, MenuItemSuggestion } from '@/services/aiService';
+import { MenuItemSuggestion } from '@/services/aiService';
 import { useToast } from "@/hooks/use-toast";
 
-// This would connect to your Node.js/Express backend in the future
-const generateMenuItemSuggestion = async (prompt: MenuItemPrompt): Promise<MenuItemSuggestion> => {
-  // For now, we'll simulate a network request
+// Updated AI service that simulates a network request to the backend
+const generateMenuItemSuggestion = async (description: string): Promise<MenuItemSuggestion> => {
+  // Simulate a network request to your Node.js backend
+  // In a real implementation, this would call your API
   return new Promise((resolve) => {
     setTimeout(() => {
-      // Mock response - this would come from your Node backend in the future
+      // Generate a meaningful name from the description
+      let name = "";
+      const words = description.split(' ');
+      if (words.length > 2) {
+        // Use first 2-3 notable words for the name
+        const notableWords = words
+          .filter(word => word.length > 3)
+          .slice(0, 2);
+        
+        if (notableWords.length > 0) {
+          name = notableWords.join(' ');
+          // Capitalize first letter of each word
+          name = name.split(' ')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(' ');
+          
+          // Add a food-related suffix
+          const suffixes = ['Special', 'Delight', 'Fusion', 'Creation', 'Signature'];
+          name += ' ' + suffixes[Math.floor(Math.random() * suffixes.length)];
+        }
+      }
+      
+      if (!name) {
+        name = "Chef's Special";
+      }
+      
+      // Determine category based on description keywords
+      let category = 'Main Courses';
+      if (/salad|appetizer|starter|soup/i.test(description)) {
+        category = 'Starters';
+      } else if (/dessert|cake|ice cream|sweet|chocolate/i.test(description)) {
+        category = 'Desserts';
+      } else if (/side|fries|rice|bread/i.test(description)) {
+        category = 'Sides';
+      } else if (/drink|beverage|cocktail|juice|water|coffee|tea/i.test(description)) {
+        category = 'Drinks';
+      }
+      
+      // Generate a reasonable price based on the category
+      let price = 0;
+      switch (category) {
+        case 'Starters':
+          price = parseFloat((Math.random() * 5 + 5).toFixed(2));
+          break;
+        case 'Main Courses':
+          price = parseFloat((Math.random() * 10 + 10).toFixed(2));
+          break;
+        case 'Sides':
+          price = parseFloat((Math.random() * 3 + 3).toFixed(2));
+          break;
+        case 'Desserts':
+          price = parseFloat((Math.random() * 4 + 4).toFixed(2));
+          break;
+        case 'Drinks':
+          price = parseFloat((Math.random() * 3 + 2).toFixed(2));
+          break;
+      }
+      
       const suggestion: MenuItemSuggestion = {
-        name: `${prompt.description.split(' ').slice(0, 3).join(' ')} Special`,
-        description: prompt.description,
-        category: ['Starters', 'Main Courses', 'Sides', 'Desserts', 'Drinks'][
-          Math.floor(Math.random() * 5)
-        ],
-        price: parseFloat((Math.random() * 15 + 5).toFixed(2)) // Random price between $5-$20
+        name,
+        description,
+        category,
+        price
       };
+      
       resolve(suggestion);
     }, 1500); // Simulate network delay
   });
@@ -48,8 +104,7 @@ const AiMenuGenerator = ({ onAddItem }: AiMenuGeneratorProps) => {
     
     setLoading(true);
     try {
-      const menuItemPrompt: MenuItemPrompt = { description: prompt };
-      const result = await generateMenuItemSuggestion(menuItemPrompt);
+      const result = await generateMenuItemSuggestion(prompt);
       setSuggestion(result);
     } catch (error) {
       console.error("Error generating menu item:", error);

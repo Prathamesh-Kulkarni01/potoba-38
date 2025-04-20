@@ -16,9 +16,17 @@ import CustomerOrder from "./pages/CustomerOrder";
 import ScanLanding from "./pages/ScanLanding";
 import NotFound from "./pages/NotFound";
 import ApiSettings from "./pages/ApiSettings";
+import ApiDocs from "./components/ApiDocs";
 import "./App.css";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      staleTime: 5 * 60 * 1000, // 5 minutes
+    },
+  },
+});
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -38,6 +46,7 @@ const App = () => (
               <Route path="/dashboard/menu" element={<Dashboard />} />
               <Route path="/dashboard/orders" element={<Dashboard />} />
               <Route path="/dashboard/api-settings" element={<ApiSettings />} />
+              <Route path="/dashboard/api-docs" element={<ApiDocs />} />
               <Route path="/dashboard/tables/:tableId" element={<TableDetail />} />
               <Route path="/scan" element={<ScanLanding />} />
               <Route path="/order/:tableId" element={<CustomerOrder />} />

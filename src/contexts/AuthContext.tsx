@@ -1,25 +1,8 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { toast } from "sonner";
-
-// Types
-export interface User {
-  id: string;
-  name: string;
-  email: string;
-  restaurants: Restaurant[];
-}
-
-export interface Restaurant {
-  id: string;
-  name: string;
-  logo?: string;
-  description?: string;
-  address?: string;
-  phone?: string;
-  cuisine?: string;
-  tables?: number;
-}
+import { api } from "@/services/api";
+import { User, Restaurant } from "@/types/api";
 
 interface AuthContextType {
   user: User | null;
@@ -35,57 +18,6 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType>({} as AuthContextType);
 
-// Dummy API functions
-const dummyApiLogin = async (email: string, password: string): Promise<User> => {
-  // Simulate API call delay
-  await new Promise(resolve => setTimeout(resolve, 800));
-  
-  // Check credentials (in real app, this would be done on server)
-  if (email === 'demo@example.com' && password === 'password') {
-    return {
-      id: 'user-1',
-      name: 'Demo User',
-      email: 'demo@example.com',
-      restaurants: [
-        {
-          id: 'rest-1',
-          name: 'Potoba Restaurant',
-          logo: '/images/potoba-logo.svg',
-          description: 'Authentic cuisine with a modern twist',
-          cuisine: 'Fusion',
-          tables: 20,
-        }
-      ]
-    };
-  }
-  
-  throw new Error('Invalid credentials');
-};
-
-const dummyApiSignup = async (name: string, email: string, password: string): Promise<User> => {
-  // Simulate API call delay
-  await new Promise(resolve => setTimeout(resolve, 1000));
-  
-  // In a real app, this would create a new user in the database
-  return {
-    id: 'user-' + Math.random().toString(36).substring(2, 9),
-    name,
-    email,
-    restaurants: []
-  };
-};
-
-const dummyApiAddRestaurant = async (userId: string, restaurant: Omit<Restaurant, 'id'>): Promise<Restaurant> => {
-  // Simulate API call delay
-  await new Promise(resolve => setTimeout(resolve, 800));
-  
-  // In a real app, this would add a restaurant to the database
-  return {
-    ...restaurant,
-    id: 'rest-' + Math.random().toString(36).substring(2, 9),
-  };
-};
-
 export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -93,31 +25,37 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
   
   // Check for existing session on mount
   useEffect(() => {
-    const storedUser = localStorage.getItem('user');
-    const storedRestaurantId = localStorage.getItem('currentRestaurantId');
-    
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-      if (storedRestaurantId) {
-        setCurrentRestaurantId(storedRestaurantId);
-      } else if (JSON.parse(storedUser).restaurants.length > 0) {
-        // Set first restaurant as default if none selected
-        setCurrentRestaurantId(JSON.parse(storedUser).restaurants[0].id);
+    const checkAuthStatus = async () => {
+      const token = localStorage.getItem('token');
+      const storedRestaurantId = localStorage.getItem('currentRestaurantId');
+      
+      if (token) {
+        try {
+          const response = await api.auth.getCurrentUser(token);
+          
+          if (response.success && response.data) {
+            setUser(response.data.user);
+            
+            if (storedRestaurantId) {
+              setCurrentRestaurantId(storedRestaurantId);
+            } else if (response.data.user.restaurants.length > 0) {
+              // Set first restaurant as default if none selected
+              setCurrentRestaurantId(response.data.user.restaurants[0].id);
+            }
+          }
+        } catch (error) {
+          console.error("Failed to restore session:", error);
+          localStorage.removeItem('token');
+        }
       }
-    }
+      
+      setLoading(false);
+    };
     
-    setLoading(false);
+    checkAuthStatus();
   }, []);
   
-  // Save user and current restaurant to localStorage whenever they change
-  useEffect(() => {
-    if (user) {
-      localStorage.setItem('user', JSON.stringify(user));
-    } else {
-      localStorage.removeItem('user');
-    }
-  }, [user]);
-  
+  // Save current restaurant to localStorage whenever it changes
   useEffect(() => {
     if (currentRestaurantId) {
       localStorage.setItem('currentRestaurantId', currentRestaurantId);
@@ -129,12 +67,22 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
   const login = async (email: string, password: string) => {
     setLoading(true);
     try {
-      const userData = await dummyApiLogin(email, password);
-      setUser(userData);
+      const response = await api.auth.login(email, password);
+      
+      if (!response.success || !response.data) {
+        throw new Error(response.error || "Login failed");
+      }
+      
+      const { user, token } = response.data;
+      
+      // Save token to localStorage
+      localStorage.setItem('token', token);
+      
+      setUser(user);
       
       // Set current restaurant to first one if available
-      if (userData.restaurants.length > 0) {
-        setCurrentRestaurantId(userData.restaurants[0].id);
+      if (user.restaurants.length > 0) {
+        setCurrentRestaurantId(user.restaurants[0].id);
       }
       
       toast.success("Logged in successfully!");
@@ -150,8 +98,18 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
   const signup = async (name: string, email: string, password: string) => {
     setLoading(true);
     try {
-      const userData = await dummyApiSignup(name, email, password);
-      setUser(userData);
+      const response = await api.auth.register({ name, email, password });
+      
+      if (!response.success || !response.data) {
+        throw new Error(response.error || "Registration failed");
+      }
+      
+      const { user, token } = response.data;
+      
+      // Save token to localStorage
+      localStorage.setItem('token', token);
+      
+      setUser(user);
       toast.success("Account created successfully!");
     } catch (error) {
       console.error("Signup error:", error);
@@ -163,9 +121,13 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
   };
   
   const logout = () => {
+    api.auth.logout().catch(error => {
+      console.error("Logout error:", error);
+    });
+    
     setUser(null);
     setCurrentRestaurantId(null);
-    localStorage.removeItem('user');
+    localStorage.removeItem('token');
     localStorage.removeItem('currentRestaurantId');
     toast.info("Logged out successfully");
   };
@@ -173,8 +135,17 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
   const addRestaurant = async (restaurant: Omit<Restaurant, 'id'>) => {
     if (!user) throw new Error("User must be logged in to add a restaurant");
     
+    const token = localStorage.getItem('token');
+    if (!token) throw new Error("Authentication token not found");
+    
     try {
-      const newRestaurant = await dummyApiAddRestaurant(user.id, restaurant);
+      const response = await api.restaurants.create(restaurant, token);
+      
+      if (!response.success || !response.data) {
+        throw new Error(response.error || "Failed to add restaurant");
+      }
+      
+      const newRestaurant = response.data;
       
       // Update user with new restaurant
       const updatedUser = {
