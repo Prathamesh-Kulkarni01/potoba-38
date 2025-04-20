@@ -64,7 +64,7 @@ const RestaurantOnboarding = () => {
     setLoading(true);
     try {
       // Create the restaurant
-      const response = await api.restaurant.create({
+      const newRestaurant = await api.restaurant.create({
         name,
         description,
         address,
@@ -72,7 +72,6 @@ const RestaurantOnboarding = () => {
         cuisine,
         tables: parseInt(tableCount) || 10,
       });
-      const newRestaurant=response.data
       if (!newRestaurant || !(newRestaurant.id || newRestaurant._id)) {
         throw new Error('Failed to create restaurant. Missing restaurant ID.');
       }
