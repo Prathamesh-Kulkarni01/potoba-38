@@ -37,7 +37,8 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
           
           if (response.success && response.data) {
             // Extract user from potentially nested data structure
-            const userData = response.data.user || (response.data.data && response.data.data.user) || response.data;
+            // Note: response.data.user is the correct path according to types
+            const userData = response.data.user || response.data;
             console.log('Extracted user data:', userData);
             
             setUser(userData);
@@ -82,9 +83,8 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
         throw new Error(response.error || "Login failed");
       }
       
-      // Extract data from potentially nested response
-      const responseData = response.data.data || response.data;
-      const { user, token } = responseData;
+      // The direct response structure or nested structure
+      const { user, token } = response.data;
       
       console.log('Extracted user:', user);
       console.log('Extracted token:', token);
@@ -127,9 +127,8 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
         throw new Error(response.error || "Registration failed");
       }
       
-      // Handle the nested data structure in the response
-      const userData = response.data.data || response.data;
-      const { user, token } = userData;
+      // AuthResponse already has the correct structure of { user, token }
+      const { user, token } = response.data;
       
       console.log('Extracted user:', user);
       console.log('Extracted token:', token);
@@ -207,8 +206,8 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
         throw new Error(response.error || "Failed to add restaurant");
       }
       
-      // Extract restaurant from potentially nested response
-      const newRestaurant = response.data.data || response.data;
+      // Extract restaurant from response
+      const newRestaurant = response.data;
       console.log('Extracted restaurant:', newRestaurant);
       
       // Update user with new restaurant
