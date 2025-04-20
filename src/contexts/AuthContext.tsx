@@ -2,6 +2,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { toast } from "sonner";
 import { api } from "@/services/api";
+import { mockApi } from "@/services/mockApi";
 import { User, Restaurant } from "@/types/api";
 
 interface AuthContextType {

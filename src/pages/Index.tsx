@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import {
   Header,
@@ -39,7 +40,7 @@ const Index = () => {
     ws.onmessage = (event) => {
       toast({
         description: event.data,
-        variant: event.data.includes('disconnected') ? 'warning' : 'default',
+        variant: event.data.includes('disconnected') ? 'destructive' : 'default',
       });
     };
 
@@ -57,7 +58,8 @@ const Index = () => {
     const current = localStorage.getItem('useMockApi') === 'true';
     localStorage.setItem('useMockApi', (!current).toString());
     setUseMockApi(!current);
-    toast(`Mock API ${!current ? 'enabled' : 'disabled'}`, {
+    toast({
+      description: `Mock API ${!current ? 'enabled' : 'disabled'}`,
       variant: "default"
     });
   };
