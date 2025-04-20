@@ -350,7 +350,7 @@ export  function DashboardShell({ children }: DashboardShellProps) {
           </div>
           
           {/* Bottom Navigation for Mobile */}
-          <div className="fixed bottom-0 left-0 right-0 md:hidden  bg-restaurant-background bg-pattern text-white z-30">
+          <div className="absolute bottom-0 left-0 right-0 md:hidden  bg-restaurant-background bg-pattern text-white z-30">
             <div className="flex justify-around items-center p-3">
               {[...filteredMainMenuItems,...filteredMarketingMenuItems,...filteredLoyaltyMenuItems].slice(0, 8).map((item) => (
                 <Button 
@@ -362,8 +362,8 @@ export  function DashboardShell({ children }: DashboardShellProps) {
                   )}
                   onClick={() => navigate(item.path)}
                 >
-                  <item.icon className="h-5 w-5 mb-1" />
-                  <span className="text-[10px]">{item.title}</span>
+                  <item.icon className="h-5 w-5" />
+                  <span className="text-[10px]">{item.title?.split(" ")[0]}</span>
                 </Button>
               ))}
             </div>
