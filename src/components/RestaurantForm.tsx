@@ -23,7 +23,7 @@ const RestaurantForm: React.FC<RestaurantFormProps> = ({ onSuccess }) => {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  const { createRestaurant } = useApi();
+  const api = useApi();
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -38,7 +38,7 @@ const RestaurantForm: React.FC<RestaurantFormProps> = ({ onSuccess }) => {
     
     try {
       console.log('Submitting restaurant data:', formData);
-      const newRestaurant = await createRestaurant(formData);
+      const newRestaurant = await api.restaurant.create(formData);
       
       toast({
         title: "Success!",

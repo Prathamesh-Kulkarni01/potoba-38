@@ -12,7 +12,7 @@ export interface User {
 export interface Restaurant {
   id: string;
   _id?: string; // MongoDB ID format support
-  name: string;
+  name?: string;
   logo?: string;
   description?: string;
   address?: string;

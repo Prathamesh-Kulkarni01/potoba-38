@@ -16,7 +16,13 @@ const { authenticate } = require('../middleware/authMiddleware');
 // Re-route orders for a specific table
 router.use('/:tableId/orders', ordersRouter);
 
-// All table routes require authentication
+// Usage:
+// - GET `/api/restaurants/:restaurantId/tables` to fetch all tables for a restaurant.
+// - POST `/api/restaurants/:restaurantId/tables` to create a new table.
+// - GET `/api/restaurants/:restaurantId/tables/:id` to fetch a specific table.
+// - PUT `/api/restaurants/:restaurantId/tables/:id` to update a table.
+// - DELETE `/api/restaurants/:restaurantId/tables/:id` to delete a table.
+// All routes require authentication using the `authenticate` middleware.
 router.route('/')
   .get(authenticate, getTables)
   .post(authenticate, createTable);

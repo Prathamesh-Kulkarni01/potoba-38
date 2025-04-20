@@ -12,6 +12,15 @@ const handleError = (res, error, message = 'Server error', status = 500) => {
   res.status(status).json({ message });
 };
 
+// Usage:
+// - GET `/api/restaurants` to fetch all restaurants for the logged-in user.
+// - GET `/api/restaurants/:id` to fetch a specific restaurant.
+// - POST `/api/restaurants` to create a new restaurant.
+// - POST `/api/restaurants/:id/demo-data` to create demo data for a restaurant.
+// - PUT `/api/restaurants/:id` to update a restaurant.
+// - DELETE `/api/restaurants/:id` to delete a restaurant.
+// All routes require authentication using the `authenticate` middleware.
+
 // Get all restaurants for the logged-in user
 router.get('/', authenticate, async (req, res) => {
   try {

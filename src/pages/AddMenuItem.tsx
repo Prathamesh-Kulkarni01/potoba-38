@@ -7,12 +7,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { api } from '@/services/api';
+
 import { useAuth } from '@/contexts/AuthContext';
+import useApi from '@/services/api';
 
 const AddMenuItem = () => {
   const [categories, setCategories] = useState([]);
   const {currentRestaurantId,token}=useAuth()
+  const api=useApi()
   
   const [formData, setFormData] = useState({
     name: '',
@@ -30,10 +32,10 @@ const AddMenuItem = () => {
   useEffect(() => {
     const fetchCategories = async () => {
       try {
-        const response = await api.categories.getCategories(currentRestaurantId,token);
+        const response = await api.category.get(currentRestaurantId);
         console.log({response})
-        if (Array.isArray(response.data)) {
-          setCategories(response.data);
+        if (Array.isArray(response)) {
+          setCategories(response);
         } else {
           throw new Error('Invalid categories data');
         }
@@ -62,7 +64,7 @@ const AddMenuItem = () => {
         return;
       }
 
-      await api.menu.createMenuItem({
+      await api.menu.create(currentRestaurantId,{
         name,
         description,
         price: parseFloat(price),
@@ -87,8 +89,8 @@ const AddMenuItem = () => {
         return;
       }
 
-      const response = await api.categories.createCategory(currentRestaurantId,{ name: newCategory },token);
-      setCategories((prev) => [...prev, response.data]);
+      const response = await api.category.create(currentRestaurantId,{ name: newCategory });
+      setCategories((prev) => [...prev, response]);
       setNewCategory('');
       toast({ title: "Success", description: "Category created successfully" });
     } catch (error) {
@@ -132,7 +134,7 @@ const AddMenuItem = () => {
                       </SelectItem>
                     ))
                   ) : (
-                    <SelectItem disabled>No categories available</SelectItem>
+                    <SelectItem value="no-categories" disabled>No categories available</SelectItem>
                   )}
                 </SelectContent>
               </Select>

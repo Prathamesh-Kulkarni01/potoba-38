@@ -2,6 +2,14 @@ const MenuItem = require('../models/MenuItem');
 const Restaurant = require('../models/Restaurant');
 const Category = require('../models/Category');
 
+// Usage:
+// - `getMenuItems`: Fetch all menu items for a restaurant.
+// - `getMenuItem`: Fetch a specific menu item by ID.
+// - `createMenuItem`: Create a new menu item for a restaurant.
+// - `updateMenuItem`: Update an existing menu item by ID.
+// - `deleteMenuItem`: Delete a menu item by ID.
+// All methods ensure the user owns the restaurant and the menu item belongs to the restaurant.
+
 // @desc    Get all menu items for a restaurant
 // @route   GET /api/restaurants/:restaurantId/menu
 // @access  Private

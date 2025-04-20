@@ -2,6 +2,8 @@
 import { Restaurant } from '@/types/auth';
 
 export interface ApiResponse<T> {
+  id: any;
+  _id: any;
   success: boolean;
   data?: T;
   error?: string;
@@ -51,6 +53,7 @@ export interface Order {
 
 export interface OrderItem {
   id: string;
+  _id?: string;
   menuItemId: string;
   name: string;
   price: number;

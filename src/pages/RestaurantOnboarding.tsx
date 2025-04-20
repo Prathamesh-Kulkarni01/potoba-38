@@ -10,7 +10,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { motion } from 'framer-motion';
 import { UtensilsCrossed, ChefHat, ArrowRight, Loader2 } from 'lucide-react';
 import { toast } from "sonner";
-import { restaurantService } from '../services/restaurantService';
+import useApi from '@/services/api';
 
 const cuisineTypes = [
   "American", "Italian", "Mexican", "Chinese", "Japanese", 
@@ -23,6 +23,7 @@ const RestaurantOnboarding = () => {
   const [loading, setLoading] = useState(false);
   const [createDemoData, setCreateDemoData] = useState(false);
   const { user, currentRestaurantId, setCurrentRestaurantId } = useAuth();
+  const api=useApi()
   const navigate = useNavigate();
   
   // Form data
@@ -63,7 +64,7 @@ const RestaurantOnboarding = () => {
     setLoading(true);
     try {
       // Create the restaurant
-      const newRestaurant = await restaurantService.createRestaurant({
+      const response = await api.restaurant.create({
         name,
         description,
         address,
@@ -71,7 +72,7 @@ const RestaurantOnboarding = () => {
         cuisine,
         tables: parseInt(tableCount) || 10,
       });
-
+      const newRestaurant=response.data
       if (!newRestaurant || !(newRestaurant.id || newRestaurant._id)) {
         throw new Error('Failed to create restaurant. Missing restaurant ID.');
       }
@@ -84,11 +85,11 @@ const RestaurantOnboarding = () => {
       }
       
       // Create default tables
-      await restaurantService.createDefaultTables(restaurantId, parseInt(tableCount) || 10);
+      await api.table.createDefault(restaurantId, parseInt(tableCount) || 10);
       
       // If demo data is requested, create it
       if (createDemoData) {
-        // await restaurantService.createDemoData(restaurantId);
+        await api.restaurant.createDemoData(restaurantId);
         toast.success("Demo data created successfully!");
       }
       

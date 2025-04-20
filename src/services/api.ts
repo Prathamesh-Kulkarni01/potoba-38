@@ -1,5 +1,5 @@
 import { useAuth } from '@/contexts/AuthContext';
-import { ApiResponse, Restaurant, MenuItem, Table, Order } from '@/types/api';
+import { ApiResponse } from '@/types/api';
 
 // Base API URL
 const API_URL = '/api';
@@ -22,89 +22,120 @@ export const useAuthHeaders = () => {
   return { getAuthHeaders };
 };
 
-// Helper function for API requests
-const fetchWithAuth = async (url: string, options: RequestInit, headers: Record<string, string>) => {
+// Generalized API request function
+const request = async (
+  method: string,
+  url: string,
+  { params = '', data = null }: { params?: string; data?: any } = {},
+  headers?: Record<string, string>
+): Promise<ApiResponse<any>> => {
   try {
-    const response = await fetch(url, { ...options, headers });
+    const fullUrl = `${API_URL}/${url}${params ? `/${params}` : ''}`;
+    const options: RequestInit = {
+      method,
+      headers,
+      ...(data && { body: JSON.stringify(data) }),
+    };
+
+    const response = await fetch(fullUrl, options);
 
     if (!response.ok) {
       const error = await response.json();
       throw new Error(error.message || 'Request failed');
     }
 
-    const data = await response.json();
-    return { success: true, data: data.data || data };
+    const responseData = await response.json();
+    return  responseData?.data?.data||responseData?.data||responseData||{}
   } catch (error) {
     console.error(`Error during API request to ${url}:`, error);
     return { success: false, error: error.message || 'Network error' };
   }
 };
 
-// API functions
-const api = {
-  // Menu
-  getMenuItems: (restaurantId: string, headers: Record<string, string>): Promise<ApiResponse<MenuItem[]>> =>
-    fetchWithAuth(`${API_URL}/restaurants/${restaurantId}/menu`, {}, headers),
-
-  createMenuItem: (restaurantId: string, menuItemData: any, headers: Record<string, string>) =>
-    fetchWithAuth(`${API_URL}/restaurants/${restaurantId}/menu`, {
-      method: 'POST',
-      body: JSON.stringify(menuItemData),
-    }, headers),
-
-  // Tables
-  getTables: (restaurantId: string, headers: Record<string, string>): Promise<ApiResponse<Table[]>> =>
-    fetchWithAuth(`${API_URL}/restaurants/${restaurantId}/tables`, {}, headers),
-
-  // Orders
-  getOrders: (restaurantId: string, headers: Record<string, string>): Promise<ApiResponse<Order[]>> =>
-    fetchWithAuth(`${API_URL}/restaurants/${restaurantId}/orders`, {}, headers),
-
-  // Restaurants
-  getRestaurants: (headers: Record<string, string>): Promise<ApiResponse<Restaurant[]>> =>
-    fetchWithAuth(`${API_URL}/restaurants`, {}, headers),
-
-  getRestaurantById: (id: string, headers: Record<string, string>): Promise<ApiResponse<Restaurant>> =>
-    fetchWithAuth(`${API_URL}/restaurants/${id}`, {}, headers),
-
-  createRestaurant: (restaurantData: any, headers: Record<string, string>): Promise<ApiResponse<Restaurant>> =>
-    fetchWithAuth(`${API_URL}/restaurants`, {
-      method: 'POST',
-      body: JSON.stringify(restaurantData),
-    }, headers),
-
-  updateRestaurant: (id: string, restaurantData: any, headers: Record<string, string>): Promise<ApiResponse<Restaurant>> =>
-    fetchWithAuth(`${API_URL}/restaurants/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(restaurantData),
-    }, headers),
-
-  deleteRestaurant: (id: string, headers: Record<string, string>): Promise<ApiResponse<null>> =>
-    fetchWithAuth(`${API_URL}/restaurants/${id}`, {
-      method: 'DELETE',
-    }, headers),
-
-  // Categories
-  getCategories: (restaurantId: string, headers: Record<string, string>): Promise<ApiResponse<any[]>> =>
-    fetchWithAuth(`${API_URL}/restaurants/${restaurantId}/categories`, {}, headers),
-
-  createCategory: (restaurantId: string, categoryData: any, headers: Record<string, string>): Promise<ApiResponse<any>> =>
-    fetchWithAuth(`${API_URL}/restaurants/${restaurantId}/categories`, {
-      method: 'POST',
-      body: JSON.stringify(categoryData),
-    }, headers),
-};
-
 // Custom hook to use API
 export const useApi = () => {
   const { getAuthHeaders } = useAuthHeaders();
-
   const headers = getAuthHeaders();
 
   return {
-    ...api,
-    headers,
+    menu: {
+      get: (restaurantId: string) => request('GET', `restaurants/${restaurantId}/menu`, {}, headers),
+      getById: (restaurantId: string, id: string) =>
+        request('GET', `restaurants/${restaurantId}/menu/${id}`, {}, headers),
+      create: (restaurantId: string, data: any) =>
+        request('POST', `restaurants/${restaurantId}/menu`, { data }, headers),
+      update: (restaurantId: string, id: string, data: any) =>
+        request('PUT', `restaurants/${restaurantId}/menu/${id}`, { data }, headers),
+      delete: (restaurantId: string, id: string) =>
+        request('DELETE', `restaurants/${restaurantId}/menu/${id}`, {}, headers),
+    },
+    table: {
+      get: (restaurantId: string) => request('GET', `restaurants/${restaurantId}/tables`, {}, headers),
+      getById: (restaurantId: string, id: string) =>
+        request('GET', `restaurants/${restaurantId}/tables/${id}`, {}, headers),
+      create: (restaurantId: string, data: any) =>
+        request('POST', `restaurants/${restaurantId}/tables`, { data }, headers),
+      update: (restaurantId: string, id: string, data: any) =>
+        request('PUT', `restaurants/${restaurantId}/tables/${id}`, { data }, headers),
+      delete: (restaurantId: string, id: string) =>
+        request('DELETE', `restaurants/${restaurantId}/tables/${id}`, {}, headers),
+      createDefault: async (restaurantId: string, count: number = 10) => {
+        const existingTablesResponse =  await request('GET', `restaurants/${restaurantId}/tables`, {}, headers)
+        console.log({existingTablesResponse})
+        const existingTableNumbers = new Set(existingTablesResponse.data.map((table: any) => table.number));
+        const tables = [];
+        for (let i = 1; tables.length < count; i++) {
+          if (!existingTableNumbers.has(i)) {
+            tables.push({
+              number: i,
+              capacity: Math.floor(Math.random() * 3) + 2, 
+              status: 'available',
+            });
+          }
+        }
+      
+        // Create tables concurrently
+        const createdTables = await Promise.all(
+          tables.map(table =>
+            request('POST', `restaurants/${restaurantId}/tables`, { data: table }, headers)
+          )
+        );
+      
+        return createdTables;
+      }
+    },
+    order: {
+      get: (restaurantId: string) => request('GET', `restaurants/${restaurantId}/orders`, {}, headers),
+      getById: (restaurantId: string, id: string) =>
+        request('GET', `restaurants/${restaurantId}/orders/${id}`, {}, headers),
+      create: (restaurantId: string, data: any) =>
+        request('POST', `restaurants/${restaurantId}/orders`, { data }, headers),
+      update: (restaurantId: string, id: string, data: any) =>
+        request('PUT', `restaurants/${restaurantId}/orders/${id}`, { data }, headers),
+      delete: (restaurantId: string, id: string) =>
+        request('DELETE', `restaurants/${restaurantId}/orders/${id}`, {}, headers),
+      updateStatus: (restaurantId: string, id: string, statusData: any) =>
+        request('PATCH', `restaurants/${restaurantId}/orders/${id}/status`, { data: statusData }, headers),
+    },
+    restaurant: {
+      get: () => request('GET', 'restaurants', {}, headers),
+      getById: (id: string) => request('GET', `restaurants/${id}`, {}, headers),
+      create: (data: any) => request('POST', 'restaurants', { data }, headers),
+      update: (id: string, data: any) => request('PUT', `restaurants/${id}`, { data }, headers),
+      delete: (id: string) => request('DELETE', `restaurants/${id}`, {}, headers),
+      createDemoData: (id: string) =>
+        request('POST', `restaurants/${id}/demo-data`, {}, headers),
+    },
+    category: {
+      get: (restaurantId: string) =>
+        request('GET', `restaurants/${restaurantId}/categories`, {}, headers),
+      create: (restaurantId: string, data: any) =>
+        request('POST', `restaurants/${restaurantId}/categories`, { data }, headers),
+    },
+    sync: {
+      post: () => request('POST', 'sync-databases', {}, headers),
+    },
   };
 };
 
-export default api;
+export default useApi;

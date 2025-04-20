@@ -7,13 +7,13 @@ import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { CalendarDays, ChefHat, DollarSign, ShoppingBasket, Users } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import restaurantService from '@/services/restaurantService';
 import { toast } from '@/components/ui/use-toast';
 import { Restaurant, MenuItem, Table, Order } from '@/types/api';
-import { api } from '@/services/api';
+import useApi from '@/services/api';
 
 const RestaurantDashboard = () => {
   const { user } = useAuth();
+  const api = useApi();
   const navigate = useNavigate();
 
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
@@ -46,13 +46,13 @@ const RestaurantDashboard = () => {
         }
         
         // Fetch restaurant data
-        const restaurantData = await restaurantService.getRestaurant(restaurantId);
+        const restaurantData = await api.restaurant.getById(restaurantId);
         setRestaurant(restaurantData);
         
         // Fetch menu items, tables, and orders
-        const menuResponse = await api.menu.getAll(restaurantId, token);
-        const tablesResponse = await api.tables.getAll(restaurantId, token);
-        const ordersResponse = await api.orders.getAll(restaurantId, token);
+        const menuResponse = await api.menu.get(restaurantId);
+        const tablesResponse = await api.table.get(restaurantId);
+        const ordersResponse = await api.order.get(restaurantId);
         
         if (menuResponse.success) {
           setMenuItems(menuResponse.data || []);
@@ -82,10 +82,10 @@ const RestaurantDashboard = () => {
 
   const createDemoData = async () => {
     if (!restaurant) return;
-    
+    console.log({restaurant})
     try {
       setCreatingDemoData(true);
-      await restaurantService.createDemoData(restaurant.id || restaurant._id || '');
+      await api.restaurant.createDemoData(restaurant.id || restaurant._id || '');
       
       toast({
         title: "Demo Data Created",
@@ -97,9 +97,9 @@ const RestaurantDashboard = () => {
       if (!token) return;
       
       const restaurantId = restaurant.id || restaurant._id || '';
-      const menuResponse = await api.menu.getAll(restaurantId, token);
-      const tablesResponse = await api.tables.getAll(restaurantId, token);
-      const ordersResponse = await api.orders.getAll(restaurantId, token);
+      const menuResponse = await api.menu.get(restaurantId);
+      const tablesResponse = await api.table.get(restaurantId);
+      const ordersResponse = await api.order.get(restaurantId);
       
       if (menuResponse.success) {
         setMenuItems(menuResponse.data || []);

@@ -3,6 +3,7 @@ const User = require('../models/User');
 const MenuItem = require('../models/MenuItem');
 const Table = require('../models/Table');
 const Order = require('../models/Order');
+const Category = require('../models/Category');
 
 // WebSocket reference for logging
 let wss;
@@ -99,7 +100,7 @@ exports.getRestaurant = async (req, res) => {
     }
 
     // Make sure user owns the restaurant
-    if (restaurant.user.toString() !== req.user.id) {
+    if (restaurant.owner.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
         error: 'You do not have permission to access this restaurant.'
@@ -203,7 +204,7 @@ exports.updateRestaurant = async (req, res) => {
     }
 
     // Make sure user owns the restaurant
-    if (restaurant.user.toString() !== req.user.id) {
+    if (restaurant.owner.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
         error: 'You do not have permission to access this restaurant.'
@@ -258,7 +259,7 @@ exports.deleteRestaurant = async (req, res) => {
     }
 
     // Make sure user owns the restaurant
-    if (restaurant.user.toString() !== req.user.id) {
+    if (restaurant.owner.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
         error: 'You do not have permission to access this restaurant.'
@@ -299,7 +300,7 @@ exports.createDemoData = async (req, res) => {
     }
 
     // Make sure user owns the restaurant
-    if (restaurant.user.toString() !== req.user.id) {
+    if (restaurant.owner.toString() !== req.user._id.toString()) {
       return res.status(403).json({ success: false, error: 'You do not have permission to access this restaurant.' });
     }
 
@@ -315,16 +316,55 @@ exports.createDemoData = async (req, res) => {
       await Table.insertMany(tables);
     }
 
+    // Create demo categories if none exist
+    const existingCategories = await Category.find({ restaurant: req.params.id });
+    let categoryMap = {};
+    if (existingCategories.length === 0) {
+      const categories = [
+        { name: 'Appetizers', restaurant: req.params.id },
+        { name: 'Main Course', restaurant: req.params.id },
+        { name: 'Desserts', restaurant: req.params.id },
+        { name: 'Drinks', restaurant: req.params.id }
+      ];
+      const createdCategories = await Category.insertMany(categories);
+      console.log('Created categories:', createdCategories); // Log created categories
+      categoryMap = createdCategories.reduce((map, category) => {
+        map[category.name] = category._id;
+        return map;
+      }, {});
+    } else {
+      console.log('Existing categories:', existingCategories); // Log existing categories
+      categoryMap = existingCategories.reduce((map, category) => {
+        map[category.name] = category._id;
+        return map;
+      }, {});
+    }
+
+    // Validate categoryMap
+    if (Object.keys(categoryMap).length === 0 || Object.values(categoryMap).some(id => !id)) {
+      console.error('Category map is invalid. Cannot create menu items.');
+      return res.status(500).json({ success: false, error: 'Failed to create categories for demo data.' });
+    }
+
     // Create demo menu items if none exist
     const existingMenuItems = await MenuItem.find({ restaurant: req.params.id });
     if (existingMenuItems.length === 0) {
       const menuItems = [
-        { name: 'Bruschetta', description: 'Toasted bread with tomatoes and herbs', price: 7.99, category: 'Appetizers' },
-        { name: 'Margherita Pizza', description: 'Classic tomato and mozzarella pizza', price: 12.99, category: 'Main Course' },
-        { name: 'Tiramisu', description: 'Classic Italian coffee dessert', price: 6.99, category: 'Desserts' },
-        { name: 'Soft Drinks', description: 'Assorted sodas', price: 2.99, category: 'Drinks' }
-      ].map(item => ({ ...item, restaurant: req.params.id }));
+        { name: 'Bruschetta', description: 'Toasted bread with tomatoes and herbs', price: 7.99, category: categoryMap['Main'], restaurant: req.params.id },
+        { name: 'Margherita Pizza', description: 'Classic tomato and mozzarella pizza', price: 12.99, category: categoryMap['Main'], restaurant: req.params.id },
+        { name: 'Tiramisu', description: 'Classic Italian coffee dessert', price: 6.99, category: categoryMap['Main'], restaurant: req.params.id },
+        { name: 'Soft Drinks', description: 'Assorted sodas', price: 2.99, category: categoryMap['Main'], restaurant: req.params.id }
+      ];
+
+      // Validate menu items before insertion
+      menuItems.forEach(item => {
+        if (!item.category || !item.restaurant) {
+          console.error(`Invalid menu item: ${JSON.stringify(item)}`);
+        }
+      });
+
       await MenuItem.insertMany(menuItems);
+      console.log('Created menu items:', menuItems); // Log created menu items
     }
 
     // Create sample orders if none exist
@@ -335,23 +375,33 @@ exports.createDemoData = async (req, res) => {
         MenuItem.find({ restaurant: req.params.id })
       ]);
 
-      if (tables.length > 0 && menuItems.length > 0) {
-        const sampleOrders = [
-          {
-            restaurant: req.params.id,
-            tableId: tables[0]._id,
-            status: 'completed',
-            items: [
-              { menuItemId: menuItems[0]._id, name: menuItems[0].name, price: menuItems[0].price, quantity: 2 },
-              { menuItemId: menuItems[1]._id, name: menuItems[1].name, price: menuItems[1].price, quantity: 1 }
-            ],
-            total: menuItems[0].price * 2 + menuItems[1].price,
-            createdAt: new Date(),
-            completedAt: new Date()
-          }
-        ];
-        await Order.insertMany(sampleOrders);
+      if (tables.length === 0) {
+        console.error('No tables found for the restaurant. Cannot create orders.');
+        return res.status(500).json({ success: false, error: 'Failed to create orders: No tables available.' });
       }
+
+      if (menuItems.length === 0) {
+        console.error('No menu items found for the restaurant. Cannot create orders.');
+        return res.status(500).json({ success: false, error: 'Failed to create orders: No menu items available.' });
+      }
+
+      const sampleOrders = [
+        {
+          restaurant: req.params.id,
+          table: tables[0]._id, // Use a valid table ID
+          status: 'completed',
+          items: [
+            { menuItemId: menuItems[0]._id, name: menuItems[0].name, price: menuItems[0].price, quantity: 2 },
+            { menuItemId: menuItems[1]._id, name: menuItems[1].name, price: menuItems[1].price, quantity: 1 }
+          ],
+          total: menuItems[0].price * 2 + menuItems[1].price,
+          createdAt: new Date(),
+          completedAt: new Date()
+        }
+      ];
+
+      await Order.insertMany(sampleOrders);
+      console.log('Created sample orders:', sampleOrders); // Log created orders
     }
 
     res.json({ success: true, data: { message: 'Demo data created successfully' } });
