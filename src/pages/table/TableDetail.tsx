@@ -30,49 +30,8 @@ import { Badge } from "@/components/ui/badge";
 import QRCodeGenerator from '../../components/table/QRCodeGenerator';
 import Navbar from '../../components/dashboard/Navbar';
 import { useToast } from "@/hooks/use-toast";
-
-// Sample data - in a real application, this would come from an API
-const tableDetails = {
-  id: 5,
-  number: 5,
-  capacity: 4,
-  status: 'occupied',
-  lastOrder: new Date().toISOString(),
-  currentOrder: {
-    id: 123,
-    items: [
-      { name: 'Classic Burger', quantity: 1, price: 12.99 },
-      { name: 'French Fries', quantity: 1, price: 4.99 },
-      { name: 'Iced Tea', quantity: 1, price: 2.99 }
-    ],
-    status: 'preparing',
-    time: new Date().toISOString(),
-    total: 20.97
-  },
-  orderHistory: [
-    {
-      id: 122,
-      items: [
-        { name: 'Caesar Salad', quantity: 1, price: 8.99 },
-        { name: 'Iced Tea', quantity: 1, price: 2.99 }
-      ],
-      status: 'completed',
-      time: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-      total: 11.98
-    },
-    {
-      id: 120,
-      items: [
-        { name: 'Margherita Pizza', quantity: 1, price: 14.99 },
-        { name: 'Chicken Wings', quantity: 1, price: 9.99 },
-        { name: 'Iced Tea', quantity: 2, price: 5.98 }
-      ],
-      status: 'completed',
-      time: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-      total: 30.96
-    }
-  ]
-};
+import useApi from '@/services/api';
+import { useAuth } from '@/contexts/AuthContext';
 
 const statusDisplay = {
   available: { text: 'Available', class: 'table-status-available' },
@@ -101,21 +60,41 @@ const TableDetail = () => {
   const [activeTab, setActiveTab] = useState('info');
   const [liveCart, setLiveCart] = useState<CartItem[]>([]);
   const [groupMembers, setGroupMembers] = useState<string[]>([]);
+  const [tableDetails, setTableDetails] = useState<any>(null); // Dynamic table details
   const { toast } = useToast();
+  const api = useApi();
+  const {currentRestaurantId}=useAuth()
+
+  // Fetch table details dynamically
+  useEffect(() => {
+    const fetchTableDetails = async () => {
+      try {
+        if (tableId) {
+          const details = await api.table.getById(currentRestaurantId, tableId); // Replace 'restaurant-id-placeholder' with actual restaurant ID
+          setTableDetails(details);
+        }
+      } catch (error) {
+        console.error("Failed to fetch table details:", error);
+        toast({
+          title: "Error",
+          description: "Failed to load table details. Please try again.",
+          duration: 3000,
+        });
+      }
+    };
+
+    fetchTableDetails();
+  }, [tableId,currentRestaurantId]);
 
   // Fetch live cart data periodically
   useEffect(() => {
-    // Normally this would be a websocket connection to get real-time updates
-    // For demo purposes, we'll check localStorage
     const checkForLiveUpdates = () => {
       try {
-        // In a real app, this would query the server for live updates
         const cartData = localStorage.getItem(`table-${tableId}-cart`);
         if (cartData) {
           const parsedCart = JSON.parse(cartData) as CartItem[];
           setLiveCart(parsedCart);
 
-          // Extract unique group members with proper type handling
           const members = [...new Set(parsedCart
             .map(item => item.addedBy)
             .filter((name): name is string => name !== undefined && name !== null)
@@ -127,15 +106,11 @@ const TableDetail = () => {
       }
     };
 
-    // Check immediately and then every 3 seconds
     checkForLiveUpdates();
     const interval = setInterval(checkForLiveUpdates, 3000);
 
     return () => clearInterval(interval);
   }, [tableId]);
-
-  // In a real app, you would fetch the table details based on the ID
-  // For demo, we're using the sample data
 
   const formatTime = (timeString: string) => {
     const time = new Date(timeString);
@@ -151,8 +126,6 @@ const TableDetail = () => {
     return liveCart.reduce((total, item) => total + (item.price * item.quantity), 0);
   };
 
-  const statusInfo = statusDisplay[tableDetails.status as keyof typeof statusDisplay];
-
   const copyDirectLink = () => {
     navigator.clipboard.writeText(`${window.location.origin}/order/${tableId}`);
     toast({
@@ -161,6 +134,16 @@ const TableDetail = () => {
       duration: 3000,
     });
   };
+
+  if (!tableDetails) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p>Loading table details...</p>
+      </div>
+    );
+  }
+
+  const statusInfo = statusDisplay[tableDetails.status as keyof typeof statusDisplay];
 
   return (
     <div className="min-h-screen bg-restaurant-background">

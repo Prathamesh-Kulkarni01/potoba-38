@@ -1,5 +1,4 @@
-
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Edit,
@@ -37,24 +36,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import QRCodeGenerator from './QRCodeGenerator';
+import QRCodeGenerator from '../../components/table/QRCodeGenerator';
 import { useToast } from "@/hooks/use-toast";
-
-// Sample data - in a real application, this would come from an API
-const tableData = [
-  { id: 1, number: 1, capacity: 2, status: 'available' },
-  { id: 2, number: 2, capacity: 4, status: 'available' },
-  { id: 3, number: 3, capacity: 2, status: 'reserved' },
-  { id: 4, number: 4, capacity: 6, status: 'occupied' },
-  { id: 5, number: 5, capacity: 4, status: 'occupied' },
-  { id: 6, number: 6, capacity: 8, status: 'available' },
-  { id: 7, number: 7, capacity: 2, status: 'reserved' },
-  { id: 8, number: 8, capacity: 4, status: 'available' },
-  { id: 9, number: 9, capacity: 2, status: 'occupied' },
-  { id: 10, number: 10, capacity: 6, status: 'available' },
-  { id: 11, number: 11, capacity: 4, status: 'available' },
-  { id: 12, number: 12, capacity: 8, status: 'occupied' }
-];
+import useApi from '@/services/api';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface TableCardProps {
   table: {
@@ -128,8 +113,30 @@ const TableManagement = () => {
   const [qrDialogOpen, setQrDialogOpen] = useState(false);
   const [selectedTableId, setSelectedTableId] = useState<number | null>(null);
   const [addTableDialogOpen, setAddTableDialogOpen] = useState(false);
+  const [tableData, setTableData] = useState<any[]>([]); // Dynamic table data
   const { toast } = useToast();
-  
+  const api = useApi();
+  const { currentRestaurantId } = useAuth();
+
+  // Fetch table data dynamically
+  useEffect(() => {
+    const fetchTableData = async () => {
+      try {
+        const tables = await api.table.get(currentRestaurantId);
+        setTableData(tables);
+      } catch (error) {
+        console.error("Failed to fetch table data:", error);
+        toast({
+          title: "Error",
+          description: "Failed to load table data. Please try again.",
+          duration: 3000,
+        });
+      }
+    };
+
+    fetchTableData();
+  }, [currentRestaurantId, api, toast]);
+
   const filteredTables = filter === 'all' 
     ? tableData 
     : tableData.filter(table => table.status === filter);
