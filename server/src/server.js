@@ -1,91 +1,87 @@
 
 require('dotenv').config();
 const express = require('express');
+const mongoose = require('mongoose');
 const cors = require('cors');
-const connectDB = require('./config/db');
+const http = require('http');
 const WebSocket = require('ws');
 
-// Connect to MongoDB
-connectDB();
+// Import routes
+const authRoutes = require('./routes/authRoutes');
+const adminRoutes = require('./routes/adminRoutes');
+// Import other routes as needed
 
+// Initialize express app
 const app = express();
+const server = http.createServer(app);
 
 // Middleware
-app.use(cors({
-  origin: (origin, callback) => {
-    callback(null, true); // Allow any origin
-  },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true,
-}));
-
+app.use(cors());
 app.use(express.json());
 
-// Debugging CORS
-app.use((req, res, next) => {
-  console.log(`CORS Debug: Origin - ${req.headers.origin}`);
-  console.log(`Auth Header: ${req.headers.authorization ? 'Present' : 'Not present'}`);
-  next();
-});
+// Connect to MongoDB
+mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/restaurant-app')
+  .then(() => console.log('MongoDB connected'))
+  .catch(err => {
+    console.error('MongoDB connection error:', err);
+    process.exit(1);
+  });
 
 // Routes
-app.use('/api/auth', require('./routes/auth'));
-app.use('/api/restaurants', require('./routes/restaurants'));
-app.use('/api/sync', require('./routes/sync')); // Add the new sync route
-// Add other routes here
+app.use('/api/auth', authRoutes);
+app.use('/api/admin', adminRoutes);
+// Add other routes as needed
 
-// Health check endpoint
-app.get('/api/health-check', (req, res) => {
-  res.status(200).json({ status: 'ok' });
+// Basic route
+app.get('/', (req, res) => {
+  res.send('Restaurant API is running');
 });
 
-// Sync databases endpoint - easier to access without authentication during development
-app.post('/api/sync-databases', async (req, res) => {
-  try {
-    const syncController = require('./controllers/sync');
-    await syncController.syncDatabases(req, res);
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-const PORT = 5000;
-const MONGO_URI = process.env.MONGO_URI || 'Unknown MongoDB URI';
-
-// Initialize WebSocket server
-const wss = new WebSocket.Server({ port: 8081 });
+// WebSocket server for real-time features
+const wss = new WebSocket.Server({ server });
 
 wss.on('connection', (ws) => {
-  console.log('Frontend connected to WebSocket');
+  console.log('Client connected');
   
-  // Send connection details to the frontend
-  ws.send(`Backend connected successfully to port ${PORT} and MongoDB at ${MONGO_URI}`);
-
-  ws.on('close', () => {
-    console.log('Frontend disconnected from WebSocket');
-    // Notify all clients about the disconnection
-    wss.clients.forEach((client) => {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send('Frontend disconnected from WebSocket');
+  ws.on('message', (message) => {
+    try {
+      const data = JSON.parse(message);
+      console.log('Received:', data);
+      
+      // Handle different message types
+      switch (data.type) {
+        case 'order_update':
+          // Broadcast order updates to all clients
+          wss.clients.forEach(client => {
+            if (client.readyState === WebSocket.OPEN) {
+              client.send(JSON.stringify({
+                type: 'order_update',
+                data: data.data
+              }));
+            }
+          });
+          break;
+          
+        default:
+          console.log('Unknown message type');
       }
-    });
+      
+    } catch (error) {
+      console.error('WebSocket message error:', error);
+    }
+  });
+  
+  ws.on('close', () => {
+    console.log('Client disconnected');
   });
 });
 
-function logToFrontend(message) {
-  wss.clients.forEach((client) => {
-    if (client.readyState === WebSocket.OPEN) {
-      client.send(message); 
-    }
-  });
-}
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({ message: 'Something went wrong!' });
+});
 
-// Export WebSocket for use in other modules
-module.exports.wss = wss;
-module.exports.logToFrontend = logToFrontend;
-
-// Example: Log a message to the frontend
-logToFrontend('Backend is running');
-
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+// Start server
+const PORT = process.env.PORT || 5000;
+server.listen(PORT, () => console.log(`Server running on port ${PORT}`));

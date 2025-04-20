@@ -2,73 +2,62 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
 
-const UserSchema = new mongoose.Schema({
+const userSchema = new mongoose.Schema({
   name: {
     type: String,
-    required: [true, 'Please add a name']
+    required: true,
+    trim: true
   },
   email: {
     type: String,
-    required: [true, 'Please add an email'],
+    required: true,
     unique: true,
-    match: [
-      /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/,
-      'Please add a valid email'
-    ]
+    trim: true,
+    lowercase: true
   },
   password: {
     type: String,
-    required: [true, 'Please add a password'],
-    minlength: 6,
-    select: false
+    required: true
   },
-  restaurants: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Restaurant'
-  }],
   role: {
     type: String,
-    enum: ['user', 'admin', 'manager', 'staff'],
+    enum: ['user', 'admin'],
     default: 'user'
   },
-  permissions: [{
-    type: String,
-    enum: [
-      'view_dashboard',
-      'manage_tables',
-      'manage_menu',
-      'manage_orders',
-      'manage_marketing',
-      'manage_loyalty',
-      'manage_settings',
-      'manage_users'
-    ]
-  }],
   createdAt: {
     type: Date,
     default: Date.now
   }
 });
 
-// Encrypt password using bcrypt
-UserSchema.pre('save', async function(next) {
-  if (!this.isModified('password')) {
+// Hash password before saving
+userSchema.pre('save', async function(next) {
+  if (!this.isModified('password')) return next();
+  
+  try {
+    const salt = await bcrypt.genSalt(10);
+    this.password = await bcrypt.hash(this.password, salt);
     next();
+  } catch (error) {
+    next(error);
   }
-
-  const salt = await bcrypt.genSalt(10);
-  this.password = await bcrypt.hash(this.password, salt);
 });
 
-// Match user entered password to hashed password in database
-UserSchema.methods.matchPassword = async function(enteredPassword) {
-  return await bcrypt.compare(enteredPassword, this.password);
+// Method to compare password
+userSchema.methods.comparePassword = async function(candidatePassword) {
+  return await bcrypt.compare(candidatePassword, this.password);
 };
 
-// Method to check if user has permission
-UserSchema.methods.hasPermission = function(permission) {
-  if (this.role === 'admin') return true; // Admin has all permissions
-  return this.permissions.includes(permission);
+// Method to get JWT payload data
+userSchema.methods.getJwtPayload = function() {
+  return {
+    userId: this._id,
+    email: this.email,
+    role: this.role,
+    name: this.name
+  };
 };
 
-module.exports = mongoose.model('User', UserSchema);
+const User = mongoose.model('User', userSchema);
+
+module.exports = User;
