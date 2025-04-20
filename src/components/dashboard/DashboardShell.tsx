@@ -1,4 +1,3 @@
-
 import React from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
@@ -18,25 +17,30 @@ import {
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { 
-  LayoutDashboard, 
-  UtensilsCrossed, 
-  TableProperties, 
-  ReceiptText, 
-  Settings, 
-  LogOut, 
-  ChevronRight, 
-  Megaphone, 
-  Award, 
-  MessageSquareText, 
-  Bot, 
+import {
+  LayoutDashboard,
+  UtensilsCrossed,
+  TableProperties,
+  ReceiptText,
+  Settings,
+  LogOut,
+  ChevronRight,
+  Megaphone,
+  Award,
+  MessageSquareText,
+  Bot,
   BadgePercent,
   Gift,
-  ShieldAlert
+  ShieldAlert,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "sonner";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import RestaurantSelector from "./RestaurantSelector";
 import { ThemeToggle } from "../theme/ThemeToggle";
 import { Separator } from "../ui/separator";
@@ -46,7 +50,7 @@ interface DashboardShellProps {
   children: React.ReactNode;
 }
 
-export  function DashboardShell({ children }: DashboardShellProps) {
+export function DashboardShell({ children }: DashboardShellProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout, getCurrentRestaurant, hasPermission } = useAuth();
@@ -58,26 +62,28 @@ export  function DashboardShell({ children }: DashboardShellProps) {
 
   const handleLogout = () => {
     logout();
-    navigate('/login');
+    navigate("/login");
   };
 
   const getUserInitials = () => {
     if (!user) return "U";
     const names = user.name.split(" ");
     if (names.length === 1) return names[0].charAt(0).toUpperCase();
-    return (names[0].charAt(0) + names[names.length - 1].charAt(0)).toUpperCase();
+    return (
+      names[0].charAt(0) + names[names.length - 1].charAt(0)
+    ).toUpperCase();
   };
 
   const getRoleBadge = () => {
     if (!user?.role) return null;
-    
+
     const roleStyles = {
       admin: "bg-purple-500",
       manager: "bg-blue-500",
       staff: "bg-green-500",
       user: "bg-gray-500",
     };
-    
+
     return (
       <Badge className={roleStyles[user.role as keyof typeof roleStyles]}>
         {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
@@ -166,18 +172,18 @@ export  function DashboardShell({ children }: DashboardShellProps) {
   };
 
   // Filter menu items based on user permissions
-  const filteredMainMenuItems = mainMenuItems.filter(item => 
+  const filteredMainMenuItems = mainMenuItems.filter((item) =>
     hasPermission(item.permission)
   );
-  
-  const filteredMarketingMenuItems = marketingMenuItems.filter(item => 
+
+  const filteredMarketingMenuItems = marketingMenuItems.filter((item) =>
     hasPermission(item.permission)
   );
-  
-  const filteredLoyaltyMenuItems = loyaltyMenuItems.filter(item => 
+
+  const filteredLoyaltyMenuItems = loyaltyMenuItems.filter((item) =>
     hasPermission(item.permission)
   );
-  
+
   const showSettingsMenuItem = hasPermission(settingsMenuItem.permission);
 
   return (
@@ -189,16 +195,20 @@ export  function DashboardShell({ children }: DashboardShellProps) {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 bg-sidebar-accent rounded-md flex items-center justify-center">
-                  <span className="text-lg font-bold text-sidebar-accent-foreground">TM</span>
+                  <span className="text-lg font-bold text-sidebar-accent-foreground">
+                    TM
+                  </span>
                 </div>
-                <h2 className="text-lg font-bold text-sidebar-foreground">TableMaster</h2>
+                <h2 className="text-lg font-bold text-sidebar-foreground">
+                  TableMaster
+                </h2>
               </div>
               <ThemeToggle />
             </div>
-            
+
             <RestaurantSelector />
           </SidebarHeader>
-          
+
           <SidebarContent className="p-2">
             {/* Main Navigation */}
             {filteredMainMenuItems.length > 0 && (
@@ -229,7 +239,9 @@ export  function DashboardShell({ children }: DashboardShellProps) {
             {/* Marketing */}
             {filteredMarketingMenuItems.length > 0 && (
               <SidebarGroup>
-                <SidebarGroupLabel className="mt-4">Marketing</SidebarGroupLabel>
+                <SidebarGroupLabel className="mt-4">
+                  Marketing
+                </SidebarGroupLabel>
                 <SidebarGroupContent>
                   <SidebarMenu>
                     {filteredMarketingMenuItems.map((item) => (
@@ -302,7 +314,7 @@ export  function DashboardShell({ children }: DashboardShellProps) {
               </SidebarGroup>
             )}
           </SidebarContent>
-          
+
           <SidebarFooter className="p-3">
             {user && (
               <div className="flex flex-col gap-3">
@@ -345,34 +357,36 @@ export  function DashboardShell({ children }: DashboardShellProps) {
 
         {/* Main Content */}
         <SidebarInset>
-          <div className="container mx-auto p-4 relative">
-            {children}
-          </div>
-          
-          {/* Bottom Navigation for Mobile */}
-          <div className="fixed bottom-0 left-0 right-0 md:hidden  bg-restaurant-background bg-pattern text-white z-30">
-            <div className="flex justify-around items-center p-3">
-              {[...filteredMainMenuItems,...filteredMarketingMenuItems,...filteredLoyaltyMenuItems].slice(0, 8).map((item) => (
-                <Button 
+          <div className="container mx-auto p-4 relative">{children}</div>
+        </SidebarInset>
+        <div className="fixed bottom-0 left-0 right-0 md:hidden  bg-restaurant-background bg-pattern text-white z-30">
+          <div className="flex justify-around items-center p-3">
+            {[
+              ...filteredMainMenuItems,
+              ...filteredMarketingMenuItems,
+              ...filteredLoyaltyMenuItems,
+            ]
+              .slice(0, 7)
+              .map((item) => (
+                <Button
                   key={item.path}
                   variant="ghost"
                   className={cn(
                     "flex flex-col items-center justify-center px-0 py-1 h-auto min-w-14 text-white",
-                    isActive(item.path) ? "text-restaurant-secondary" : "text-white/80 hover:text-white"
+                    isActive(item.path)
+                      ? "text-restaurant-secondary"
+                      : "text-white/80 hover:text-white"
                   )}
                   onClick={() => navigate(item.path)}
                 >
                   <item.icon className="h-5 w-5" />
-                  <span className="text-[10px]">{item.title?.split(" ")[0]}</span>
+                  <span className="text-[10px]">
+                    {item.title?.split(" ")[0]}
+                  </span>
                 </Button>
               ))}
-            </div>
           </div>
-          
-          <div className="h-16 md:hidden">
-            {/* Spacer for mobile bottom navigation */}
-          </div>
-        </SidebarInset>
+        </div>
 
         {/* Toaster for notifications */}
         <Toaster position="top-right" />
