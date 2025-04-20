@@ -124,15 +124,81 @@ const Index = () => {
                 animate={{ scale: 1, opacity: 1 }}
                 transition={{ duration: 0.5, delay: 0.3 }}
               >
-                <div className="bg-food-primary text-white p-3 font-semibold flex items-center justify-between">
-                  <span>TableMaster Dashboard</span>
-                  <Sparkles className="h-4 w-4" />
+                <div className="bg-gradient-to-r from-food-primary to-food-accent text-white p-3 font-semibold flex items-center justify-between">
+                  <div className="flex items-center">
+                    <Sparkles className="h-4 w-4 mr-2" />
+                    <span>TableMaster Dashboard</span>
+                  </div>
+                  <div className="flex space-x-2">
+                    <div className="w-2 h-2 rounded-full bg-white/30"></div>
+                    <div className="w-2 h-2 rounded-full bg-white/50"></div>
+                    <div className="w-2 h-2 rounded-full bg-white/70"></div>
+                  </div>
                 </div>
-                <img 
-                  src="https://placehold.co/600x400/FFF8F6/FF6B35?text=AI+Dashboard+Preview&font=montserrat" 
-                  alt="Dashboard Preview" 
-                  className="w-full h-auto" 
-                />
+                <div className="relative">
+                  <div className="absolute inset-0 bg-gradient-to-br from-food-secondary/5 to-food-primary/5"></div>
+                  <div className="p-5 space-y-4">
+                    <div className="flex justify-between items-center">
+                      <div className="space-y-1">
+                        <div className="text-xs text-gray-500">Today's Revenue</div>
+                        <div className="text-2xl font-bold text-food-primary">$1,458.20</div>
+                      </div>
+                      <div className="h-10 w-10 rounded-full bg-food-primary/10 flex items-center justify-center">
+                        <TrendingUp className="h-5 w-5 text-food-primary" />
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-3 pt-2">
+                      <div className="bg-white p-3 rounded-lg shadow-sm border border-gray-100">
+                        <div className="flex items-center mb-2">
+                          <Users className="h-4 w-4 text-food-secondary mr-1.5" />
+                          <span className="text-xs font-medium">Active Tables</span>
+                        </div>
+                        <div className="text-lg font-bold">12/15</div>
+                      </div>
+                      <div className="bg-white p-3 rounded-lg shadow-sm border border-gray-100">
+                        <div className="flex items-center mb-2">
+                          <ChefHat className="h-4 w-4 text-food-accent mr-1.5" />
+                          <span className="text-xs font-medium">Orders</span>
+                        </div>
+                        <div className="text-lg font-bold">24</div>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <div className="text-xs font-medium text-gray-600">Popular Items Today</div>
+                      <div className="flex items-center justify-between bg-white p-2 rounded shadow-sm border border-gray-100">
+                        <div className="flex items-center">
+                          <div className="w-8 h-8 bg-food-primary/20 rounded-md flex items-center justify-center mr-2">
+                            <Star className="h-4 w-4 text-food-primary" />
+                          </div>
+                          <span className="text-sm">Classic Burger</span>
+                        </div>
+                        <span className="text-xs bg-food-secondary/10 text-food-secondary px-2 py-1 rounded-full">
+                          42 orders
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between bg-white p-2 rounded shadow-sm border border-gray-100">
+                        <div className="flex items-center">
+                          <div className="w-8 h-8 bg-food-accent/20 rounded-md flex items-center justify-center mr-2">
+                            <Star className="h-4 w-4 text-food-accent" />
+                          </div>
+                          <span className="text-sm">Caesar Salad</span>
+                        </div>
+                        <span className="text-xs bg-food-secondary/10 text-food-secondary px-2 py-1 rounded-full">
+                          36 orders
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div className="flex justify-center">
+                      <div className="text-xs text-gray-400 animate-pulse flex items-center">
+                        <Sparkles className="h-3 w-3 mr-1 text-food-primary" />
+                        AI insights updating...
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </motion.div>
               <motion.img 
                 src="/images/food-doodle-2.svg" 
