@@ -131,16 +131,18 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
   const signup = async (name: string, email: string, password: string) => {
     setLoading(true);
     try {
+      console.log('Attempting signup with API...');
       const response = await api.auth.register({ name, email, password });
       
       if (!response.success || !response.data) {
         throw new Error(response.error || "Registration failed");
       }
       
+      console.log('API signup response:', response.data);
       const { user, token } = response.data;
       
-      // Save token to localStorage - ensure this line executes
-      console.log('Saving token to localStorage:', token);
+      // Save token to localStorage with direct extraction from response
+      console.log('Saving API token to localStorage:', token);
       localStorage.setItem('token', token);
       
       setUser(user);
@@ -152,8 +154,11 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
       
       // Try mock API as fallback
       try {
+        console.log('Attempting mock signup...');
         const mockResponse = await mockApi.auth.register({ name, email, password });
+        
         if (mockResponse.success && mockResponse.data) {
+          console.log('Mock signup response:', mockResponse.data);
           const { user, token } = mockResponse.data;
           
           // Save token to localStorage - ensure this executes in mock flow too

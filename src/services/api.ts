@@ -405,7 +405,7 @@ if (typeof window !== 'undefined') {
   
   window.addEventListener('offline', () => {
     toast({
-      variant: "warning",
+      variant: "destructive",
       description: 'You are offline. Changes will be synced when you reconnect.',
     });
   });
