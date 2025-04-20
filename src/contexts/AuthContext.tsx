@@ -113,11 +113,17 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
         throw new Error(response.error || "Registration failed");
       }
       
-      console.log('API signup response:', response.data.data);
-      const { user, token } = response.data.data;
+      console.log('API signup response:', response.data);
       
-      // Save token to localStorage with direct extraction from response
-      console.log('Saving API token to localStorage:', token);
+      // Handle the nested data structure in the response
+      const userData = response.data.data || response.data;
+      const { user, token } = userData;
+      
+      console.log('Extracted user:', user);
+      console.log('Extracted token:', token);
+      
+      // Save token to localStorage
+      console.log('Saving token to localStorage:', token);
       localStorage.setItem('token', token);
       
       setUser(user);
@@ -126,6 +132,31 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
       });
     } catch (error) {
       console.error("Signup error:", error);
+      
+      // Try mock API as fallback
+      try {
+        console.log('Attempting signup with mock API...');
+        const mockResponse = await mockApi.auth.register({ name, email, password });
+        
+        if (mockResponse.success && mockResponse.data) {
+          console.log('Mock API signup response:', mockResponse.data);
+          
+          const { user, token } = mockResponse.data;
+          
+          console.log('Saving mock token to localStorage:', token);
+          localStorage.setItem('token', token);
+          
+          setUser(user);
+          
+          toast({
+            description: "Account created successfully (mock mode)",
+          });
+          return;
+        }
+      } catch (mockError) {
+        console.error("Mock API signup also failed:", mockError);
+      }
+      
       toast({
         variant: "destructive",
         description: `Failed to create account: ${error}`,
