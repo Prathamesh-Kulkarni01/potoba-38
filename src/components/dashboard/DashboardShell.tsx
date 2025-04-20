@@ -352,7 +352,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
           {/* Bottom Navigation for Mobile */}
           <div className="fixed bottom-0 left-0 right-0 md:hidden bg-restaurant-primary text-white z-30">
             <div className="flex justify-around items-center p-3">
-              {filteredMainMenuItems.slice(0, 4).map((item) => (
+              {[filteredMainMenuItems,filteredMarketingMenuItems,filteredLoyaltyMenuItems].slice(0, 8).map((item) => (
                 <Button 
                   key={item.path}
                   variant="ghost"
