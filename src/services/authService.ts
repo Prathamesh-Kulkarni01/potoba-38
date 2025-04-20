@@ -25,7 +25,7 @@ export const authService = {
   
   async register(email: string, password: string, name: string, role?: string) {
     try {
-      const response = await axios.post<AuthResponse>(`${API_URL}/auth/register`, // Use the API_URL
+      const response = await axios.post<AuthResponse>(`api/auth/register`, // Use the API_URL
         { email, password, name, role },
         { withCredentials: true }
       );
