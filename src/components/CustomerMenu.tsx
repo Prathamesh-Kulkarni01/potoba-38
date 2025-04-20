@@ -1,6 +1,6 @@
 
 import { useState } from 'react';
-import { PlusCircle, MinusCircle, ShoppingCart } from 'lucide-react';
+import { PlusCircle, MinusCircle, ShoppingCart, Search } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -17,7 +17,9 @@ import {
 } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import AiRecommendations from './AiRecommendations';
 
 // Sample data - in a real application, this would come from an API
 const categories = [
@@ -112,11 +114,26 @@ const CustomerMenu = ({ restaurantName, tableNumber }: CustomerMenuProps) => {
   const [activeCategory, setActiveCategory] = useState('All');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const { toast } = useToast();
   
-  const filteredItems = activeCategory === 'All' 
-    ? menuItems 
-    : menuItems.filter(item => item.category === activeCategory);
+  const filteredItems = menuItems
+    .filter(item => {
+      // First filter by category
+      if (activeCategory !== 'All' && item.category !== activeCategory) {
+        return false;
+      }
+      
+      // Then filter by search query if it exists
+      if (searchQuery.trim()) {
+        return (
+          item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          item.description.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+      }
+      
+      return true;
+    });
 
   const addToCart = (item: typeof menuItems[0]) => {
     setCart(prevCart => {
@@ -185,7 +202,7 @@ const CustomerMenu = ({ restaurantName, tableNumber }: CustomerMenuProps) => {
   
   return (
     <div className="pb-20">
-      <div className="sticky top-0 z-10 bg-restaurant-primary text-white p-4 shadow-md">
+      <div className="sticky top-0 z-10 bg-gradient-to-r from-restaurant-primary to-restaurant-primary/90 text-white p-4 shadow-md">
         <div className="container mx-auto">
           <h1 className="text-xl font-bold">{restaurantName}</h1>
           <p className="text-sm">Table {tableNumber}</p>
@@ -193,6 +210,25 @@ const CustomerMenu = ({ restaurantName, tableNumber }: CustomerMenuProps) => {
       </div>
       
       <div className="container mx-auto px-4 py-6">
+        <div className="mb-6">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search menu..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+        </div>
+        
+        {!searchQuery && activeCategory === 'All' && (
+          <AiRecommendations 
+            menuItems={menuItems} 
+            onSelectItem={(item) => addToCart(item)}
+          />
+        )}
+        
         <h2 className="text-2xl font-bold mb-6">Menu</h2>
         
         <Tabs value={activeCategory} onValueChange={setActiveCategory}>
@@ -235,6 +271,7 @@ const CustomerMenu = ({ restaurantName, tableNumber }: CustomerMenuProps) => {
                                 variant="outline" 
                                 size="icon" 
                                 onClick={() => removeFromCart(item.id)}
+                                className="h-8 w-8 rounded-full"
                               >
                                 <MinusCircle className="h-4 w-4" />
                               </Button>
@@ -243,6 +280,7 @@ const CustomerMenu = ({ restaurantName, tableNumber }: CustomerMenuProps) => {
                                 variant="outline" 
                                 size="icon"
                                 onClick={() => addToCart(item)}
+                                className="h-8 w-8 rounded-full"
                               >
                                 <PlusCircle className="h-4 w-4" />
                               </Button>
@@ -251,6 +289,7 @@ const CustomerMenu = ({ restaurantName, tableNumber }: CustomerMenuProps) => {
                             <Button
                               variant="outline"
                               onClick={() => addToCart(item)}
+                              className="rounded-full"
                             >
                               Add to Order
                             </Button>
@@ -264,8 +303,17 @@ const CustomerMenu = ({ restaurantName, tableNumber }: CustomerMenuProps) => {
             </div>
             
             {filteredItems.length === 0 && (
-              <div className="text-center py-12">
-                <p className="text-muted-foreground">No items in this category</p>
+              <div className="text-center py-12 bg-muted/30 rounded-lg">
+                <p className="text-muted-foreground">No items found</p>
+                {searchQuery && (
+                  <Button 
+                    variant="outline" 
+                    className="mt-4"
+                    onClick={() => setSearchQuery('')}
+                  >
+                    Clear Search
+                  </Button>
+                )}
               </div>
             )}
           </TabsContent>

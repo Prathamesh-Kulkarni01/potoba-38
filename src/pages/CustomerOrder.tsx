@@ -2,7 +2,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import CustomerMenu from '../components/CustomerMenu';
-import { Loader2 } from 'lucide-react';
+import { Loader2, AlertCircle } from 'lucide-react';
+import { Button } from "@/components/ui/button";
 
 // Sample data - in a real application, this would come from an API
 const tableData = [
@@ -69,7 +70,7 @@ const CustomerOrder = () => {
       <div className="min-h-screen flex items-center justify-center bg-restaurant-background">
         <div className="text-center">
           <Loader2 className="h-12 w-12 animate-spin text-restaurant-primary mx-auto" />
-          <p className="mt-4 text-muted-foreground">Loading menu...</p>
+          <p className="mt-4 text-muted-foreground">Loading your menu...</p>
         </div>
       </div>
     );
@@ -79,9 +80,16 @@ const CustomerOrder = () => {
     return (
       <div className="min-h-screen flex items-center justify-center bg-restaurant-background">
         <div className="text-center max-w-sm p-6 bg-white rounded-lg shadow-md">
+          <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-2" />
           <h1 className="text-xl font-bold text-red-500 mb-2">Error</h1>
           <p className="text-muted-foreground">{error || 'An unknown error occurred'}</p>
           <p className="mt-4">Please try scanning the QR code again or ask for assistance.</p>
+          <Button 
+            className="mt-6"
+            onClick={() => navigate('/scan')}
+          >
+            Return to Scan Page
+          </Button>
         </div>
       </div>
     );

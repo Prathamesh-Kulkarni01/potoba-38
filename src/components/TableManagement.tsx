@@ -36,6 +36,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import QRCodeGenerator from './QRCodeGenerator';
+import { useToast } from "@/hooks/use-toast";
 
 // Sample data - in a real application, this would come from an API
 const tableData = [
@@ -125,6 +126,7 @@ const TableManagement = () => {
   const [qrDialogOpen, setQrDialogOpen] = useState(false);
   const [selectedTableId, setSelectedTableId] = useState<number | null>(null);
   const [addTableDialogOpen, setAddTableDialogOpen] = useState(false);
+  const { toast } = useToast();
   
   const filteredTables = filter === 'all' 
     ? tableData 
@@ -197,9 +199,30 @@ const TableManagement = () => {
                   value={`${window.location.origin}/order/${selectedTableId}`}
                   size={200}
                 />
-                <p className="text-sm text-center text-muted-foreground">
-                  Direct order link: {window.location.origin}/order/{selectedTableId}
-                </p>
+                <div className="flex flex-col items-center space-y-2">
+                  <p className="text-sm text-center text-muted-foreground">
+                    Direct order link:
+                  </p>
+                  <div className="flex items-center space-x-2">
+                    <code className="bg-muted px-2 py-1 rounded text-sm">
+                      {window.location.origin}/order/{selectedTableId}
+                    </code>
+                    <Button 
+                      variant="outline" 
+                      size="icon"
+                      onClick={() => {
+                        navigator.clipboard.writeText(`${window.location.origin}/order/${selectedTableId}`);
+                        toast({
+                          title: "Link copied",
+                          description: "Direct link copied to clipboard",
+                          duration: 3000,
+                        });
+                      }}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                    </Button>
+                  </div>
+                </div>
               </div>
             )}
             <p className="mt-4 text-sm text-center">
