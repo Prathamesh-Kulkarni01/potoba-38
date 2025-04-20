@@ -19,10 +19,12 @@ const Cta = () => {
             <p className="text-lg mb-8 opacity-90">
               Join thousands of restaurants already using Potoba to streamline operations, increase revenue, and delight customers.
             </p>
-            <Button size="lg" className="bg-white text-food-primary hover:bg-white/90 shadow-lg">
-              Start Your Free Trial
-              <ChevronRight className="ml-2 h-4 w-4" />
-            </Button>
+            <motion.div whileHover={{ scale: 1.05 }} transition={{ duration: 0.2 }}>
+              <Button size="lg" className="bg-white text-food-primary hover:bg-white/90 shadow-lg">
+                Start Your Free Trial
+                <ChevronRight className="ml-2 h-4 w-4" />
+              </Button>
+            </motion.div>
             <p className="mt-4 text-sm opacity-80">
               No credit card required. 14-day free trial.
             </p>
