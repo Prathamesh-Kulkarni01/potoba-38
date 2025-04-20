@@ -423,7 +423,7 @@ const CustomerMenu = ({ restaurantName, tableNumber }: CustomerMenuProps) => {
               <SheetTrigger asChild>
                 <Button className="w-full bg-restaurant-primary hover:bg-restaurant-primary/90">
                   <ShoppingCart className="mr-2 h-4 w-4" />
-                  View Order ({getTotalItems()} items) - ${getTotalPrice().toFixed(2)}
+                  View Order ({getTotalItems()} items) -₹{getTotalPrice().toFixed(2)}
                 </Button>
               </SheetTrigger>
               <SheetContent className="w-full sm:max-w-md">
@@ -455,7 +455,7 @@ const CustomerMenu = ({ restaurantName, tableNumber }: CustomerMenuProps) => {
                             <div key={member} className="mb-4">
                               <div className="flex justify-between items-center mb-2">
                                 <Badge variant="outline">{member}</Badge>
-                                <span className="text-sm font-medium">${memberTotal.toFixed(2)}</span>
+                                <span className="text-sm font-medium">₹{memberTotal.toFixed(2)}</span>
                               </div>
                               
                               {memberItems.map((item) => (
@@ -505,7 +505,7 @@ const CustomerMenu = ({ restaurantName, tableNumber }: CustomerMenuProps) => {
                             </div>
                             <span>{item.name}</span>
                           </div>
-                          <span>${(item.price * item.quantity).toFixed(2)}</span>
+                          <span>₹{(item.price * item.quantity).toFixed(2)}</span>
                         </div>
                     ))}
                   </div>
@@ -517,25 +517,25 @@ const CustomerMenu = ({ restaurantName, tableNumber }: CustomerMenuProps) => {
                       <>
                         <div className="flex justify-between text-sm">
                           <span>Your subtotal</span>
-                          <span>${getMyTotalPrice().toFixed(2)}</span>
+                          <span>₹{getMyTotalPrice().toFixed(2)}</span>
                         </div>
                         <div className="flex justify-between text-sm">
                           <span>Others' subtotal</span>
-                          <span>${(getTotalPrice() - getMyTotalPrice()).toFixed(2)}</span>
+                          <span>₹{(getTotalPrice() - getMyTotalPrice()).toFixed(2)}</span>
                         </div>
                       </>
                     )}
                     <div className="flex justify-between">
                       <span>Subtotal</span>
-                      <span>${getTotalPrice().toFixed(2)}</span>
+                      <span>₹{getTotalPrice().toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between">
                       <span>Tax</span>
-                      <span>${(getTotalPrice() * 0.08).toFixed(2)}</span>
+                      <span>₹{(getTotalPrice() * 0.08).toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between font-semibold">
                       <span>Total</span>
-                      <span>${(getTotalPrice() * 1.08).toFixed(2)}</span>
+                      <span>₹{(getTotalPrice() * 1.08).toFixed(2)}</span>
                     </div>
                   </div>
                   

@@ -338,11 +338,11 @@ export default function PromotionsManagement() {
                           )}
                         </td>
                         <td className="py-3 px-4 text-center">
-                          {promo.discount}{promo.discountType === 'percentage' ? '%' : ' $'}
+                          {promo.discount}{promo.discountType === 'percentage' ? '%' : ' ₹'}
                         </td>
                         <td className="py-3 px-4 max-w-[200px] truncate">{promo.description}</td>
                         <td className="py-3 px-4 text-center">{promo.endDate}</td>
-                        <td className="py-3 px-4 text-center">{promo.minPurchase ? `$${promo.minPurchase}` : 'None'}</td>
+                        <td className="py-3 px-4 text-center">{promo.minPurchase ? `₹${promo.minPurchase}` : 'None'}</td>
                         <td className="py-3 px-4 text-center">{promo.usedCount}</td>
                         <td className="py-3 px-4 text-right">
                           <div className="flex justify-end gap-2">
@@ -417,7 +417,7 @@ export default function PromotionsManagement() {
                           )}
                         </td>
                         <td className="py-3 px-4 text-center">
-                          {promo.discount}{promo.discountType === 'percentage' ? '%' : ' $'}
+                          {promo.discount}{promo.discountType === 'percentage' ? '%' : ' ₹'}
                         </td>
                         <td className="py-3 px-4 text-center">
                           <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${

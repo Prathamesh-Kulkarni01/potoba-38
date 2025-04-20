@@ -87,7 +87,7 @@ const AiRecommendations = ({ menuItems, onSelectItem }: AiRecommendationsProps) 
               </CardDescription>
             </CardHeader>
             <CardContent className="p-3 pt-0">
-              <p className="text-restaurant-primary font-semibold">${item.price.toFixed(2)}</p>
+              <p className="text-restaurant-primary font-semibold">₹{item.price.toFixed(2)}</p>
             </CardContent>
           </Card>
         ))}

@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
-import { CalendarDays, ChefHat, DollarSign, ShoppingBasket, Users } from 'lucide-react';
+import { CalendarDays, ChefHat, DollarSign, IndianRupee, ShoppingBasket, Users } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/components/ui/use-toast';
 import { Restaurant, MenuItem, Table, Order } from '@/types/api';
@@ -193,10 +193,10 @@ const RestaurantDashboard = () => {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Revenue</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
+            <IndianRupee className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${totalRevenue.toFixed(2)}</div>
+            <div className="text-2xl font-bold">₹{totalRevenue.toFixed(2)}</div>
           </CardContent>
         </Card>
         
@@ -240,7 +240,7 @@ const RestaurantDashboard = () => {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <div>${typeof order.total === 'number' ? order.total.toFixed(2) : order.total}</div>
+                      <div>₹{typeof order.total === 'number' ? order.total.toFixed(2) : order.total}</div>
                       <Badge variant={
                         order.status === 'paid' || order.status === 'completed' ? 'default' : 
                         order.status === 'preparing' || order.status === 'ready' || order.status === 'in-progress' ? 'secondary' : 
@@ -271,7 +271,7 @@ const RestaurantDashboard = () => {
                       <div className="font-medium">{item.name}</div>
                       <div className="text-sm text-muted-foreground">{item.category}</div>
                     </div>
-                    <div>${item.price.toFixed(2)}</div>
+                    <div>₹{item.price.toFixed(2)}</div>
                   </div>
                 ))}
               </div>

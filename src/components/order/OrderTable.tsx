@@ -345,7 +345,7 @@ const OrderTable = () => {
                             {status.text}
                           </span>
                         </TableCell>
-                        <TableCell className="font-medium">${order.total.toFixed(2)}</TableCell>
+                        <TableCell className="font-medium">₹{order.total.toFixed(2)}</TableCell>
                         <TableCell>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -357,7 +357,7 @@ const OrderTable = () => {
                               <DropdownMenuLabel>Actions</DropdownMenuLabel>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem onClick={() => {
-                                toast(`Order #${order.id} Details - ${order.items.length} items - $${order.total.toFixed(2)}`);
+                                toast(`Order #${order.id} Details - ${order.items.length} items - ₹${order.total.toFixed(2)}`);
                               }}>
                                 View Details
                               </DropdownMenuItem>

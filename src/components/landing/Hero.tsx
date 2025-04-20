@@ -86,7 +86,7 @@ const Hero = () => {
                 <div className="flex justify-between items-center">
                   <div className="space-y-1">
                     <div className="text-xs text-gray-500">Today's Revenue</div>
-                    <div className="text-2xl font-bold text-food-primary">$1,458.20</div>
+                    <div className="text-2xl font-bold text-food-primary">₹10,458.20</div>
                   </div>
                   <div className="h-10 w-10 rounded-full bg-food-primary/10 flex items-center justify-center">
                     <TrendingUp className="h-5 w-5 text-food-primary" />

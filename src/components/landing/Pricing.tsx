@@ -85,7 +85,7 @@ const Pricing = () => {
               )}
               <h3 className="text-xl font-bold mb-2">{plan.name}</h3>
               <div className="mb-6">
-                <span className="text-4xl font-bold">${plan.price}</span>
+                <span className="text-4xl font-bold">₹{plan.price}</span>
                 <span className="text-sm opacity-80">/month</span>
               </div>
               

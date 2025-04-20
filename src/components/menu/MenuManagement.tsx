@@ -215,7 +215,7 @@ const MenuManagement = () => {
                           <div className="flex justify-between items-start">
                             <h3 className="font-medium">{item.name}</h3>
                             <span className="text-restaurant-primary font-medium">
-                              ${item.price.toFixed(2)}
+                            ₹{item.price.toFixed(2)}
                             </span>
                           </div>
                           <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
