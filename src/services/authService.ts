@@ -2,12 +2,12 @@
 import axios from 'axios';
 import { AuthResponse } from '../types/auth';
 
-const API_URL = 'api';
+const API_URL = import.meta.env.VITE_API_URL; // Use the environment variable
 
 export const authService = {
   async login(email: string, password: string) {
     try {
-      const response = await axios.post<AuthResponse>(`${API_URL}/auth/login`, 
+      const response = await axios.post<AuthResponse>(`${API_URL}/api/auth/login`, // Use the API_URL
         { email, password },
         { withCredentials: true }
       );
@@ -25,7 +25,7 @@ export const authService = {
   
   async register(email: string, password: string, name: string, role?: string) {
     try {
-      const response = await axios.post<AuthResponse>(`${API_URL}/auth/register`, 
+      const response = await axios.post<AuthResponse>(`${API_URL}/auth/register`, // Use the API_URL
         { email, password, name, role },
         { withCredentials: true }
       );
@@ -59,7 +59,7 @@ export const authService = {
       if (!token) throw new Error('Not authenticated');
 
       const response = await axios.put(
-        `${API_URL}/auth/users/${userId}/role`, 
+        `${API_URL}/auth/users/${userId}/role`, // Use the API_URL
         { role, permissions },
         {
           headers: {
@@ -81,7 +81,7 @@ export const authService = {
       const token = this.getToken();
       if (!token) throw new Error('Not authenticated');
 
-      const response = await axios.get(`${API_URL}/auth/me`, {
+      const response = await axios.get(`${API_URL}/auth/me`, { // Use the API_URL
         headers: {
           Authorization: `Bearer ${token}`
         },
