@@ -93,34 +93,9 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
     } catch (error) {
       console.error("Login error:", error);
       
-      // Try using mock API as fallback in development
-      try {
-        const mockResponse = await mockApi.auth.login(email, password);
-        if (mockResponse.success && mockResponse.data) {
-          const { user, token } = mockResponse.data;
-          
-          // Save token to localStorage
-          localStorage.setItem('token', token);
-          
-          setUser(user);
-          
-          // Set current restaurant to first one if available
-          if (user.restaurants && user.restaurants.length > 0) {
-            setCurrentRestaurantId(user.restaurants[0].id);
-          }
-          
-          toast({
-            description: "Logged in successfully with mock data!",
-          });
-          return;
-        }
-      } catch (mockError) {
-        console.error("Mock login also failed:", mockError);
-      }
-      
       toast({
         variant: "destructive",
-        description: "Login failed. Please check your credentials.",
+        description: `Login failed: ${error}`,
       });
       throw error;
     } finally {
@@ -138,8 +113,8 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
         throw new Error(response.error || "Registration failed");
       }
       
-      console.log('API signup response:', response.data);
-      const { user, token } = response.data;
+      console.log('API signup response:', response.data.data);
+      const { user, token } = response.data.data;
       
       // Save token to localStorage with direct extraction from response
       console.log('Saving API token to localStorage:', token);
@@ -151,33 +126,9 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
       });
     } catch (error) {
       console.error("Signup error:", error);
-      
-      // Try mock API as fallback
-      try {
-        console.log('Attempting mock signup...');
-        const mockResponse = await mockApi.auth.register({ name, email, password });
-        
-        if (mockResponse.success && mockResponse.data) {
-          console.log('Mock signup response:', mockResponse.data);
-          const { user, token } = mockResponse.data;
-          
-          // Save token to localStorage - ensure this executes in mock flow too
-          console.log('Saving mock token to localStorage:', token);
-          localStorage.setItem('token', token);
-          
-          setUser(user);
-          toast({
-            description: "Account created successfully with mock data!",
-          });
-          return;
-        }
-      } catch (mockError) {
-        console.error("Mock signup also failed:", mockError);
-      }
-      
       toast({
         variant: "destructive",
-        description: "Failed to create account.",
+        description: `Failed to create account: ${error}`,
       });
       throw error;
     } finally {

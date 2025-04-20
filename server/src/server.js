@@ -50,7 +50,7 @@ app.post('/api/sync-databases', async (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 5000;
+const PORT = 5000;
 const MONGO_URI = process.env.MONGO_URI || 'Unknown MongoDB URI';
 
 // Initialize WebSocket server
