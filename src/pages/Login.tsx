@@ -25,6 +25,7 @@ const Login = () => {
   // If user is already logged in, check if they have restaurants
   useEffect(() => {
     if (isAuthenticated() && user) {
+      // Safely check if the user has restaurants
       if (!user.restaurants || user.restaurants.length === 0) {
         navigate('/onboarding');
       } else {
@@ -40,7 +41,7 @@ const Login = () => {
     try {
       await login(email, password);
       
-      // After login, check if user has restaurants
+      // After login, safely check if user has restaurants
       if (user && (!user.restaurants || user.restaurants.length === 0)) {
         navigate('/onboarding');
       } else {

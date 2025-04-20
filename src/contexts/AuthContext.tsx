@@ -76,11 +76,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, navigate }
 
       if (response.ok) {
         const userData = await response.json();
-        setUser(userData);
+        setUser(userData.data.user);
         
-        // Set default restaurant if available and none selected
-        if (!currentRestaurantId && userData.restaurants && userData.restaurants.length > 0) {
-          setCurrentRestaurantId(userData.restaurants[0].id || userData.restaurants[0]._id);
+        // Safely check if restaurants exist before trying to set default restaurant
+        if (userData.data.user.restaurants && userData.data.user.restaurants.length > 0) {
+          const firstRestaurant = userData.data.user.restaurants[0];
+          if (!currentRestaurantId && firstRestaurant) {
+            setCurrentRestaurantId(firstRestaurant.id || firstRestaurant._id);
+          }
         }
       } else {
         // Token is invalid, remove it
@@ -110,20 +113,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, navigate }
       const data = await response.json();
 
       if (response.ok) {
-        localStorage.setItem('token', data.token);
-        setToken(data.token);
-        setUser(data.user);
+        localStorage.setItem('token', data.data.token);
+        setToken(data.data.token);
+        setUser(data.data.user);
         
-        // Set default restaurant if available
-        if (data.user.restaurants && data.user.restaurants.length > 0) {
-          setCurrentRestaurantId(data.user.restaurants[0].id || data.user.restaurants[0]._id);
+        // Safely check if restaurants exist and set default restaurant if available
+        if (data.data.user.restaurants && data.data.user.restaurants.length > 0) {
+          const firstRestaurant = data.data.user.restaurants[0];
+          const restaurantId = firstRestaurant.id || firstRestaurant._id;
+          if (restaurantId) {
+            setCurrentRestaurantId(restaurantId);
+          }
         }
         
         toast({
           title: "Login successful",
           description: "You've been logged in",
         });
-        navigate('/dashboard');
       } else {
         toast({
           title: "Login failed",
@@ -138,6 +144,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, navigate }
         description: "Could not connect to the server",
         variant: "destructive",
       });
+      throw error; // Re-throw error so the calling code can handle it
     } finally {
       setIsLoading(false);
     }
@@ -196,9 +203,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, navigate }
 
       if (response.ok) {
         // Auto login after signup
-        localStorage.setItem('token', data.token);
-        setToken(data.token);
-        setUser(data.user);
+        localStorage.setItem('token', data.data.token);
+        setToken(data.data.token);
+        setUser(data.data.user);
         
         toast({
           title: "Registration successful",
