@@ -1,228 +1,125 @@
 
-@import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
+ 
 @layer base {
   :root {
-    --background: 47 38% 98%;
-    --foreground: 219 46% 20%;
-
+    --background: 0 0% 99%;
+    --foreground: 222 47% 11%;
+    
     --card: 0 0% 100%;
-    --card-foreground: 219 46% 20%;
-
+    --card-foreground: 222 47% 11%;
+ 
     --popover: 0 0% 100%;
-    --popover-foreground: 219 46% 20%;
-
-    --primary: 16 100% 60%; /* Bright orange */
-    --primary-foreground: 0 0% 100%;
-
-    --secondary: 173 63% 45%; /* Teal */
-    --secondary-foreground: 0 0% 100%;
-
-    --muted: 215 25% 94%;
-    --muted-foreground: 215 16% 46%;
-
-    --accent: 35 100% 55%; /* Warm orange */
-    --accent-foreground: 0 0% 100%;
-
-    --destructive: 0 84% 60%;
+    --popover-foreground: 222 47% 11%;
+ 
+    --primary: 14 100% 60%;
+    --primary-foreground: 210 40% 98%;
+ 
+    --secondary: 172 63% 48%;
+    --secondary-foreground: 222 47% 11%;
+ 
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+ 
+    --accent: 35 100% 55%;
+    --accent-foreground: 222 47% 11%;
+ 
+    --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 214 32% 91%;
-    --input: 214 32% 91%;
-    --ring: 16 100% 60%;
-
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 14 100% 60%;
+ 
     --radius: 0.75rem;
-
-    --sidebar-background: 0 0% 100%;
-    --sidebar-foreground: 215 16% 46%;
-    --sidebar-primary: 16 100% 60%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 173 54% 39%;
-    --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 214 32% 91%;
-    --sidebar-ring: 217 91% 60%;
   }
-
+ 
+  .dark {
+    --background: 222 47% 11%;
+    --foreground: 210 40% 98%;
+ 
+    --card: 222 47% 11%;
+    --card-foreground: 210 40% 98%;
+ 
+    --popover: 222 47% 11%;
+    --popover-foreground: 210 40% 98%;
+ 
+    --primary: 14 100% 60%;
+    --primary-foreground: 222 47% 1%;
+ 
+    --secondary: 172 63% 48%;
+    --secondary-foreground: 210 40% 98%;
+ 
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+ 
+    --accent: 35 100% 55%;
+    --accent-foreground: 210 40% 98%;
+ 
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+ 
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 14 100% 60%;
+  }
+}
+ 
+@layer base {
   * {
     @apply border-border;
   }
-
   body {
-    @apply bg-restaurant-background text-restaurant-dark;
-    font-family: 'Open Sans', sans-serif;
-  }
-
-  h1, h2, h3, h4, h5, h6 {
-    @apply font-display font-semibold;
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
   }
 }
 
-@layer components {
-  .table-status-available {
-    @apply bg-restaurant-available/20 text-restaurant-available border-restaurant-available/30 border;
-  }
-  
-  .table-status-occupied {
-    @apply bg-restaurant-occupied/20 text-restaurant-occupied border-restaurant-occupied/30 border;
-  }
-  
-  .table-status-reserved {
-    @apply bg-restaurant-reserved/20 text-restaurant-reserved border-restaurant-reserved/30 border;
-  }
+/* Custom styles */
+.bg-food-pattern {
+  background-image: url('/images/food-pattern.svg');
+  background-repeat: repeat;
+  background-size: 200px;
+}
 
-  .menu-item-card {
-    @apply bg-white rounded-lg shadow p-4 hover:shadow-md transition-all duration-300 hover:scale-[1.02];
-  }
+.mask-gradient-right {
+  mask-image: linear-gradient(to right, rgba(0, 0, 0, 1.0) 70%, rgba(0, 0, 0, 0));
+}
 
-  .btn-primary {
-    @apply bg-restaurant-primary text-white hover:bg-restaurant-primary/90 px-4 py-2 rounded-md transform transition-all duration-200 hover:-translate-y-1 hover:shadow-md;
-  }
+.mask-gradient-bottom {
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 1.0) 85%, rgba(0, 0, 0, 0));
+}
 
-  .btn-secondary {
-    @apply bg-restaurant-secondary text-white hover:bg-restaurant-secondary/90 px-4 py-2 rounded-md transform transition-all duration-200 hover:-translate-y-1 hover:shadow-md;
-  }
+.gradient-text {
+  @apply bg-clip-text text-transparent bg-gradient-to-r from-food-primary via-food-accent to-food-secondary;
+}
 
-  .btn-accent {
-    @apply bg-restaurant-accent text-white hover:bg-restaurant-accent/90 px-4 py-2 rounded-md transform transition-all duration-200 hover:-translate-y-1 hover:shadow-md;
+.card-highlight {
+  box-shadow: 0 0 0 2px rgba(255, 107, 53, 0.1);
+  transition: box-shadow 0.3s ease, transform 0.3s ease;
+}
+
+.card-highlight:hover {
+  box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.2);
+  transform: translateY(-3px);
+}
+
+.btn-glow {
+  animation: glow 2s infinite alternate;
+}
+
+@keyframes glow {
+  from {
+    box-shadow: 0 0 5px -5px rgba(255, 107, 53, 0.8);
   }
-  
-  /* Food-themed styles */
-  .card-dish {
-    @apply rounded-xl border border-restaurant-secondary/20 shadow-md hover:shadow-lg transition-all duration-300 overflow-hidden bg-white relative;
-  }
-  
-  .bg-pattern {
-    @apply relative;
-  }
-  
-  .bg-pattern::before {
-    content: '';
-    @apply absolute inset-0 bg-food-pattern opacity-[0.03] pointer-events-none;
-  }
-  
-  .potoba-gradient-text {
-    @apply bg-clip-text text-transparent bg-gradient-to-r from-restaurant-primary to-restaurant-accent;
-  }
-  
-  .card-hover-effect {
-    @apply transition-all duration-300 hover:scale-[1.02] hover:shadow-lg;
-  }
-  
-  .food-icon {
-    @apply inline-block mr-2 animate-bounce-subtle;
-  }
-  
-  .dashboard-card {
-    @apply bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden transition-all duration-300 hover:shadow-lg;
-  }
-  
-  .dashboard-card-header {
-    @apply p-4 border-b border-gray-100 flex justify-between items-center;
-  }
-  
-  .page-title {
-    @apply text-3xl font-display font-bold potoba-gradient-text;
-  }
-  
-  .section-title {
-    @apply text-xl font-display font-semibold text-restaurant-dark;
-  }
-  
-  /* New professional styles */
-  .status-badge {
-    @apply rounded-full px-3 py-1 text-xs font-medium inline-flex items-center gap-1;
-  }
-  
-  .dashboard-status-card {
-    @apply flex-1 bg-white rounded-lg p-4 border border-gray-100 shadow-sm hover:shadow transition-all duration-300;
-  }
-  
-  .food-themed-header {
-    @apply relative overflow-hidden rounded-t-lg bg-gradient-to-r from-restaurant-primary/90 to-restaurant-accent/90 text-white;
-  }
-  
-  .food-themed-header::before {
-    content: '';
-    @apply absolute inset-0 bg-food-pattern opacity-10 pointer-events-none;
-  }
-  
-  .table-hover-row {
-    @apply hover:bg-restaurant-primary/5 transition-colors duration-200;
-  }
-  
-  .animated-dish {
-    animation: float 6s ease-in-out infinite;
-  }
-  
-  .order-notification {
-    animation: pulse-border 2s infinite;
-  }
-  
-  .shimmer-effect {
-    @apply relative overflow-hidden;
-  }
-  
-  .shimmer-effect::after {
-    content: '';
-    @apply absolute top-0 left-0 h-full w-full;
-    background: linear-gradient(
-      90deg,
-      rgba(255, 255, 255, 0) 0%,
-      rgba(255, 255, 255, 0.2) 50%,
-      rgba(255, 255, 255, 0) 100%
-    );
-    animation: shimmer 2s infinite;
+  to {
+    box-shadow: 0 0 15px 5px rgba(255, 107, 53, 0.4);
   }
 }
 
-/* Enhanced animations */
-@keyframes float {
-  0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-10px); }
+.wavy-bg {
+  background-image: url("data:image/svg+xml,%3Csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3E%3Cdefs%3E%3Cpattern id='pattern' width='100' height='30' patternUnits='userSpaceOnUse' patternTransform='scale(0.5) rotate(0)'%3E%3Cpath d='M0 5C20 5 20 25 40 25C60 25 60 5 80 5C100 5 100 25 120 25C140 25 140 5 160 5C180 5 180 25 200 25C220 25 220 5 240 5C260 5 260 25 280 25C300 25 300 5 320 5C340 5 340 25 360 25C380 25 380 5 400 5C420 5 420 25 440 25C460 25 460 5 480 5C500 5 500 25 520 25C540 25 540 5 560 5' stroke-width='1' stroke='rgba(255, 107, 53, 0.1)' fill='none'/%3E%3C/pattern%3E%3C/defs%3E%3Crect width='100%25' height='100%25' fill='url(%23pattern)'/%3E%3C/svg%3E");
 }
 
-@keyframes pulse-border {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 107, 53, 0.4); }
-  50% { box-shadow: 0 0 0 4px rgba(255, 107, 53, 0.2); }
-}
-
-@keyframes shimmer {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
-}
-
-@keyframes steam {
-  0%, 100% { opacity: 0.3; transform: translateY(0) scale(1); }
-  50% { opacity: 0.7; transform: translateY(-10px) scale(1.2); }
-}
-
-/* Page transitions */
-.page-enter {
-  opacity: 0;
-  transform: translateY(20px);
-}
-
-.page-enter-active {
-  opacity: 1;
-  transform: translateY(0);
-  transition: opacity 400ms, transform 400ms;
-}
-
-.page-exit {
-  opacity: 1;
-}
-
-.page-exit-active {
-  opacity: 0;
-  transform: translateY(-20px);
-  transition: opacity 300ms, transform 300ms;
-}
-
-/* App specific styles */
-#root {
-  @apply w-full max-w-none m-0 p-0;
-}
