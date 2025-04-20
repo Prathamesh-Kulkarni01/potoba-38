@@ -99,6 +99,14 @@ const App = () => (
                     </ProtectedRoute>
                     } 
                   />
+                   <Route 
+                    path="/dashboard/menu/edit/:id" 
+                    element={
+                    <ProtectedRoute requiredPermission="manage_menu">
+                   <Dashboard />
+                    </ProtectedRoute>
+                    } 
+                  />
                   <Route 
                     path="/dashboard/orders" 
                     element={

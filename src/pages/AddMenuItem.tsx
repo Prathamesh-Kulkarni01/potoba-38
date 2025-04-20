@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,10 +12,11 @@ import { useAuth } from '@/contexts/AuthContext';
 import useApi from '@/services/api';
 
 const AddMenuItem = () => {
+  const { id } = useParams<{ id: string }>();
   const [categories, setCategories] = useState([]);
-  const {currentRestaurantId,token}=useAuth()
-  const api=useApi()
-  
+  const { currentRestaurantId, token } = useAuth();
+  const api = useApi();
+
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -33,7 +34,7 @@ const AddMenuItem = () => {
     const fetchCategories = async () => {
       try {
         const response = await api.category.get(currentRestaurantId);
-        console.log({response})
+        console.log({ response })
         if (Array.isArray(response)) {
           setCategories(response);
         } else {
@@ -45,8 +46,27 @@ const AddMenuItem = () => {
       }
     };
 
+    const fetchMenuItem = async () => {
+      if (id) {
+        try {
+          const response = await api.menu.getById(currentRestaurantId, id);
+          setFormData({
+            name: response.name || '',
+            description: response.description || '',
+            price: response.price?.toString() || '',
+            category: response.category || '',
+            image: response.image || '',
+          });
+        } catch (error) {
+          console.error('Failed to fetch menu item:', error);
+          setError('Failed to load menu item. Please try again later.');
+        }
+      }
+    };
+
     fetchCategories();
-  }, [currentRestaurantId]);
+    fetchMenuItem();
+  }, [id, currentRestaurantId, api]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -64,19 +84,32 @@ const AddMenuItem = () => {
         return;
       }
 
-      await api.menu.create(currentRestaurantId,{
-        name,
-        description,
-        price: parseFloat(price),
-        category,
-        image,
-      });
+      if (id) {
+        // Update existing menu item
+        await api.menu.update(currentRestaurantId, id, {
+          name,
+          description,
+          price: parseFloat(price),
+          category,
+          image,
+        });
+        toast({ title: "Success", description: "Menu item updated successfully" });
+      } else {
+        // Create new menu item
+        await api.menu.create(currentRestaurantId, {
+          name,
+          description,
+          price: parseFloat(price),
+          category,
+          image,
+        });
+        toast({ title: "Success", description: "Menu item added successfully" });
+      }
 
-      toast({ title: "Success", description: "Menu item added successfully" });
       navigate('/dashboard/menu');
     } catch (error) {
-      console.error("Failed to add menu item:", error);
-      toast({ title: "Error", description: "Failed to add menu item", variant: "destructive" });
+      console.error(id ? "Failed to update menu item:" : "Failed to add menu item:", error);
+      toast({ title: "Error", description: id ? "Failed to update menu item" : "Failed to add menu item", variant: "destructive" });
     } finally {
       setIsSubmitting(false);
     }
@@ -89,7 +122,7 @@ const AddMenuItem = () => {
         return;
       }
 
-      const response = await api.category.create(currentRestaurantId,{ name: newCategory });
+      const response = await api.category.create(currentRestaurantId, { name: newCategory });
       setCategories((prev) => [...prev, response]);
       setNewCategory('');
       toast({ title: "Success", description: "Category created successfully" });
@@ -103,7 +136,7 @@ const AddMenuItem = () => {
     <div className="container mx-auto py-6">
       <Card className="max-w-lg mx-auto">
         <CardHeader>
-          <CardTitle>Add New Menu Item</CardTitle>
+          <CardTitle>{id ? "Edit Menu Item" : "Add New Menu Item"}</CardTitle>
         </CardHeader>
         <CardContent>
           {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
@@ -164,7 +197,7 @@ const AddMenuItem = () => {
               <Input id="image" name="image" value={formData.image} onChange={handleChange} />
             </div>
             <Button type="submit" className="w-full bg-restaurant-primary hover:bg-restaurant-primary/90" disabled={isSubmitting}>
-              {isSubmitting ? "Adding..." : "Add Menu Item"}
+              {isSubmitting ? (id ? "Updating..." : "Adding...") : (id ? "Update Menu Item" : "Add Menu Item")}
             </Button>
           </form>
         </CardContent>

@@ -88,6 +88,10 @@ const Dashboard = () => {
     else if (path === '/dashboard/menu/add') {
       return <AddMenuItem />;
     }
+    else if (path.startsWith('/dashboard/menu/edit/:id')) {
+      const id = path.split('/').pop();
+      return <AddMenuItem />;
+    }
     
     // Render the Outlet for any other sub-routes
     return <Outlet />;
