@@ -15,6 +15,7 @@ import TableDetail from "./pages/TableDetail";
 import CustomerOrder from "./pages/CustomerOrder";
 import ScanLanding from "./pages/ScanLanding";
 import NotFound from "./pages/NotFound";
+import ApiSettings from "./pages/ApiSettings";
 import "./App.css";
 
 const queryClient = new QueryClient();
@@ -36,6 +37,7 @@ const App = () => (
               <Route path="/dashboard/tables" element={<Dashboard />} />
               <Route path="/dashboard/menu" element={<Dashboard />} />
               <Route path="/dashboard/orders" element={<Dashboard />} />
+              <Route path="/dashboard/api-settings" element={<ApiSettings />} />
               <Route path="/dashboard/tables/:tableId" element={<TableDetail />} />
               <Route path="/scan" element={<ScanLanding />} />
               <Route path="/order/:tableId" element={<CustomerOrder />} />

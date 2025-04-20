@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { useAuth } from '../contexts/AuthContext';
 import { motion } from 'framer-motion';
 import { Utensils, ChefHat } from 'lucide-react';
+import { api } from '@/services/api';
 
 const Login = () => {
   const [email, setEmail] = useState('demo@example.com');
@@ -21,11 +22,23 @@ const Login = () => {
     setIsLoading(true);
     
     try {
-      await login(email, password);
-      navigate('/dashboard');
+      // Call the API service instead of the mock login
+      const response = await api.auth.login(email, password);
+      
+      if (response.success && response.data) {
+        // Store the token in localStorage
+        localStorage.setItem('authToken', response.data.token);
+        
+        // Update the auth context
+        await login(email, password);
+        
+        navigate('/dashboard');
+      } else {
+        throw new Error(response.error || 'Login failed');
+      }
     } catch (error) {
       console.error('Login error:', error);
-      // Toast is handled in auth context
+      // Toast is handled in api service
     } finally {
       setIsLoading(false);
     }

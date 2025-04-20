@@ -5,8 +5,27 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Sparkles, Loader2 } from 'lucide-react';
-import { generateMenuItemSuggestion, MenuItemPrompt, MenuItemSuggestion } from '@/services/aiService';
+import { MenuItemPrompt, MenuItemSuggestion } from '@/services/aiService';
 import { useToast } from "@/hooks/use-toast";
+
+// This would connect to your Node.js/Express backend in the future
+const generateMenuItemSuggestion = async (prompt: MenuItemPrompt): Promise<MenuItemSuggestion> => {
+  // For now, we'll simulate a network request
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      // Mock response - this would come from your Node backend in the future
+      const suggestion: MenuItemSuggestion = {
+        name: `${prompt.description.split(' ').slice(0, 3).join(' ')} Special`,
+        description: prompt.description,
+        category: ['Starters', 'Main Courses', 'Sides', 'Desserts', 'Drinks'][
+          Math.floor(Math.random() * 5)
+        ],
+        price: parseFloat((Math.random() * 15 + 5).toFixed(2)) // Random price between $5-$20
+      };
+      resolve(suggestion);
+    }, 1500); // Simulate network delay
+  });
+};
 
 interface AiMenuGeneratorProps {
   onAddItem?: (item: MenuItemSuggestion) => void;
