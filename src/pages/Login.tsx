@@ -41,12 +41,22 @@ const Login = () => {
     try {
       await login(email, password);
       
-      // After login, safely check if user has restaurants
-      if (user && (!user.restaurants || user.restaurants.length === 0)) {
-        navigate('/onboarding');
-      } else {
-        navigate(redirectPath);
-      }
+      // Introduce a small delay to ensure user state is updated
+      setTimeout(() => {
+        if (isAuthenticated() && user) {
+          // Safely check if user has restaurants
+          if (!user.restaurants || user.restaurants.length === 0) {
+            navigate('/onboarding');
+          } else {
+            navigate(redirectPath);
+          }
+          console.log("User authenticated:", user);
+          console.log("User role:", user.role);
+          console.log("User permissions:", user.permissions);
+        } else {
+          console.log("Authentication failed or user data not available");
+        }
+      }, 100);
     } catch (error) {
       console.error('Login error:', error);
       // Toast is handled in auth context

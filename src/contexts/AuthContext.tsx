@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useToast } from '@/components/ui/use-toast';
 import { Restaurant } from '@/types/auth';
@@ -76,11 +77,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, navigate }
 
       if (response.ok) {
         const userData = await response.json();
-        setUser(userData.data.user);
+        
+        // Ensure user data has role and permissions
+        const userWithDefaults = {
+          ...userData.data.user,
+          role: userData.data.user.role || 'user',
+          permissions: userData.data.user.permissions || getDefaultPermissions(userData.data.user.role || 'user')
+        };
+        
+        setUser(userWithDefaults);
         
         // Safely check if restaurants exist before trying to set default restaurant
-        if (userData.data.user.restaurants && userData.data.user.restaurants.length > 0) {
-          const firstRestaurant = userData.data.user.restaurants[0];
+        if (userWithDefaults.restaurants && userWithDefaults.restaurants.length > 0) {
+          const firstRestaurant = userWithDefaults.restaurants[0];
           if (!currentRestaurantId && firstRestaurant) {
             setCurrentRestaurantId(firstRestaurant.id || firstRestaurant._id);
           }
@@ -115,11 +124,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, navigate }
       if (response.ok) {
         localStorage.setItem('token', data.data.token);
         setToken(data.data.token);
-        setUser(data.data.user);
+        
+        // Ensure user data has role and permissions
+        const userWithDefaults = {
+          ...data.data.user,
+          role: data.data.user.role || 'user',
+          permissions: data.data.user.permissions || getDefaultPermissions(data.data.user.role || 'user')
+        };
+        
+        setUser(userWithDefaults);
         
         // Safely check if restaurants exist and set default restaurant if available
-        if (data.data.user.restaurants && data.data.user.restaurants.length > 0) {
-          const firstRestaurant = data.data.user.restaurants[0];
+        if (userWithDefaults.restaurants && userWithDefaults.restaurants.length > 0) {
+          const firstRestaurant = userWithDefaults.restaurants[0];
           const restaurantId = firstRestaurant.id || firstRestaurant._id;
           if (restaurantId) {
             setCurrentRestaurantId(restaurantId);
@@ -205,7 +222,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, navigate }
         // Auto login after signup
         localStorage.setItem('token', data.data.token);
         setToken(data.data.token);
-        setUser(data.data.user);
+        
+        // Ensure user data has role and permissions
+        const userWithDefaults = {
+          ...data.data.user,
+          role: data.data.user.role || 'user',
+          permissions: data.data.user.permissions || getDefaultPermissions(data.data.user.role || 'user')
+        };
+        
+        setUser(userWithDefaults);
         
         toast({
           title: "Registration successful",
@@ -274,7 +299,44 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, navigate }
     if (user.role === 'admin') return true;
     
     // Check user's permissions array
-    return user.permissions?.includes(permission) || false;
+    if (!user.permissions) return false;
+    
+    return user.permissions.includes(permission);
+  };
+  
+  // Helper function to get default permissions based on role
+  const getDefaultPermissions = (role: string): string[] => {
+    switch (role) {
+      case 'admin':
+        return [
+          'view_dashboard',
+          'manage_tables',
+          'manage_menu',
+          'manage_orders',
+          'manage_marketing',
+          'manage_loyalty',
+          'manage_settings',
+          'manage_users'
+        ];
+      case 'manager':
+        return [
+          'view_dashboard',
+          'manage_tables',
+          'manage_menu',
+          'manage_orders',
+          'manage_marketing',
+          'manage_loyalty'
+        ];
+      case 'staff':
+        return [
+          'view_dashboard',
+          'manage_tables',
+          'manage_orders'
+        ];
+      case 'user':
+      default:
+        return ['view_dashboard'];
+    }
   };
 
   return (
