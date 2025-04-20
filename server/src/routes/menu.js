@@ -10,8 +10,9 @@ const {
 
 const router = express.Router({ mergeParams: true });
 
-const { protect } = require('../middleware/auth');
+const { protect, authorize } = require('../middleware/auth');
 
+// All menu routes require authentication
 router.route('/')
   .get(protect, getMenuItems)
   .post(protect, createMenuItem);

@@ -1,523 +1,274 @@
 
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { 
-  Users, 
-  Calendar, 
-  Utensils, 
-  ShoppingCart, 
-  ArrowUpRight,
-  TrendingUp,
-  Star,
-  ChefHat,
-  Coffee,
-  Loader2
-} from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { motion } from 'framer-motion';
+import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
+import { Badge } from '@/components/ui/badge';
+import { CalendarDays, ChefHat, DollarSign, ShoppingBasket, Users } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import AiAnalytics from './AiAnalytics';
-import axios from 'axios';
+import restaurantService from '@/services/restaurantService';
 import { toast } from '@/hooks/use-toast';
-
-// Animation variants
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: { 
-    opacity: 1,
-    transition: { 
-      staggerChildren: 0.1
-    }
-  }
-};
-
-const itemVariants = {
-  hidden: { y: 20, opacity: 0 },
-  visible: { 
-    y: 0, 
-    opacity: 1,
-    transition: { 
-      type: "spring", 
-      stiffness: 100,
-      duration: 0.5 
-    }
-  }
-};
+import { Restaurant, MenuItem, Table, Order } from '@/types/api';
+import { api } from '@/services/api';
 
 const RestaurantDashboard = () => {
-  const { getCurrentRestaurant } = useAuth();
-  const currentRestaurant = getCurrentRestaurant();
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
+  const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [tables, setTables] = useState<Table[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
-  const [dashboardData, setDashboardData] = useState<any>(null);
-  const [loadingDemo, setLoadingDemo] = useState(false);
-  
-  // Function to fetch dashboard data
-  const fetchDashboardData = async () => {
-    if (!currentRestaurant) return;
-    
-    setLoading(true);
-    
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) throw new Error('Not authenticated');
-      
-      // Fetch tables
-      const tablesRes = await axios.get(
-        `http://localhost:5000/api/restaurants/${currentRestaurant.id}/tables`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      
-      // Fetch menu items
-      const menuRes = await axios.get(
-        `http://localhost:5000/api/restaurants/${currentRestaurant.id}/menu`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      
-      // Fetch orders
-      const ordersRes = await axios.get(
-        `http://localhost:5000/api/restaurants/${currentRestaurant.id}/orders`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      
-      // Calculate dashboard metrics
-      const tables = tablesRes.data.data || [];
-      const menu = menuRes.data.data || [];
-      const orders = ordersRes.data.data || [];
-      
-      // Calculate table stats
-      const tableStats = {
-        total: tables.length,
-        available: tables.filter(t => t.status === 'available').length,
-        occupied: tables.filter(t => t.status === 'occupied').length,
-        reserved: tables.filter(t => t.status === 'reserved').length
-      };
-      
-      // Calculate order stats
-      const orderStats = {
-        total: orders.length,
-        pending: orders.filter(o => o.status === 'new' || o.status === 'in-progress').length,
-        completed: orders.filter(o => o.status === 'completed').length
-      };
-      
-      // Calculate revenue from orders
-      const revenue = {
-        today: orders
-          .filter(o => new Date(o.createdAt).toDateString() === new Date().toDateString())
-          .reduce((sum, o) => sum + o.total, 0),
-        week: orders
-          .filter(o => {
-            const orderDate = new Date(o.createdAt);
-            const weekAgo = new Date();
-            weekAgo.setDate(weekAgo.getDate() - 7);
-            return orderDate >= weekAgo;
-          })
-          .reduce((sum, o) => sum + o.total, 0),
-        month: orders
-          .filter(o => {
-            const orderDate = new Date(o.createdAt);
-            const monthAgo = new Date();
-            monthAgo.setMonth(monthAgo.getMonth() - 1);
-            return orderDate >= monthAgo;
-          })
-          .reduce((sum, o) => sum + o.total, 0)
-      };
-      
-      // Get popular items (simplified version)
-      const menuItemCounts = {};
-      orders.forEach(order => {
-        order.items.forEach(item => {
-          menuItemCounts[item.name] = (menuItemCounts[item.name] || 0) + item.quantity;
-        });
-      });
-      
-      const popularItems = Object.entries(menuItemCounts)
-        .map(([name, count]) => ({ name, count }))
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 4);
-      
-      setDashboardData({
-        tables: tableStats,
-        orders: orderStats,
-        revenue,
-        popular: popularItems.length > 0 ? popularItems : [
-          { name: "No orders yet", count: 0 }
-        ],
-        recentOrders: orders.slice(0, 3).map(order => ({
-          id: order.id,
-          tableId: order.tableId,
-          tableNumber: tables.find(t => t.id === order.tableId)?.number || 'Unknown',
-          items: order.items.length,
-          status: order.status,
-          createdAt: new Date(order.createdAt),
-          total: order.total
-        }))
-      });
-    } catch (error) {
-      console.error('Error fetching dashboard data:', error);
-      // Fallback to dummy data for demo purposes
-      setDashboardData({
-        tables: { total: 10, available: 5, occupied: 3, reserved: 2 },
-        orders: { total: 15, pending: 3, completed: 12 },
-        revenue: { today: 450, week: 2800, month: 12000 },
-        popular: [
-          { name: "Classic Burger", count: 12 },
-          { name: "Caesar Salad", count: 8 },
-          { name: "Margherita Pizza", count: 6 },
-          { name: "Chocolate Cake", count: 4 }
-        ],
-        recentOrders: []
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-  
-  // Initial data fetch
+  const [creating, setCreating] = useState(false);
+  const [creatingDemoData, setCreatingDemoData] = useState(false);
+
   useEffect(() => {
-    if (currentRestaurant) {
-      fetchDashboardData();
-    }
-  }, [currentRestaurant]);
-  
-  // Function to create demo data
-  const handleCreateDemoData = async () => {
-    if (!currentRestaurant) return;
+    const loadData = async () => {
+      try {
+        if (!user || !user.restaurants || user.restaurants.length === 0) {
+          navigate('/onboarding');
+          return;
+        }
+
+        const restaurantId = user.restaurants[0];
+        const token = localStorage.getItem('token');
+        
+        if (!token) {
+          toast({
+            title: "Authentication Error",
+            description: "Please log in again.",
+            variant: "destructive"
+          });
+          navigate('/login');
+          return;
+        }
+        
+        // Fetch restaurant data
+        const restaurantData = await restaurantService.getRestaurant(restaurantId);
+        setRestaurant(restaurantData);
+        
+        // Fetch menu items, tables, and orders
+        const menuResponse = await api.menu.getAll(restaurantId, token);
+        const tablesResponse = await api.tables.getAll(restaurantId, token);
+        const ordersResponse = await api.orders.getAll(restaurantId, token);
+        
+        if (menuResponse.success) {
+          setMenuItems(menuResponse.data || []);
+        }
+        
+        if (tablesResponse.success) {
+          setTables(tablesResponse.data || []);
+        }
+        
+        if (ordersResponse.success) {
+          setOrders(ordersResponse.data || []);
+        }
+      } catch (error) {
+        console.error('Error loading restaurant data:', error);
+        toast({
+          title: "Error Loading Data",
+          description: "There was a problem loading your restaurant data.",
+          variant: "destructive"
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, [user, navigate]);
+
+  const createDemoData = async () => {
+    if (!restaurant) return;
     
-    setLoadingDemo(true);
     try {
-      const token = localStorage.getItem('token');
-      if (!token) throw new Error('Not authenticated');
-      
-      // Make API request to create demo data
-      await axios.post(
-        `http://localhost:5000/api/restaurants/${currentRestaurant.id}/demo-data`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      setCreatingDemoData(true);
+      await restaurantService.createDemoData(restaurant.id || restaurant._id);
       
       toast({
-        title: "Success",
-        description: "Demo data created successfully",
+        title: "Demo Data Created",
+        description: "Sample menu items, tables and orders have been created for your restaurant.",
       });
       
-      // Refresh dashboard data
-      fetchDashboardData();
+      // Reload data
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      
+      const restaurantId = restaurant.id || restaurant._id;
+      const menuResponse = await api.menu.getAll(restaurantId, token);
+      const tablesResponse = await api.tables.getAll(restaurantId, token);
+      const ordersResponse = await api.orders.getAll(restaurantId, token);
+      
+      if (menuResponse.success) {
+        setMenuItems(menuResponse.data || []);
+      }
+      
+      if (tablesResponse.success) {
+        setTables(tablesResponse.data || []);
+      }
+      
+      if (ordersResponse.success) {
+        setOrders(ordersResponse.data || []);
+      }
     } catch (error) {
       console.error('Error creating demo data:', error);
       toast({
-        variant: "destructive",
         title: "Error",
-        description: "Failed to create demo data. Please try again.",
+        description: "Failed to create demo data.",
+        variant: "destructive"
       });
     } finally {
-      setLoadingDemo(false);
+      setCreatingDemoData(false);
     }
   };
+
+  // Calculate dashboard stats
+  const activeOrders = orders.filter(order => order.status !== 'completed' && order.status !== 'cancelled').length;
   
-  // If we don't have a current restaurant, show a message
-  if (!currentRestaurant) {
-    return (
-      <div className="text-center py-12">
-        <h2 className="text-2xl font-bold text-gray-800">No Restaurant Selected</h2>
-        <p className="mt-2 text-gray-600">Please select or create a restaurant to view the dashboard.</p>
-        <Button asChild className="mt-4">
-          <Link to="/onboarding">Add Restaurant</Link>
-        </Button>
-      </div>
-    );
-  }
+  // Fix the arithmetic operation error - calculate total revenue properly
+  const totalRevenue = orders
+    .filter(order => order.status === 'completed')
+    .reduce((sum, order) => {
+      // Convert to number if it's a string, or use 0 if undefined
+      const orderTotal = typeof order.total === 'string' 
+        ? parseFloat(order.total) 
+        : (typeof order.total === 'number' ? order.total : 0);
+      
+      return sum + orderTotal;
+    }, 0);
   
-  if (loading || !dashboardData) {
+  const totalTables = tables.length;
+  const availableTables = tables.filter(table => table.status === 'available').length;
+
+  if (loading) {
     return (
-      <div className="text-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin mx-auto text-restaurant-primary" />
-        <p className="mt-2 text-gray-600">Loading dashboard data...</p>
+      <div className="flex items-center justify-center h-full">
+        <span className="loading loading-spinner loading-lg"></span>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="page-title flex items-center">
-          <img src={currentRestaurant.logo || "/images/potoba-logo.svg"} alt={currentRestaurant.name} className="h-10 mr-2" />
-          <span>{currentRestaurant.name} Dashboard</span>
-        </h1>
+    <div className="p-4 space-y-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h2 className="text-2xl font-bold">{restaurant?.name || 'Restaurant Dashboard'}</h2>
+          <p className="text-muted-foreground">{restaurant?.description}</p>
+        </div>
         
-        <Button 
-          onClick={handleCreateDemoData} 
-          variant="outline" 
-          disabled={loadingDemo}
-          size="sm"
-        >
-          {loadingDemo ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Creating...
-            </>
-          ) : (
-            "Create Demo Data"
-          )}
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            onClick={createDemoData}
+            disabled={creatingDemoData}
+          >
+            {creatingDemoData ? 'Creating...' : 'Create Demo Data'}
+          </Button>
+        </div>
       </div>
 
-      {/* AI Analytics Section */}
-      <AiAnalytics />
-
-      {/* Main dashboard content */}
-      <motion.div 
-        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-      >
-        {/* Tables Card */}
-        <motion.div variants={itemVariants}>
-          <Card className="dashboard-card overflow-hidden border-t-4 border-t-restaurant-primary">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center">
-                <Users className="h-4 w-4 mr-2 text-restaurant-primary" />
-                Table Status
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{dashboardData.tables.total} Tables</div>
-              <div className="mt-4 grid grid-cols-3 gap-2">
-                <div className="flex flex-col items-center">
-                  <div className="text-lg font-semibold text-restaurant-available">
-                    {dashboardData.tables.available}
-                  </div>
-                  <div className="text-xs text-muted-foreground">Available</div>
-                </div>
-                <div className="flex flex-col items-center">
-                  <div className="text-lg font-semibold text-restaurant-occupied">
-                    {dashboardData.tables.occupied}
-                  </div>
-                  <div className="text-xs text-muted-foreground">Occupied</div>
-                </div>
-                <div className="flex flex-col items-center">
-                  <div className="text-lg font-semibold text-restaurant-reserved">
-                    {dashboardData.tables.reserved}
-                  </div>
-                  <div className="text-xs text-muted-foreground">Reserved</div>
-                </div>
-              </div>
-            </CardContent>
-            <CardFooter>
-              <Link 
-                to="/dashboard/tables"
-                className="text-xs text-restaurant-primary flex items-center hover:underline"
-              >
-                View tables <ArrowUpRight className="h-3 w-3 ml-1" />
-              </Link>
-            </CardFooter>
-          </Card>
-        </motion.div>
-
-        {/* Orders Card */}
-        <motion.div variants={itemVariants}>
-          <Card className="dashboard-card overflow-hidden border-t-4 border-t-restaurant-secondary">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center">
-                <ShoppingCart className="h-4 w-4 mr-2 text-restaurant-secondary" />
-                Orders Today
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{dashboardData.orders.total} Orders</div>
-              <div className="mt-4 grid grid-cols-2 gap-2">
-                <div className="flex flex-col items-center">
-                  <div className="text-lg font-semibold text-restaurant-accent">
-                    {dashboardData.orders.pending}
-                  </div>
-                  <div className="text-xs text-muted-foreground">Pending</div>
-                </div>
-                <div className="flex flex-col items-center">
-                  <div className="text-lg font-semibold text-restaurant-available">
-                    {dashboardData.orders.completed}
-                  </div>
-                  <div className="text-xs text-muted-foreground">Completed</div>
-                </div>
-              </div>
-            </CardContent>
-            <CardFooter>
-              <Link 
-                to="/dashboard/orders"
-                className="text-xs text-restaurant-primary flex items-center hover:underline"
-              >
-                View orders <ArrowUpRight className="h-3 w-3 ml-1" />
-              </Link>
-            </CardFooter>
-          </Card>
-        </motion.div>
-
-        {/* Revenue Card */}
-        <motion.div variants={itemVariants}>
-          <Card className="dashboard-card overflow-hidden border-t-4 border-t-restaurant-accent">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center">
-                <TrendingUp className="h-4 w-4 mr-2 text-restaurant-accent" />
-                Revenue
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">${dashboardData.revenue.today.toFixed(2)}</div>
-              <div className="text-xs text-muted-foreground">Today</div>
-              <div className="mt-4 grid grid-cols-2 gap-2">
-                <div className="flex flex-col">
-                  <div className="text-sm font-medium">${dashboardData.revenue.week.toFixed(2)}</div>
-                  <div className="text-xs text-muted-foreground">This Week</div>
-                </div>
-                <div className="flex flex-col">
-                  <div className="text-sm font-medium">${dashboardData.revenue.month.toFixed(2)}</div>
-                  <div className="text-xs text-muted-foreground">This Month</div>
-                </div>
-              </div>
-            </CardContent>
-            <CardFooter>
-              <span className="text-xs text-muted-foreground">Updated just now</span>
-            </CardFooter>
-          </Card>
-        </motion.div>
-
-        {/* Popular Items Card */}
-        <motion.div variants={itemVariants}>
-          <Card className="dashboard-card overflow-hidden border-t-4 border-t-restaurant-primary">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center">
-                <Star className="h-4 w-4 mr-2 text-restaurant-primary" />
-                Popular Items
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ul className="space-y-2">
-                {dashboardData.popular.map((item, index) => (
-                  <li key={index} className="flex justify-between items-center">
-                    <span className="text-sm">{item.name}</span>
-                    <span className="text-xs bg-muted px-2 py-1 rounded-full">
-                      {item.count} orders
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </CardContent>
-            <CardFooter>
-              <Link 
-                to="/dashboard/menu"
-                className="text-xs text-restaurant-primary flex items-center hover:underline"
-              >
-                Manage menu <ArrowUpRight className="h-3 w-3 ml-1" />
-              </Link>
-            </CardFooter>
-          </Card>
-        </motion.div>
-      </motion.div>
-
-      <motion.div 
-        className="grid grid-cols-1 lg:grid-cols-3 gap-6"
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-      >
-        <motion.div variants={itemVariants} className="lg:col-span-2">
-          <Card className="dashboard-card">
-            <CardHeader>
-              <CardTitle className="section-title flex items-center">
-                <ChefHat className="h-5 w-5 mr-2 text-restaurant-primary" />
-                Recent Orders
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="rounded-md border">
-                <table className="min-w-full divide-y divide-border">
-                  <thead>
-                    <tr className="bg-muted/50">
-                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Table</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Items</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Time</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-border">
-                    <tr className="hover:bg-muted/20 transition-colors">
-                      <td className="px-4 py-3 text-sm">Table 5</td>
-                      <td className="px-4 py-3 text-sm">3 items</td>
-                      <td className="px-4 py-3 text-sm">
-                        <span className="px-2 py-1 text-xs rounded-full bg-restaurant-secondary/20 text-restaurant-secondary">
-                          Preparing
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-sm">Just now</td>
-                      <td className="px-4 py-3 text-sm font-medium">$42.50</td>
-                    </tr>
-                    <tr className="hover:bg-muted/20 transition-colors">
-                      <td className="px-4 py-3 text-sm">Table 12</td>
-                      <td className="px-4 py-3 text-sm">2 items</td>
-                      <td className="px-4 py-3 text-sm">
-                        <span className="px-2 py-1 text-xs rounded-full bg-restaurant-accent/20 text-restaurant-accent">
-                          Served
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-sm">15 min ago</td>
-                      <td className="px-4 py-3 text-sm font-medium">$28.75</td>
-                    </tr>
-                    <tr className="hover:bg-muted/20 transition-colors">
-                      <td className="px-4 py-3 text-sm">Table 8</td>
-                      <td className="px-4 py-3 text-sm">5 items</td>
-                      <td className="px-4 py-3 text-sm">
-                        <span className="px-2 py-1 text-xs rounded-full bg-restaurant-available/20 text-restaurant-available">
-                          Completed
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-sm">25 min ago</td>
-                      <td className="px-4 py-3 text-sm font-medium">$64.20</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Orders in Progress</CardTitle>
+            <ShoppingBasket className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{activeOrders}</div>
+          </CardContent>
+        </Card>
         
-        <motion.div variants={itemVariants}>
-          <Card className="dashboard-card">
-            <CardHeader>
-              <CardTitle className="section-title flex items-center">
-                <Coffee className="h-5 w-5 mr-2 text-restaurant-accent" />
-                Quick Actions
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Link to="/dashboard/tables/add">
-                <Button className="w-full bg-restaurant-primary hover:bg-restaurant-primary/90 transition-all duration-300 hover:-translate-y-1 hover:shadow-md">
-                  <Users className="mr-2 h-4 w-4" />
-                  Add Table
-                </Button>
-              </Link>
-              <Link to="/dashboard/menu/add">
-                <Button className="w-full bg-restaurant-secondary hover:bg-restaurant-secondary/90 transition-all duration-300 hover:-translate-y-1 hover:shadow-md">
-                  <Utensils className="mr-2 h-4 w-4" />
-                  Add Menu Item
-                </Button>
-              </Link>
-              <Link to="/dashboard/tables/reserve">
-                <Button className="w-full bg-restaurant-accent hover:bg-restaurant-accent/90 transition-all duration-300 hover:-translate-y-1 hover:shadow-md">
-                  <Calendar className="mr-2 h-4 w-4" />
-                  Reserve Table
-                </Button>
-              </Link>
-              <Link to="/dashboard/orders">
-                <Button variant="outline" className="w-full hover:bg-muted/20 transition-all duration-300 hover:-translate-y-1 hover:shadow-md">
-                  <ShoppingCart className="mr-2 h-4 w-4" />
-                  View All Orders
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
-        </motion.div>
-      </motion.div>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Revenue</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">${totalRevenue.toFixed(2)}</div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Menu Items</CardTitle>
+            <ChefHat className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{menuItems.length}</div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Tables</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{availableTables} / {totalTables}</div>
+          </CardContent>
+        </Card>
+      </div>
+      
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent Orders</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {orders.length === 0 ? (
+              <p className="text-muted-foreground">No orders yet.</p>
+            ) : (
+              <div className="space-y-4">
+                {orders.slice(0, 5).map((order) => (
+                  <div key={order.id || order._id} className="flex justify-between items-center">
+                    <div>
+                      <div className="font-medium">Table {order.table?.number || 'N/A'}</div>
+                      <div className="text-sm text-muted-foreground">
+                        {new Date(order.createdAt).toLocaleString()}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div>${typeof order.total === 'number' ? order.total.toFixed(2) : order.total}</div>
+                      <Badge variant={
+                        order.status === 'completed' ? 'default' : 
+                        order.status === 'in-progress' ? 'secondary' : 
+                        order.status === 'cancelled' ? 'destructive' : 'outline'
+                      }>
+                        {order.status}
+                      </Badge>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader>
+            <CardTitle>Popular Menu Items</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {menuItems.length === 0 ? (
+              <p className="text-muted-foreground">No menu items yet.</p>
+            ) : (
+              <div className="space-y-4">
+                {menuItems.slice(0, 5).map((item) => (
+                  <div key={item.id || item._id} className="flex justify-between items-center">
+                    <div>
+                      <div className="font-medium">{item.name}</div>
+                      <div className="text-sm text-muted-foreground">{item.category}</div>
+                    </div>
+                    <div>${item.price.toFixed(2)}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 };

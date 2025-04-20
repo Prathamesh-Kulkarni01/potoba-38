@@ -11,8 +11,9 @@ const {
 
 const router = express.Router({ mergeParams: true });
 
-const { protect } = require('../middleware/auth');
+const { protect, authorize } = require('../middleware/auth');
 
+// All order routes require authentication
 router.route('/')
   .get(protect, getOrders)
   .post(protect, createOrder);

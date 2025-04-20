@@ -11,11 +11,12 @@ const ordersRouter = require('./orders');
 
 const router = express.Router({ mergeParams: true });
 
-const { protect } = require('../middleware/auth');
+const { protect, authorize } = require('../middleware/auth');
 
 // Re-route orders for a specific table
 router.use('/:tableId/orders', ordersRouter);
 
+// All table routes require authentication
 router.route('/')
   .get(protect, getTables)
   .post(protect, createTable);

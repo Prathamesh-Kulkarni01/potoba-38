@@ -101,37 +101,17 @@ export const restaurantService = {
       const token = authService.getToken();
       if (!token) throw new Error('Not authenticated');
 
-      // Create demo tables
-      await this.createDefaultTables(restaurantId);
-      
-      // Create demo menu items
-      const menuCategories = ['Appetizers', 'Main Course', 'Desserts', 'Drinks'];
-      const menuItems = [
-        { name: 'Bruschetta', description: 'Toasted bread with tomatoes and herbs', price: 7.99, category: 'Appetizers' },
-        { name: 'Mozzarella Sticks', description: 'Breaded and fried mozzarella', price: 6.99, category: 'Appetizers' },
-        { name: 'Caesar Salad', description: 'Fresh romaine with Caesar dressing', price: 8.99, category: 'Appetizers' },
-        { name: 'Margherita Pizza', description: 'Classic tomato and mozzarella pizza', price: 12.99, category: 'Main Course' },
-        { name: 'Beef Burger', description: 'Juicy beef patty with lettuce and tomato', price: 13.99, category: 'Main Course' },
-        { name: 'Pasta Carbonara', description: 'Creamy pasta with pancetta', price: 14.99, category: 'Main Course' },
-        { name: 'Tiramisu', description: 'Classic Italian coffee dessert', price: 6.99, category: 'Desserts' },
-        { name: 'Chocolate Cake', description: 'Rich and moist chocolate cake', price: 5.99, category: 'Desserts' },
-        { name: 'Soft Drinks', description: 'Assorted sodas', price: 2.99, category: 'Drinks' },
-        { name: 'Coffee', description: 'Freshly brewed coffee', price: 3.49, category: 'Drinks' }
-      ];
-      
-      for (const item of menuItems) {
-        await axios.post(
-          `${API_URL}/restaurants/${restaurantId}/menu`,
-          item,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`
-            }
+      const response = await axios.post(
+        `${API_URL}/restaurants/${restaurantId}/demo-data`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
           }
-        );
-      }
+        }
+      );
       
-      return { success: true, message: 'Demo data created successfully' };
+      return response.data.data;
     } catch (error) {
       console.error('Create demo data error:', error);
       throw error;

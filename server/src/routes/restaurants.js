@@ -1,7 +1,7 @@
 
 const express = require('express');
 const router = express.Router();
-const { protect } = require('../middleware/auth');
+const { protect, authorize } = require('../middleware/auth');
 const {
   getRestaurants,
   getRestaurant,
@@ -11,7 +11,7 @@ const {
   createDemoData
 } = require('../controllers/restaurants');
 
-// Restaurant routes
+// Restaurant routes - all routes require authentication
 router.route('/')
   .get(protect, getRestaurants)
   .post(protect, createRestaurant);
@@ -21,7 +21,7 @@ router.route('/:id')
   .put(protect, updateRestaurant)
   .delete(protect, deleteRestaurant);
 
-// Demo data route
+// Demo data route - requires authentication
 router.post('/:id/demo-data', protect, createDemoData);
 
 // Import nested routes
