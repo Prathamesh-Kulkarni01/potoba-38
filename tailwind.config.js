@@ -1,4 +1,3 @@
-
 /** @type {import('tailwindcss').Config} */
 export default {
   darkMode: ["class"],
@@ -101,6 +100,10 @@ export default {
           "0%": { transform: "rotate(0deg)" },
           "100%": { transform: "rotate(360deg)" },
         },
+        "theme-fade": {
+          "0%": { opacity: 0 },
+          "100%": { opacity: 1 },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -112,6 +115,7 @@ export default {
         "slide-in-right": "slide-in-right 0.6s ease-out",
         "zoom-in": "zoom-in 0.5s ease-out",
         "rotate-slow": "rotate-slow 15s linear infinite",
+        "theme-fade": "theme-fade 0.5s ease-out",
       },
     },
   },

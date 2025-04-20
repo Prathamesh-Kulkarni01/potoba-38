@@ -1,4 +1,3 @@
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -162,3 +161,29 @@
   border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
+/* Dark mode additional styles */
+.dark .bg-food-pattern {
+  opacity: 0.05;
+}
+
+.dark .glass-effect {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.dark .text-food-dark {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.dark .text-food-dark\/70 {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.dark .text-food-dark\/80 {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* New animations for theme transitions */
+.theme-transition {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}

@@ -3,10 +3,13 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { ChevronRight } from 'lucide-react';
 import { Button } from "@/components/ui/button";
+import { useTheme } from '../theme/ThemeProvider';
 
 const Cta = () => {
+  const { theme } = useTheme();
+  
   return (
-    <section className="py-20 bg-gradient-to-r from-food-primary to-food-secondary text-white">
+    <section className={`py-20 ${theme === 'dark' ? 'bg-gradient-to-r from-food-primary/80 to-food-secondary/80' : 'bg-gradient-to-r from-food-primary to-food-secondary'} text-white theme-transition`}>
       <div className="container mx-auto px-4">
         <div className="text-center max-w-3xl mx-auto">
           <motion.div
