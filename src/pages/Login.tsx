@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,6 +8,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { motion } from 'framer-motion';
 import { Utensils, ChefHat } from 'lucide-react';
 import { api } from '@/services/api';
+import { toast } from "sonner";
+import { mockApi } from '@/services/mockApi';
 
 const Login = () => {
   const [email, setEmail] = useState('demo@example.com');
@@ -22,8 +23,16 @@ const Login = () => {
     setIsLoading(true);
     
     try {
-      // Call the API service instead of the mock login
-      const response = await api.auth.login(email, password);
+      // Try to call the API service first
+      let response;
+      try {
+        response = await api.auth.login(email, password);
+      } catch (apiError) {
+        console.error('API login failed, falling back to mock:', apiError);
+        // If real API fails, fall back to mock API
+        response = await mockApi.auth.login(email, password);
+        toast.info("Using mock login (backend server not available)");
+      }
       
       if (response.success && response.data) {
         // Store the token in localStorage
@@ -32,13 +41,14 @@ const Login = () => {
         // Update the auth context
         await login(email, password);
         
+        toast.success("Logged in successfully!");
         navigate('/dashboard');
       } else {
         throw new Error(response.error || 'Login failed');
       }
     } catch (error) {
       console.error('Login error:', error);
-      // Toast is handled in api service
+      toast.error("Login failed. Please check your credentials.");
     } finally {
       setIsLoading(false);
     }
