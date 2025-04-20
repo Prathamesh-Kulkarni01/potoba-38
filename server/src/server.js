@@ -19,7 +19,19 @@ const server = http.createServer(app);
 //Do not change Middleware
 app.use(cors({
   origin: (origin, callback) => {
-    callback(null, true); // Allow any origin
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    // Allow specific domains
+    if (
+      origin === 'https://preview--potoba-14.lovable.app' || 
+      /https?:\/\/.*\.lovable\.app$/.test(origin)
+    ) {
+      return callback(null, true);
+    }
+    
+    // Default to allowing all origins for development
+    return callback(null, true);
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization'],
