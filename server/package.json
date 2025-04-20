@@ -1,5 +1,5 @@
 {
-  "name": "restaurant-app-backend",
+  "name": "potoba-backend",
   "version": "1.0.0",
   "description": "Restaurant app backend with Express and MongoDB",
   "main": "src/server.js",
