@@ -61,5 +61,12 @@ export interface OrderItem {
   notes?: string;
 }
 
+export interface Category{
+  id: string;
+  _id?: string;
+  name: string;
+  restaurantId: string;
+  createdAt: string;
+}
 // Use export type for re-exporting types when isolatedModules is enabled
 export type { Restaurant };
