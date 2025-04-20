@@ -104,12 +104,12 @@ Follow these steps to set up the project locally:
 
 ## 🌐 Deployment
 
-To deploy the project, visit [Lovable](https://lovable.dev/projects/ab571078-575f-4689-9917-7e0659e3fc48) and click on **Share -> Publish**.
+To deploy the project, visit [Potoba] and click on **Share -> Publish**.
 
 ## 📖 Documentation
 
 - **API Documentation**: Refer to the in-app API documentation for details on available endpoints.
-- **Custom Domain Setup**: [Guide to setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide).
+- **Custom Domain Setup**: [Guide to setting up a custom domain]
 
 ## 🤝 Contributing
 
