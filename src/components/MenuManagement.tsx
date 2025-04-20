@@ -1,508 +1,304 @@
-import { useState } from 'react';
-import {
-  Edit,
-  Trash2,
-  PlusCircle,
-  Filter,
-  MoreHorizontal,
-  Image,
-  Sparkles
-} from 'lucide-react';
+
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { 
+  Card, 
+  CardContent, 
+  CardDescription, 
+  CardHeader, 
+  CardTitle
+} from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import { useToast } from "@/hooks/use-toast";
+import { 
+  Utensils, 
+  Plus, 
+  Edit, 
+  Trash2, 
+  Search,
+  Coffee,
+  Soup,
+  UtensilsCrossed,
+  IceCream
+} from 'lucide-react';
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { toast } from "sonner";
+import AiMenuGenerator from './AiMenuGenerator';
+import { MenuItemSuggestion } from '@/services/aiService';
 
-// Sample data - in a real application, this would come from an API
-const categories = [
-  'All',
-  'Starters',
-  'Main Courses',
-  'Sides',
-  'Desserts',
-  'Drinks'
-];
-
-const menuItems = [
-  { 
-    id: 1, 
-    name: 'Classic Burger', 
+// Sample menu data - in a real app, this would come from an API
+const MENU_ITEMS = [
+  {
+    id: 1,
+    name: 'Classic Burger',
     description: 'Beef patty with lettuce, tomato, and our special sauce',
-    category: 'Main Courses',
     price: 12.99,
+    category: 'Main Courses',
     image: '/placeholder.svg'
   },
-  { 
-    id: 2, 
-    name: 'Caesar Salad', 
+  {
+    id: 2,
+    name: 'Caesar Salad',
     description: 'Romaine lettuce with Caesar dressing, croutons, and parmesan',
-    category: 'Starters',
     price: 8.99,
-    image: '/placeholder.svg'
-  },
-  { 
-    id: 3, 
-    name: 'Margherita Pizza', 
-    description: 'Tomato sauce, mozzarella, and fresh basil',
-    category: 'Main Courses',
-    price: 14.99,
-    image: '/placeholder.svg'
-  },
-  { 
-    id: 4, 
-    name: 'Chocolate Cake', 
-    description: 'Rich chocolate cake with a molten center',
-    category: 'Desserts',
-    price: 6.99,
-    image: '/placeholder.svg'
-  },
-  { 
-    id: 5, 
-    name: 'French Fries', 
-    description: 'Crispy golden fries with sea salt',
-    category: 'Sides',
-    price: 4.99,
-    image: '/placeholder.svg'
-  },
-  { 
-    id: 6, 
-    name: 'Iced Tea', 
-    description: 'Refreshing iced tea with lemon',
-    category: 'Drinks',
-    price: 2.99,
-    image: '/placeholder.svg'
-  },
-  { 
-    id: 7, 
-    name: 'Chicken Wings', 
-    description: 'Spicy chicken wings with blue cheese dip',
     category: 'Starters',
-    price: 9.99,
     image: '/placeholder.svg'
   },
-  { 
-    id: 8, 
-    name: 'Spaghetti Carbonara', 
-    description: 'Creamy pasta with bacon and parmesan',
+  {
+    id: 3,
+    name: 'Margherita Pizza',
+    description: 'Tomato sauce, mozzarella, and fresh basil',
+    price: 14.99,
     category: 'Main Courses',
-    price: 13.99,
+    image: '/placeholder.svg'
+  },
+  {
+    id: 4,
+    name: 'Chocolate Cake',
+    description: 'Rich chocolate cake with a molten center',
+    price: 6.99,
+    category: 'Desserts',
+    image: '/placeholder.svg'
+  },
+  {
+    id: 5,
+    name: 'French Fries',
+    description: 'Crispy golden fries with sea salt',
+    price: 4.99,
+    category: 'Sides',
+    image: '/placeholder.svg'
+  },
+  {
+    id: 6,
+    name: 'Iced Tea',
+    description: 'Refreshing iced tea with lemon',
+    price: 2.99,
+    category: 'Drinks',
     image: '/placeholder.svg'
   }
 ];
 
-interface MenuItemCardProps {
-  item: {
-    id: number;
-    name: string;
-    description: string;
-    category: string;
-    price: number;
-    image: string;
-  };
-  onEdit: (itemId: number) => void;
-}
-
-const MenuItemCard = ({ item, onEdit }: MenuItemCardProps) => {
-  return (
-    <div className="bg-white rounded-lg shadow-sm border overflow-hidden hover:shadow-md transition-all duration-200">
-      <div className="relative h-40 bg-gray-100">
-        <img 
-          src={item.image} 
-          alt={item.name} 
-          className="w-full h-full object-cover" 
-        />
-        <div className="absolute top-2 right-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="bg-white/80 hover:bg-white rounded-full h-8 w-8">
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Actions</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => onEdit(item.id)}>
-                <Edit className="mr-2 h-4 w-4" />
-                Edit Item
-              </DropdownMenuItem>
-              <DropdownMenuItem className="text-destructive">
-                <Trash2 className="mr-2 h-4 w-4" />
-                Delete Item
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
-      <div className="p-4">
-        <div className="flex justify-between items-start">
-          <div>
-            <h3 className="font-semibold">{item.name}</h3>
-            <p className="text-xs text-muted-foreground">{item.category}</p>
-          </div>
-          <div className="text-restaurant-primary font-semibold">${item.price.toFixed(2)}</div>
-        </div>
-        <p className="mt-2 text-sm text-gray-500 line-clamp-2">{item.description}</p>
-      </div>
-    </div>
-  );
-};
+const CATEGORIES = [
+  {
+    id: 'all',
+    name: 'All Items',
+    icon: Utensils
+  },
+  {
+    id: 'starters',
+    name: 'Starters',
+    icon: Soup
+  },
+  {
+    id: 'main-courses',
+    name: 'Main Courses',
+    icon: UtensilsCrossed
+  },
+  {
+    id: 'sides',
+    name: 'Sides',
+    icon: Utensils
+  },
+  {
+    id: 'desserts',
+    name: 'Desserts',
+    icon: IceCream
+  },
+  {
+    id: 'drinks',
+    name: 'Drinks',
+    icon: Coffee
+  }
+];
 
 const MenuManagement = () => {
-  const [activeCategory, setActiveCategory] = useState('All');
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
-  const [addItemDialogOpen, setAddItemDialogOpen] = useState(false);
-  const [aiDialogOpen, setAiDialogOpen] = useState(false);
-  const [aiPrompt, setAiPrompt] = useState('');
-  const [aiGenerating, setAiGenerating] = useState(false);
-  const [aiSuggestions, setAiSuggestions] = useState<{
-    name: string;
-    description: string;
-    category: string;
-    price: number;
-  } | null>(null);
+  const [items, setItems] = useState(MENU_ITEMS);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeCategory, setActiveCategory] = useState('all');
+  const { toast } = useToast();
+  const navigate = useNavigate();
   
-  const filteredItems = activeCategory === 'All' 
-    ? menuItems 
-    : menuItems.filter(item => item.category === activeCategory);
-
-  const handleEdit = (itemId: number) => {
-    setSelectedItemId(itemId);
-    setEditDialogOpen(true);
-  };
-
-  const selectedItem = menuItems.find(item => item.id === selectedItemId);
-  
-  const generateAiSuggestion = async () => {
-    if (!aiPrompt.trim()) {
-      toast.error("Please enter a description for the AI to work with");
-      return;
+  const filteredItems = items.filter(item => {
+    // Filter by category first
+    if (activeCategory !== 'all') {
+      const categoryMatch = item.category.toLowerCase().replace(' ', '-') === activeCategory;
+      if (!categoryMatch) return false;
     }
-
-    setAiGenerating(true);
     
-    // Simulate AI generation - in a real app, this would be an API call
-    setTimeout(() => {
-      // Generate a mock response based on the prompt
-      const words = aiPrompt.toLowerCase().split(' ');
-      
-      let suggestedCategory = 'Main Courses';
-      if (words.some(w => ['salad', 'appetizer', 'starter'].includes(w))) {
-        suggestedCategory = 'Starters';
-      } else if (words.some(w => ['dessert', 'sweet', 'cake', 'ice cream'].includes(w))) {
-        suggestedCategory = 'Desserts';
-      } else if (words.some(w => ['side', 'fries', 'rice'].includes(w))) {
-        suggestedCategory = 'Sides';
-      } else if (words.some(w => ['drink', 'beverage', 'coffee', 'tea', 'juice'].includes(w))) {
-        suggestedCategory = 'Drinks';
-      }
-      
-      // Generate a price between $5.99 and $24.99
-      const price = Math.round((5.99 + Math.random() * 19) * 100) / 100;
-      
-      // Generate a name based on key ingredients or descriptors in the prompt
-      const nameWords = words.filter(w => 
-        !['a', 'the', 'and', 'with', 'in', 'on', 'of', 'for', 'to', 'by', 'from'].includes(w)
-      ).slice(0, 3);
-      
-      const firstWord = nameWords[0] ? nameWords[0].charAt(0).toUpperCase() + nameWords[0].slice(1) : 'Signature';
-      const suggestion = {
-        name: nameWords.length > 1 
-          ? `${firstWord} ${nameWords.slice(1).join(' ')}` 
-          : `${firstWord} Special`,
-        description: aiPrompt,
-        category: suggestedCategory,
-        price: price
-      };
-      
-      setAiSuggestions(suggestion);
-      setAiGenerating(false);
-      toast.success("AI suggestion generated!");
-    }, 1500);
-  };
-
-  const applyAiSuggestion = () => {
-    if (aiSuggestions) {
-      // In a real app, you would update your form state here
-      // For this example, we'll just close the AI dialog and open the regular add item dialog
-      setAiDialogOpen(false);
-      
-      // Open the add dialog with pre-filled values
-      // In a more complex app, you'd pass the AI suggestions to the add dialog
-      setAddItemDialogOpen(true);
-      toast.success("AI suggestion applied to the form");
+    // Then filter by search query
+    if (searchQuery) {
+      return (
+        item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.description.toLowerCase().includes(searchQuery.toLowerCase())
+      );
     }
+    
+    return true;
+  });
+  
+  const handleAddItem = (newItem: MenuItemSuggestion) => {
+    // In a real app, this would send the data to an API
+    const newId = Math.max(...items.map(item => item.id), 0) + 1;
+    
+    const itemToAdd = {
+      id: newId,
+      name: newItem.name,
+      description: newItem.description,
+      price: newItem.price,
+      category: newItem.category,
+      image: '/placeholder.svg' // Default image
+    };
+    
+    setItems([...items, itemToAdd]);
+    
+    toast({
+      description: `${newItem.name} has been added to your menu`,
+    });
+  };
+  
+  const handleDeleteItem = (id: number) => {
+    // In a real app, this would send a delete request to an API
+    setItems(items.filter(item => item.id !== id));
+    
+    toast({
+      description: "Menu item has been deleted",
+    });
   };
   
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold">Menu Management</h1>
-          <p className="text-muted-foreground">Manage your restaurant menu items</p>
-        </div>
-        
-        <div className="flex gap-2">
-          <Button 
-            variant="outline"
-            onClick={() => setAiDialogOpen(true)}
-            className="flex items-center gap-2"
-          >
-            <Sparkles className="h-4 w-4 text-restaurant-primary" />
-            AI Suggestions
-          </Button>
-          <Button 
-            onClick={() => setAddItemDialogOpen(true)} 
-            className="bg-restaurant-primary hover:bg-restaurant-primary/90"
-          >
-            <PlusCircle className="mr-2 h-4 w-4" />
-            Add Menu Item
-          </Button>
-        </div>
+      <div className="flex justify-between items-center">
+        <h1 className="page-title">Menu Management</h1>
+        <Button onClick={() => navigate('/dashboard/menu/add')}>
+          <Plus className="mr-2 h-4 w-4" /> Add Menu Item
+        </Button>
       </div>
       
-      <Tabs value={activeCategory} onValueChange={setActiveCategory} className="w-full">
-        <TabsList className="w-full max-w-full h-auto flex flex-wrap">
-          {categories.map((category) => (
-            <TabsTrigger key={category} value={category} className="flex-grow">
-              {category}
-            </TabsTrigger>
-          ))}
-        </TabsList>
+      {/* AI Menu Generator - NEW */}
+      <AiMenuGenerator onAddItem={handleAddItem} />
+      
+      <div className="flex flex-col sm:flex-row gap-4">
+        <div className="w-full sm:w-56 flex-shrink-0">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Categories</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="divide-y">
+                {CATEGORIES.map(category => (
+                  <button
+                    key={category.id}
+                    className={`flex items-center w-full px-4 py-2 text-left transition-colors ${
+                      activeCategory === category.id
+                        ? 'bg-muted font-medium'
+                        : 'hover:bg-muted/50'
+                    }`}
+                    onClick={() => setActiveCategory(category.id)}
+                  >
+                    <category.icon className="h-4 w-4 mr-2 text-muted-foreground" />
+                    {category.name}
+                    <span className="ml-auto text-xs text-muted-foreground">
+                      {category.id === 'all'
+                        ? items.length
+                        : items.filter(item =>
+                            item.category.toLowerCase().replace(' ', '-') === category.id
+                          ).length}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
         
-        {categories.map((category) => (
-          <TabsContent key={category} value={category} className="mt-6">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {filteredItems.map((item) => (
-                <MenuItemCard key={item.id} item={item} onEdit={handleEdit} />
-              ))}
-            </div>
-            {filteredItems.length === 0 && (
-              <div className="text-center py-12">
-                <p className="text-muted-foreground">No items in this category</p>
-              </div>
-            )}
-          </TabsContent>
-        ))}
-      </Tabs>
-      
-      {/* Edit Item Dialog */}
-      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Edit Menu Item</DialogTitle>
-            <DialogDescription>
-              Update the details for {selectedItem?.name}
-            </DialogDescription>
-          </DialogHeader>
-          {selectedItem && (
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label htmlFor="itemName">Item Name</Label>
-                <Input id="itemName" defaultValue={selectedItem.name} />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="description">Description</Label>
-                <Textarea id="description" defaultValue={selectedItem.description} />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="category">Category</Label>
-                <Select defaultValue={selectedItem.category}>
-                  <SelectTrigger id="category">
-                    <SelectValue placeholder="Select category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categories.filter(c => c !== 'All').map((category) => (
-                      <SelectItem key={category} value={category}>
-                        {category}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="price">Price ($)</Label>
-                <Input id="price" type="number" step="0.01" defaultValue={selectedItem.price} />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="image">Image</Label>
-                <div className="flex items-center gap-4">
-                  <img 
-                    src={selectedItem.image} 
-                    alt={selectedItem.name}
-                    className="w-16 h-16 object-cover rounded"
+        <div className="flex-1">
+          <Card>
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <CardTitle className="text-lg">Menu Items</CardTitle>
+                <div className="relative w-64">
+                  <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search items..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-8"
                   />
-                  <Button variant="outline" className="flex-1">
-                    <Image className="mr-2 h-4 w-4" />
-                    Change Image
-                  </Button>
                 </div>
               </div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button 
-              className="bg-restaurant-primary hover:bg-restaurant-primary/90"
-              onClick={() => setEditDialogOpen(false)}
-            >
-              Save Changes
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      
-      {/* Add Item Dialog */}
-      <Dialog open={addItemDialogOpen} onOpenChange={setAddItemDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Add Menu Item</DialogTitle>
-            <DialogDescription>
-              Enter the details for the new menu item
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="newItemName">Item Name</Label>
-              <Input id="newItemName" />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="newDescription">Description</Label>
-              <Textarea id="newDescription" />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="newCategory">Category</Label>
-              <Select defaultValue="Main Courses">
-                <SelectTrigger id="newCategory">
-                  <SelectValue placeholder="Select category" />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.filter(c => c !== 'All').map((category) => (
-                    <SelectItem key={category} value={category}>
-                      {category}
-                    </SelectItem>
+              <CardDescription>
+                {filteredItems.length} items found
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {filteredItems.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {filteredItems.map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex border rounded-lg overflow-hidden hover:shadow-md transition-shadow"
+                    >
+                      <div className="w-20 h-20 bg-gray-100 flex-shrink-0">
+                        <img
+                          src={item.image}
+                          alt={item.name}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <div className="flex-1 p-3 flex flex-col justify-between">
+                        <div>
+                          <div className="flex justify-between items-start">
+                            <h3 className="font-medium">{item.name}</h3>
+                            <span className="text-restaurant-primary font-medium">
+                              ${item.price.toFixed(2)}
+                            </span>
+                          </div>
+                          <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
+                            {item.description}
+                          </p>
+                        </div>
+                        <div className="flex justify-between items-center mt-2">
+                          <span className="text-xs bg-muted px-2 py-0.5 rounded">
+                            {item.category}
+                          </span>
+                          <div className="flex gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => navigate(`/dashboard/menu/edit/${item.id}`)}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50"
+                              onClick={() => handleDeleteItem(item.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="newPrice">Price ($)</Label>
-              <Input id="newPrice" type="number" step="0.01" />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="newImage">Image</Label>
-              <Button variant="outline" className="w-full">
-                <Image className="mr-2 h-4 w-4" />
-                Upload Image
-              </Button>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAddItemDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button 
-              className="bg-restaurant-primary hover:bg-restaurant-primary/90"
-              onClick={() => setAddItemDialogOpen(false)}
-            >
-              Add Item
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      
-      {/* AI Suggestion Dialog */}
-      <Dialog open={aiDialogOpen} onOpenChange={setAiDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>AI Menu Item Suggestions</DialogTitle>
-            <DialogDescription>
-              Describe what you'd like to add to your menu, and our AI will suggest a complete menu item
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="aiPrompt">Describe your dish</Label>
-              <Textarea 
-                id="aiPrompt"
-                placeholder="A creamy mushroom pasta with truffle oil and parmesan"
-                value={aiPrompt}
-                onChange={(e) => setAiPrompt(e.target.value)}
-                rows={4}
-              />
-              <Button 
-                onClick={generateAiSuggestion}
-                className="mt-2"
-                disabled={aiGenerating}
-              >
-                {aiGenerating ? (
-                  <>Generating<span className="animate-pulse">...</span></>
-                ) : (
-                  <>
-                    <Sparkles className="mr-2 h-4 w-4" />
-                    Generate Suggestion
-                  </>
-                )}
-              </Button>
-            </div>
-            
-            {aiSuggestions && (
-              <div className="border rounded-md p-4 bg-muted/30 mt-4">
-                <h3 className="font-medium text-lg">{aiSuggestions.name}</h3>
-                <p className="text-sm text-muted-foreground mt-1">{aiSuggestions.description}</p>
-                <div className="flex justify-between mt-3">
-                  <span className="text-sm">{aiSuggestions.category}</span>
-                  <span className="font-semibold">${aiSuggestions.price.toFixed(2)}</span>
                 </div>
-                <Button 
-                  onClick={applyAiSuggestion}
-                  className="w-full mt-4 bg-restaurant-primary hover:bg-restaurant-primary/90"
-                >
-                  Use This Suggestion
-                </Button>
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAiDialogOpen(false)}>
-              Cancel
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+              ) : (
+                <div className="text-center py-12">
+                  <Utensils className="mx-auto h-12 w-12 text-muted stroke-1" />
+                  <h3 className="mt-2 text-lg font-medium">No items found</h3>
+                  <p className="text-sm text-muted-foreground">
+                    {searchQuery
+                      ? "Try a different search term"
+                      : "Add some items to your menu"}
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 };

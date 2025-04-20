@@ -16,6 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/componen
 import { Button } from "@/components/ui/button";
 import { motion } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
+import AiAnalytics from './AiAnalytics';
 
 // Sample data - in a real application, this would come from an API
 const generateDashboardData = (restaurantId: string) => {
@@ -99,6 +100,9 @@ const RestaurantDashboard = () => {
         <img src={currentRestaurant.logo || "/images/potoba-logo.svg"} alt={currentRestaurant.name} className="h-10 mr-2" />
         <span>{currentRestaurant.name} Dashboard</span>
       </h1>
+
+      {/* AI Analytics Section - NEW */}
+      <AiAnalytics />
 
       <motion.div 
         className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
