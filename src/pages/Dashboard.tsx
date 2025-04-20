@@ -88,8 +88,7 @@ const Dashboard = () => {
     else if (path === '/dashboard/menu/add') {
       return <AddMenuItem />;
     }
-    else if (path.startsWith('/dashboard/menu/edit/:id')) {
-      const id = path.split('/').pop();
+    else if (path.startsWith('/dashboard/menu/edit')) {
       return <AddMenuItem />;
     }
     

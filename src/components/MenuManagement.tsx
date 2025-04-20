@@ -231,7 +231,7 @@ const MenuManagement = () => {
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8"
-                              onClick={() => navigate(`/dashboard/menu/edit/${item.id}`)}
+                              onClick={() => navigate(`/dashboard/menu/edit/${item._id}`)}
                             >
                               <Edit className="h-4 w-4" />
                             </Button>
@@ -239,7 +239,7 @@ const MenuManagement = () => {
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50"
-                              onClick={() => handleDeleteItem(item.id)}
+                              onClick={() => handleDeleteItem(item._id)}
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>

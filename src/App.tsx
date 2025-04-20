@@ -33,9 +33,9 @@ const queryClient = new QueryClient({
 });
 
 // Create a wrapper component to provide navigate function
-const AuthProviderWithRouter: React.FC<{children: React.ReactNode}> = ({ children }) => {
+const AuthProviderWithRouter: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const navigate = useNavigate();
-  
+
   return (
     <AuthProvider navigate={navigate}>
       {children}
@@ -57,145 +57,145 @@ const App = () => (
                 <Route path="/login" element={<Login />} />
                 <Route path="/signup" element={<Signup />} />
                 <Route path="/unauthorized" element={<Unauthorized />} />
-                <Route 
-                  path="/onboarding" 
+                <Route
+                  path="/onboarding"
                   element={
                     <ProtectedRoute>
                       <RestaurantOnboarding />
                     </ProtectedRoute>
-                  } 
+                  }
                 />
-                
+
                 {/* Dashboard routes */}
-                <Route 
-                  path="/dashboard" 
+                <Route
+                  path="/dashboard"
                   element={
                     <ProtectedRoute requiredPermission="view_dashboard">
                       <Dashboard />
                     </ProtectedRoute>
-                  } 
+                  }
                 />
-                <Route 
-                  path="/dashboard/tables" 
+                <Route
+                  path="/dashboard/tables"
                   element={
                     <ProtectedRoute requiredPermission="manage_tables">
                       <Dashboard />
                     </ProtectedRoute>
-                    } 
-                  />
-                  <Route 
-                    path="/dashboard/menu" 
-                    element={
+                  }
+                />
+                <Route
+                  path="/dashboard/menu"
+                  element={
                     <ProtectedRoute requiredPermission="manage_menu">
                       <Dashboard />
                     </ProtectedRoute>
-                    } 
-                  />
-                  <Route 
-                    path="/dashboard/menu/add" 
-                    element={
+                  }
+                />
+                <Route
+                  path="/dashboard/menu/add"
+                  element={
                     <ProtectedRoute requiredPermission="manage_menu">
-                   <Dashboard />
+                      <Dashboard />
                     </ProtectedRoute>
-                    } 
-                  />
-                   <Route 
-                    path="/dashboard/menu/edit/:id" 
-                    element={
+                  }
+                />
+                <Route
+                  path="/dashboard/menu/edit/:id"
+                  element={
                     <ProtectedRoute requiredPermission="manage_menu">
-                   <Dashboard />
+                      <Dashboard />
                     </ProtectedRoute>
-                    } 
-                  />
-                  <Route 
-                    path="/dashboard/orders" 
-                    element={
+                  }
+                />
+                <Route
+                  path="/dashboard/orders"
+                  element={
                     <ProtectedRoute requiredPermission="manage_orders">
                       <Dashboard />
                     </ProtectedRoute>
-                  } 
+                  }
                 />
-                <Route 
-                  path="/dashboard/api-settings" 
+                <Route
+                  path="/dashboard/api-settings"
                   element={
                     <ProtectedRoute requiredPermission="manage_settings">
                       <ApiSettings />
                     </ProtectedRoute>
-                  } 
+                  }
                 />
-                <Route 
-                  path="/dashboard/api-docs" 
+                <Route
+                  path="/dashboard/api-docs"
                   element={
                     <ProtectedRoute requiredPermission="manage_settings">
                       <ApiDocs />
                     </ProtectedRoute>
-                  } 
+                  }
                 />
-                <Route 
-                  path="/dashboard/tables/:tableId" 
+                <Route
+                  path="/dashboard/tables/:tableId"
                   element={
                     <ProtectedRoute requiredPermission="manage_tables">
                       <TableDetail />
                     </ProtectedRoute>
-                  } 
+                  }
                 />
-                
+
                 {/* Marketing routes */}
-                <Route 
-                  path="/dashboard/marketing/campaigns" 
+                <Route
+                  path="/dashboard/marketing/campaigns"
                   element={
                     <ProtectedRoute requiredPermission="manage_marketing">
                       <Dashboard />
                     </ProtectedRoute>
-                  } 
+                  }
                 />
-                <Route 
-                  path="/dashboard/marketing/whatsapp" 
+                <Route
+                  path="/dashboard/marketing/whatsapp"
                   element={
                     <ProtectedRoute requiredPermission="manage_marketing">
                       <Dashboard />
                     </ProtectedRoute>
-                  } 
+                  }
                 />
-                <Route 
-                  path="/dashboard/marketing/ai-assistant" 
+                <Route
+                  path="/dashboard/marketing/ai-assistant"
                   element={
                     <ProtectedRoute requiredPermission="manage_marketing">
                       <Dashboard />
                     </ProtectedRoute>
-                  } 
+                  }
                 />
-                
+
                 {/* Loyalty routes */}
-                <Route 
-                  path="/dashboard/loyalty/rewards" 
+                <Route
+                  path="/dashboard/loyalty/rewards"
                   element={
                     <ProtectedRoute requiredPermission="manage_loyalty">
                       <Dashboard />
                     </ProtectedRoute>
-                  } 
+                  }
                 />
-                <Route 
-                  path="/dashboard/loyalty/promotions" 
+                <Route
+                  path="/dashboard/loyalty/promotions"
                   element={
                     <ProtectedRoute requiredPermission="manage_loyalty">
                       <Dashboard />
                     </ProtectedRoute>
-                  } 
+                  }
                 />
-                <Route 
-                  path="/dashboard/loyalty/members" 
+                <Route
+                  path="/dashboard/loyalty/members"
                   element={
                     <ProtectedRoute requiredPermission="manage_loyalty">
                       <Dashboard />
                     </ProtectedRoute>
-                  } 
+                  }
                 />
-                
+
                 {/* Customer facing routes */}
                 <Route path="/scan" element={<ScanLanding />} />
                 <Route path="/order/:tableId" element={<CustomerOrder />} />
-                
+
                 {/* Catch-all route */}
                 <Route path="*" element={<NotFound />} />
               </Routes>

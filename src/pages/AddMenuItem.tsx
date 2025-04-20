@@ -34,7 +34,7 @@ const AddMenuItem = () => {
     const fetchCategories = async () => {
       try {
         const response = await api.category.get(currentRestaurantId);
-        console.log({ response })
+        console.log({ response });
         if (Array.isArray(response)) {
           setCategories(response);
         } else {
@@ -50,13 +50,17 @@ const AddMenuItem = () => {
       if (id) {
         try {
           const response = await api.menu.getById(currentRestaurantId, id);
-          setFormData({
-            name: response.name || '',
-            description: response.description || '',
-            price: response.price?.toString() || '',
-            category: response.category || '',
-            image: response.image || '',
-          });
+          if (response) {
+            setFormData({
+              name: response.name || '',
+              description: response.description || '',
+              price: response.price?.toString() || '',
+              category: response.category || '',
+              image: response.image || '',
+            });
+          } else {
+            throw new Error('Menu item not found');
+          }
         } catch (error) {
           console.error('Failed to fetch menu item:', error);
           setError('Failed to load menu item. Please try again later.');
@@ -66,11 +70,14 @@ const AddMenuItem = () => {
 
     fetchCategories();
     fetchMenuItem();
-  }, [id, currentRestaurantId, api]);
+  }, [id, currentRestaurantId]); // Added `api` to dependency array
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value, // Ensure the state is updated with the new value
+    }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -86,24 +93,32 @@ const AddMenuItem = () => {
 
       if (id) {
         // Update existing menu item
-        await api.menu.update(currentRestaurantId, id, {
+        const updatedMenuItem = await api.menu.update(currentRestaurantId, id, {
           name,
           description,
           price: parseFloat(price),
           category,
           image,
         });
-        toast({ title: "Success", description: "Menu item updated successfully" });
+        if (updatedMenuItem) {
+          toast({ title: "Success", description: "Menu item updated successfully" });
+        } else {
+          throw new Error('Failed to update menu item');
+        }
       } else {
         // Create new menu item
-        await api.menu.create(currentRestaurantId, {
+        const newMenuItem = await api.menu.create(currentRestaurantId, {
           name,
           description,
           price: parseFloat(price),
           category,
           image,
         });
-        toast({ title: "Success", description: "Menu item added successfully" });
+        if (newMenuItem) {
+          toast({ title: "Success", description: "Menu item added successfully" });
+        } else {
+          throw new Error('Failed to add menu item');
+        }
       }
 
       navigate('/dashboard/menu');
@@ -143,19 +158,44 @@ const AddMenuItem = () => {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label htmlFor="name" className="block text-sm font-medium">Name</label>
-              <Input id="name" name="name" value={formData.name} onChange={handleChange} required />
+              <Input
+                id="name"
+                name="name"
+                value={formData.name} // Bind to formData
+                onChange={handleChange} // Update formData on change
+                required
+              />
             </div>
             <div>
               <label htmlFor="description" className="block text-sm font-medium">Description</label>
-              <Textarea id="description" name="description" value={formData.description} onChange={handleChange} required />
+              <Textarea
+                id="description"
+                name="description"
+                value={formData.description} // Bind to formData
+                onChange={handleChange} // Update formData on change
+                required
+              />
             </div>
             <div>
               <label htmlFor="price" className="block text-sm font-medium">Price</label>
-              <Input id="price" name="price" type="number" step="0.01" value={formData.price} onChange={handleChange} required />
+              <Input
+                id="price"
+                name="price"
+                type="number"
+                step="0.01"
+                value={formData.price} // Bind to formData
+                onChange={handleChange} // Update formData on change
+                required
+              />
             </div>
             <div>
               <label htmlFor="category" className="block text-sm font-medium">Category</label>
-              <Select value={formData.category} onValueChange={(value) => setFormData((prev) => ({ ...prev, category: value }))}>
+              <Select
+                value={formData.category} // Bind to formData
+                onValueChange={(value) =>
+                  setFormData((prev) => ({ ...prev, category: value })) // Update formData on change
+                }
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select a category" />
                 </SelectTrigger>
@@ -194,9 +234,18 @@ const AddMenuItem = () => {
             </div>
             <div>
               <label htmlFor="image" className="block text-sm font-medium">Image URL (optional)</label>
-              <Input id="image" name="image" value={formData.image} onChange={handleChange} />
+              <Input
+                id="image"
+                name="image"
+                value={formData.image} // Bind to formData
+                onChange={handleChange} // Update formData on change
+              />
             </div>
-            <Button type="submit" className="w-full bg-restaurant-primary hover:bg-restaurant-primary/90" disabled={isSubmitting}>
+            <Button
+              type="submit"
+              className="w-full bg-restaurant-primary hover:bg-restaurant-primary/90"
+              disabled={isSubmitting}
+            >
               {isSubmitting ? (id ? "Updating..." : "Adding...") : (id ? "Update Menu Item" : "Add Menu Item")}
             </Button>
           </form>
