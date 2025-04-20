@@ -3,7 +3,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { toast } from "@/hooks/use-toast";
 import { api } from "@/services/api";
 import { mockApi } from "@/services/mockApi"; 
-import { User, Restaurant } from "@/types/api";
+import { User, Restaurant, ApiResponse, AuthResponse } from "@/types/api";
 
 interface AuthContextType {
   user: User | null;
@@ -36,25 +36,27 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
           console.log('Auth status response:', response);
           
           if (response.success && response.data) {
-            // Extract user from nested data structure
-            const userData = response.data.data && response.data.data.user 
-              ? response.data.data.user 
-              : response.data.user 
-                ? response.data.user 
-                : response.data;
+            // Extract user data, handling potential nesting
+            let userData: any = response.data;
             
-            console.log('Extracted user data:', userData);
+            // Handle nested data structures
+            if (response.data.data) {
+              userData = response.data.data;
+            }
             
-            // Ensure userData is a User object, not an object containing User
-            const actualUser = (userData as any).user ? (userData as any).user : userData;
-            setUser(actualUser as User);
+            // Extract user from nested structure if needed
+            const userObject = userData.user || userData;
+            
+            console.log('Extracted user data:', userObject);
+            
+            setUser(userObject as User);
             
             if (storedRestaurantId) {
               setCurrentRestaurantId(storedRestaurantId);
-            } else if (actualUser.restaurants && actualUser.restaurants.length > 0) {
+            } else if (userObject.restaurants && userObject.restaurants.length > 0) {
               // Set first restaurant as default if none selected
-              setCurrentRestaurantId(actualUser.restaurants[0].id);
-              localStorage.setItem('currentRestaurantId', actualUser.restaurants[0].id);
+              setCurrentRestaurantId(userObject.restaurants[0].id);
+              localStorage.setItem('currentRestaurantId', userObject.restaurants[0].id);
             }
           }
         } catch (error) {
@@ -90,7 +92,13 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
       }
       
       // Extract data from potentially nested response
-      const responseData = response.data.data || response.data;
+      let responseData: any = response.data;
+      
+      // Handle nested data structure
+      if (response.data.data) {
+        responseData = response.data.data;
+      }
+      
       const user = responseData.user;
       const token = responseData.token;
       
@@ -136,7 +144,13 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
       }
       
       // Handle the nested data structure in the response
-      const userData = response.data.data || response.data;
+      let userData: any = response.data;
+      
+      // Handle nested data structure
+      if (response.data.data) {
+        userData = response.data.data;
+      }
+      
       const user = userData.user;
       const token = userData.token;
       
@@ -162,7 +176,13 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
         if (mockResponse.success && mockResponse.data) {
           console.log('Mock API signup response:', mockResponse.data);
           
-          const userData = mockResponse.data.data || mockResponse.data;
+          let userData: any = mockResponse.data;
+          
+          // Handle nested data structure
+          if (mockResponse.data.data) {
+            userData = mockResponse.data.data;
+          }
+          
           const user = userData.user;
           const token = userData.token;
           
@@ -219,7 +239,13 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
       }
       
       // Extract restaurant from potentially nested response
-      const newRestaurant = response.data.data || response.data;
+      let newRestaurant: any = response.data;
+      
+      // Handle nested data structure
+      if (response.data.data) {
+        newRestaurant = response.data.data;
+      }
+      
       console.log('Extracted restaurant:', newRestaurant);
       
       // Update user with new restaurant
@@ -235,7 +261,7 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
         setCurrentRestaurantId(newRestaurant.id);
       }
       
-      return newRestaurant;
+      return newRestaurant as Restaurant;
     } catch (error) {
       console.error("Error adding restaurant:", error);
       
@@ -243,7 +269,12 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
       try {
         const mockResponse = await mockApi.restaurants.create(restaurant);
         if (mockResponse.success && mockResponse.data) {
-          const newRestaurant = mockResponse.data.data || mockResponse.data;
+          let newRestaurant: any = mockResponse.data;
+          
+          // Handle nested data structure
+          if (mockResponse.data.data) {
+            newRestaurant = mockResponse.data.data;
+          }
           
           // Update user with new restaurant
           const updatedUser = {
@@ -261,7 +292,7 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
           toast({
             description: "Restaurant added successfully (mock mode)",
           });
-          return newRestaurant;
+          return newRestaurant as Restaurant;
         }
       } catch (mockError) {
         console.error("Mock API also failed:", mockError);

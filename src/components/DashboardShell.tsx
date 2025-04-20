@@ -17,11 +17,14 @@ import {
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { LayoutDashboard, UtensilsCrossed, TableProperties, ReceiptText, Settings, LogOut } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { LayoutDashboard, UtensilsCrossed, TableProperties, ReceiptText, Settings, LogOut, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "sonner";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import RestaurantSelector from "./RestaurantSelector";
+import { ThemeToggle } from "./theme/ThemeToggle";
+import { Separator } from "./ui/separator";
 
 interface DashboardShellProps {
   children: React.ReactNode;
@@ -83,20 +86,23 @@ export function DashboardShell({ children }: DashboardShellProps) {
       <div className="flex min-h-screen w-full bg-restaurant-background bg-pattern">
         {/* Sidebar for larger screens */}
         <Sidebar variant="inset">
-          <SidebarHeader className="flex flex-col items-center justify-center gap-2 p-4 text-center">
-            <div className="flex w-full items-center justify-center">
-              <h2 className="text-xl font-bold text-sidebar-foreground">TableMaster</h2>
-            </div>
-            {currentRestaurant && (
-              <div className="text-sm text-sidebar-foreground/70">
-                {currentRestaurant.name}
+          <SidebarHeader className="flex flex-col gap-3 p-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-sidebar-accent rounded-md flex items-center justify-center">
+                  <span className="text-lg font-bold text-sidebar-accent-foreground">TM</span>
+                </div>
+                <h2 className="text-lg font-bold text-sidebar-foreground">TableMaster</h2>
               </div>
-            )}
+              <ThemeToggle />
+            </div>
+            
+            <RestaurantSelector />
           </SidebarHeader>
           
           <SidebarContent className="p-2">
             <SidebarGroup>
-              <SidebarGroupLabel>Navigation</SidebarGroupLabel>
+              <SidebarGroupLabel>Main Navigation</SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>
                   {menuItems.map((item) => (
@@ -109,6 +115,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
                         <button onClick={() => navigate(item.path)}>
                           <item.icon className="h-4 w-4" />
                           <span>{item.title}</span>
+                          <ChevronRight className="ml-auto h-4 w-4 opacity-0 group-data-[active=true]:opacity-70" />
                         </button>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
@@ -118,37 +125,40 @@ export function DashboardShell({ children }: DashboardShellProps) {
             </SidebarGroup>
           </SidebarContent>
           
-          <SidebarFooter className="p-4">
+          <SidebarFooter className="p-3">
             {user && (
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Avatar className="h-8 w-8 bg-restaurant-secondary">
-                    <AvatarFallback>{getUserInitials()}</AvatarFallback>
-                  </Avatar>
-                  <div className="text-sm leading-none">
-                    <div className="font-medium group-data-[collapsible=icon]:hidden">
-                      {user.name}
-                    </div>
-                    <div className="text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
-                      {user.email}
+              <div className="flex flex-col gap-3">
+                <Separator className="bg-sidebar-border/50" />
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Avatar className="h-8 w-8 bg-sidebar-accent text-sidebar-accent-foreground">
+                      <AvatarFallback>{getUserInitials()}</AvatarFallback>
+                    </Avatar>
+                    <div className="text-sm leading-none">
+                      <div className="font-medium text-sidebar-foreground group-data-[collapsible=icon]:hidden">
+                        {user.name}
+                      </div>
+                      <div className="text-xs text-sidebar-foreground/70 group-data-[collapsible=icon]:hidden mt-1">
+                        {user.email}
+                      </div>
                     </div>
                   </div>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={handleLogout}
+                        className="text-sidebar-foreground h-8 w-8"
+                      >
+                        <LogOut className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Logout</p>
+                    </TooltipContent>
+                  </Tooltip>
                 </div>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={handleLogout}
-                      className="text-sidebar-foreground"
-                    >
-                      <LogOut className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Logout</p>
-                  </TooltipContent>
-                </Tooltip>
               </div>
             )}
           </SidebarFooter>
