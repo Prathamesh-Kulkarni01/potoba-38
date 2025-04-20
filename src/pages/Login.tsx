@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,9 +7,7 @@ import { Label } from "@/components/ui/label";
 import { useAuth } from '../contexts/AuthContext';
 import { motion } from 'framer-motion';
 import { Utensils, ChefHat } from 'lucide-react';
-import { api } from '@/services/api';
-import { toast } from "sonner";
-import { mockApi } from '@/services/mockApi';
+import { toast } from '@/hooks/use-toast';
 
 const Login = () => {
   const [email, setEmail] = useState('demo@example.com');

@@ -1,7 +1,8 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { toast } from "sonner";
+import { toast } from "@/hooks/use-toast";
 import { api } from "@/services/api";
+import { mockApi } from "@/services/mockApi"; 
 import { User, Restaurant } from "@/types/api";
 
 interface AuthContextType {
@@ -86,7 +87,9 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
         setCurrentRestaurantId(user.restaurants[0].id);
       }
       
-      toast.success("Logged in successfully!");
+      toast({
+        description: "Logged in successfully!",
+      });
     } catch (error) {
       console.error("Login error:", error);
       
@@ -106,14 +109,19 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
             setCurrentRestaurantId(user.restaurants[0].id);
           }
           
-          toast.success("Logged in successfully with mock data!");
+          toast({
+            description: "Logged in successfully with mock data!",
+          });
           return;
         }
       } catch (mockError) {
         console.error("Mock login also failed:", mockError);
       }
       
-      toast.error("Login failed. Please check your credentials.");
+      toast({
+        variant: "destructive",
+        description: "Login failed. Please check your credentials.",
+      });
       throw error;
     } finally {
       setLoading(false);
@@ -135,7 +143,9 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
       localStorage.setItem('token', token);
       
       setUser(user);
-      toast.success("Account created successfully!");
+      toast({
+        description: "Account created successfully!",
+      });
     } catch (error) {
       console.error("Signup error:", error);
       
@@ -149,14 +159,19 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
           localStorage.setItem('token', token);
           
           setUser(user);
-          toast.success("Account created successfully with mock data!");
+          toast({
+            description: "Account created successfully with mock data!",
+          });
           return;
         }
       } catch (mockError) {
         console.error("Mock signup also failed:", mockError);
       }
       
-      toast.error("Failed to create account.");
+      toast({
+        variant: "destructive",
+        description: "Failed to create account.",
+      });
       throw error;
     } finally {
       setLoading(false);
@@ -172,7 +187,9 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
     setCurrentRestaurantId(null);
     localStorage.removeItem('token');
     localStorage.removeItem('currentRestaurantId');
-    toast.info("Logged out successfully");
+    toast({
+      description: "Logged out successfully",
+    });
   };
   
   const addRestaurant = async (restaurant: Omit<Restaurant, 'id'>) => {
@@ -226,14 +243,19 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
             setCurrentRestaurantId(newRestaurant.id);
           }
           
-          toast.success("Restaurant added successfully (mock mode)");
+          toast({
+            description: "Restaurant added successfully (mock mode)",
+          });
           return newRestaurant;
         }
       } catch (mockError) {
         console.error("Mock API also failed:", mockError);
       }
       
-      toast.error("Failed to add restaurant");
+      toast({
+        variant: "destructive",
+        description: "Failed to add restaurant",
+      });
       throw error;
     }
   };
