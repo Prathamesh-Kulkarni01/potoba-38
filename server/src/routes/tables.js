@@ -1,4 +1,3 @@
-
 const express = require('express');
 const {
   getTables,
@@ -12,18 +11,19 @@ const ordersRouter = require('./orders');
 const router = express.Router({ mergeParams: true });
 
 const { protect, authorize } = require('../middleware/auth');
+const { authenticate } = require('../middleware/authMiddleware');
 
 // Re-route orders for a specific table
 router.use('/:tableId/orders', ordersRouter);
 
 // All table routes require authentication
 router.route('/')
-  .get(protect, getTables)
-  .post(protect, createTable);
+  .get(authenticate, getTables)
+  .post(authenticate, createTable);
 
 router.route('/:id')
-  .get(protect, getTable)
-  .put(protect, updateTable)
-  .delete(protect, deleteTable);
+  .get(authenticate, getTable)
+  .put(authenticate, updateTable)
+  .delete(authenticate, deleteTable);
 
 module.exports = router;

@@ -1,4 +1,3 @@
-
 const express = require('express');
 const {
   getOrders,
@@ -12,18 +11,19 @@ const {
 const router = express.Router({ mergeParams: true });
 
 const { protect, authorize } = require('../middleware/auth');
+const { authenticate } = require('../middleware/authMiddleware');
 
 // All order routes require authentication
 router.route('/')
-  .get(protect, getOrders)
-  .post(protect, createOrder);
+  .get(authenticate, getOrders)
+  .post(authenticate, createOrder);
 
 router.route('/:id')
-  .get(protect, getOrder)
-  .put(protect, updateOrder)
-  .delete(protect, deleteOrder);
+  .get(authenticate, getOrder)
+  .put(authenticate, updateOrder)
+  .delete(authenticate, deleteOrder);
 
 router.route('/:id/status')
-  .patch(protect, updateOrderStatus);
+  .patch(authenticate, updateOrderStatus);
 
 module.exports = router;

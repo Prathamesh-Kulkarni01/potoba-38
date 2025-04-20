@@ -1,4 +1,3 @@
-
 const Table = require('../models/Table');
 const Restaurant = require('../models/Restaurant');
 
@@ -7,8 +6,18 @@ const Restaurant = require('../models/Restaurant');
 // @access  Private
 exports.getTables = async (req, res) => {
   try {
+    if (!req.params.restaurantId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Restaurant ID is required'
+      });
+    }
+
+    req.body.restaurant = req.params.restaurantId;
+
     const restaurant = await Restaurant.findById(req.params.restaurantId);
 
+console.log('Restaurant ID:', restaurant,req.user._id); // Log the restaurant ID for debugging
     if (!restaurant) {
       return res.status(404).json({
         success: false,
@@ -17,7 +26,7 @@ exports.getTables = async (req, res) => {
     }
 
     // Make sure user owns the restaurant
-    if (restaurant.user.toString() !== req.user.id) {
+    if (restaurant?.owner?.toString() !== req.user._id?.toString()) {
       return res.status(401).json({
         success: false,
         error: 'Not authorized to access this restaurant'
@@ -43,6 +52,13 @@ exports.getTables = async (req, res) => {
 // @access  Private
 exports.getTable = async (req, res) => {
   try {
+    if (!req.params.restaurantId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Restaurant ID is required'
+      });
+    }
+
     const table = await Table.findById(req.params.id);
 
     if (!table) {
@@ -55,7 +71,7 @@ exports.getTable = async (req, res) => {
     const restaurant = await Restaurant.findById(table.restaurant);
 
     // Make sure user owns the restaurant
-    if (restaurant.user.toString() !== req.user.id) {
+     if (restaurant?.owner?.toString() !== req.user._id?.toString()) {
       return res.status(401).json({
         success: false,
         error: 'Not authorized to access this table'
@@ -79,6 +95,20 @@ exports.getTable = async (req, res) => {
 // @access  Private
 exports.createTable = async (req, res) => {
   try {
+    if (!req.params.restaurantId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Restaurant ID is required'
+      });
+    }
+
+    if (!req.body.tableNumber) {
+      return res.status(400).json({
+        success: false,
+        error: 'Table number is required'
+      });
+    }
+
     // Add restaurant to req.body
     req.body.restaurant = req.params.restaurantId;
 
@@ -92,19 +122,30 @@ exports.createTable = async (req, res) => {
     }
 
     // Make sure user owns the restaurant
-    if (restaurant.user.toString() !== req.user.id) {
+    if (restaurant?.owner?.toString() !== req.user._id?.toString()) {
       return res.status(401).json({
         success: false,
         error: 'Not authorized to add tables to this restaurant'
       });
     }
 
-    const table = await Table.create(req.body);
+    try {
+      console.log(req.body)
+      const table = await Table.create(req.body);
 
-    res.status(201).json({
-      success: true,
-      data: table
-    });
+      res.status(201).json({
+        success: true,
+        data: table
+      });
+    } catch (error) {
+      if (error.code === 11000) {
+        return res.status(400).json({
+          success: false,
+          error: error.message
+        });
+      }
+      throw error;
+    }
   } catch (error) {
     res.status(500).json({
       success: false,
@@ -118,47 +159,55 @@ exports.createTable = async (req, res) => {
 // @access  Private
 exports.updateTable = async (req, res) => {
   try {
-    let table = await Table.findById(req.params.id);
-
-    if (!table) {
-      return res.status(404).json({
+    if (!req.params.restaurantId) {
+      return res.status(400).json({
         success: false,
-        error: 'Table not found'
+        error: 'Restaurant ID is required'
       });
     }
+
+    if (req.body.tableNumber === undefined) {
+      return res.status(400).json({
+        success: false,
+        error: 'Table number is required'
+      });
+    }
+
+
 
     const restaurant = await Restaurant.findById(req.params.restaurantId);
 
-    // Make sure restaurant exists
     if (!restaurant) {
-      return res.status(404).json({
-        success: false,
-        error: 'Restaurant not found'
-      });
+      return res.status(404).json({ success: false, error: 'Restaurant not found' });
     }
 
     // Make sure user owns the restaurant
-    if (restaurant.user.toString() !== req.user.id) {
-      return res.status(401).json({
-        success: false,
-        error: 'Not authorized to update tables for this restaurant'
-      });
+     if (restaurant?.owner?.toString() !== req.user._id?.toString()) {
+      return res.status(401).json({ success: false, error: 'Not authorized to update tables for this restaurant' });
     }
 
-    table = await Table.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
-      runValidators: true
-    });
+    try {
+      const table = await Table.findByIdAndUpdate(req.params.id, req.body, {
+        new: true,
+        runValidators: true
+      });
 
-    res.json({
-      success: true,
-      data: table
-    });
+      if (!table) {
+        return res.status(404).json({ success: false, error: 'Table not found' });
+      }
+
+      res.json({ success: true, data: table });
+    } catch (error) {
+      if (error.code === 11000) {
+        return res.status(400).json({
+          success: false,
+          error: 'Duplicate table number'
+        });
+      }
+      throw error;
+    }
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
+    res.status(500).json({ success: false, error: error.message });
   }
 };
 
@@ -167,6 +216,13 @@ exports.updateTable = async (req, res) => {
 // @access  Private
 exports.deleteTable = async (req, res) => {
   try {
+    if (!req.params.restaurantId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Restaurant ID is required'
+      });
+    }
+
     const table = await Table.findById(req.params.id);
 
     if (!table) {
@@ -187,7 +243,7 @@ exports.deleteTable = async (req, res) => {
     }
 
     // Make sure user owns the restaurant
-    if (restaurant.user.toString() !== req.user.id) {
+     if (restaurant?.owner?.toString() !== req.user._id?.toString()) {
       return res.status(401).json({
         success: false,
         error: 'Not authorized to delete tables from this restaurant'

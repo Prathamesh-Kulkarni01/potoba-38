@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -72,18 +71,24 @@ const RestaurantOnboarding = () => {
         cuisine,
         tables: parseInt(tableCount) || 10,
       });
-      
+
+      if (!newRestaurant || !(newRestaurant.id || newRestaurant._id)) {
+        throw new Error('Failed to create restaurant. Missing restaurant ID.');
+      }
+
+      const restaurantId = newRestaurant.id || newRestaurant._id;
+
       // Set as current restaurant
       if (setCurrentRestaurantId) {
         setCurrentRestaurantId(newRestaurant.id);
       }
       
       // Create default tables
-      await restaurantService.createDefaultTables(newRestaurant.id, parseInt(tableCount) || 10);
+      await restaurantService.createDefaultTables(restaurantId, parseInt(tableCount) || 10);
       
       // If demo data is requested, create it
       if (createDemoData) {
-        await restaurantService.createDemoData(newRestaurant.id);
+        // await restaurantService.createDemoData(restaurantId);
         toast.success("Demo data created successfully!");
       }
       

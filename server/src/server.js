@@ -1,4 +1,3 @@
-
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -7,6 +6,8 @@ const WebSocket = require('ws');
 // Import routes
 const authRoutes = require('./routes/auth');
 const adminRoutes = require('./routes/adminRoutes');
+const tableRoutes = require('./routes/tables');
+const orderRoutes = require('./routes/orders');
 // Import other routes as needed
 
 // Connect to MongoDB
@@ -38,6 +39,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/restaurants', require('./routes/restaurants'));
 app.use('/api/sync', require('./routes/sync')); // Add the new sync route
+app.use('/api/restaurants/:restaurantId/tables', tableRoutes);
+app.use('/api/restaurants/:restaurantId/orders', orderRoutes);
 // Add other routes here
 
 // Health check endpoint

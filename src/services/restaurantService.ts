@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { Restaurant } from '../types/auth';
 import authService from './authService';
@@ -46,14 +45,13 @@ export const restaurantService = {
     try {
       const token = authService.getToken();
       if (!token) throw new Error('Not authenticated');
-
       const response = await axios.post(`${API_URL}/restaurants`, data, {
         headers: {
           Authorization: `Bearer ${token}`
         }
       });
       
-      return response.data.data;
+      return response.data;
     } catch (error) {
       console.error('Create restaurant error:', error);
       throw error;
@@ -65,30 +63,31 @@ export const restaurantService = {
       const token = authService.getToken();
       if (!token) throw new Error('Not authenticated');
       
+      const existingTablesResponse = await axios.get(`${API_URL}/restaurants/${restaurantId}/tables`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const existingTableNumbers = new Set(existingTablesResponse.data.data.map((table: any) => table.number));
+
       const tables = [];
-      for (let i = 1; i <= count; i++) {
-        tables.push({
-          number: i,
-          capacity: Math.floor(Math.random() * 3) + 2, // 2-4 people
-          status: 'available'
-        });
+      for (let i = 1; tables.length < count; i++) {
+        if (!existingTableNumbers.has(i)) {
+          tables.push({
+            tableNumber: i,
+            capacity: Math.floor(Math.random() * 3) + 2, // 2-4 people
+            status: 'available'
+          });
+        }
       }
-      
-      // Create tables in sequence
-      const createdTables = [];
-      for (const table of tables) {
-        const response = await axios.post(
-          `${API_URL}/restaurants/${restaurantId}/tables`, 
-          table,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`
-            }
-          }
-        );
-        createdTables.push(response.data.data);
-      }
-      
+
+      // Create tables concurrently
+      const createdTables = await Promise.all(
+        tables.map(table =>
+          axios.post(`${API_URL}/restaurants/${restaurantId}/tables`, table, {
+            headers: { Authorization: `Bearer ${token}` }
+          }).then(response => response.data.data)
+        )
+      );
+
       return createdTables;
     } catch (error) {
       console.error('Create default tables error:', error);

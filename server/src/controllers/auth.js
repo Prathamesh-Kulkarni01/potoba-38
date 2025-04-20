@@ -2,10 +2,14 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
 // Generate JWT
-const generateToken = (id) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET||'your-secret-key-here', {
+const generateToken = (userId) => {
+  const secretKey = process.env.JWT_SECRET || 'your-secret-key-here';
+  console.log('JWT Secret (Generation):', secretKey); // Log the secret key for debugging
+  const token = jwt.sign({ userId }, secretKey, {
     expiresIn: '30d'
   });
+  console.log('Generated Token:', token); // Log the generated token for debugging
+  return token;
 };
 
 // @desc    Register a new user

@@ -2,7 +2,7 @@
 const mongoose = require('mongoose');
 
 const TableSchema = new mongoose.Schema({
-  number: {
+  tableNumber: {
     type: Number,
     required: [true, 'Please add a table number']
   },

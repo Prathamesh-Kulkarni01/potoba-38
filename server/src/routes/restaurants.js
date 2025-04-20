@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const Restaurant = require('../models/Restaurant');
 const auth = require('../middleware/auth');
+const { authenticate } = require('../middleware/authMiddleware');
+const { createDemoData } = require('../controllers/restaurants');
 
 // Standardized error response function
 const handleError = (res, error, message = 'Server error', status = 500) => {
@@ -10,19 +12,24 @@ const handleError = (res, error, message = 'Server error', status = 500) => {
 };
 
 // Get all restaurants for the logged-in user
-router.get('/', auth, async (req, res) => {
+router.get('/', authenticate, async (req, res) => {
   try {
-    const restaurants = await Restaurant.find({ owner: req.userId });
+    const restaurants = await Restaurant.find({ owner: req.user._id });
     res.json(restaurants);
   } catch (error) {
+    console.error('Error fetching restaurants:', error);
     handleError(res, error, 'Error fetching restaurants');
   }
 });
 
 // Get a specific restaurant
-router.get('/:id', auth, async (req, res) => {
+router.get('/:id', authenticate, async (req, res) => {
   try {
-    const restaurant = await Restaurant.findOne({ _id: req.params.id, owner: req.userId });
+    if (!req.params.id) {
+      return res.status(400).json({ message: 'Restaurant ID is required' });
+    }
+
+    const restaurant = await Restaurant.findOne({ _id: req.params.id, owner: req.user._id });
 
     if (!restaurant) {
       return res.status(404).json({ message: 'Restaurant not found' });
@@ -35,9 +42,9 @@ router.get('/:id', auth, async (req, res) => {
 });
 
 // Create a new restaurant
-router.post('/', auth, async (req, res) => {
+router.post('/', authenticate, async (req, res) => {
   try {
-    const restaurant = new Restaurant({ ...req.body, owner: req.userId });
+    const restaurant = new Restaurant({ ...req.body, owner: req.user._id });
     await restaurant.save();
     res.status(201).json(restaurant);
   } catch (error) {
@@ -45,9 +52,16 @@ router.post('/', auth, async (req, res) => {
   }
 });
 
+// Create demo data for a restaurant
+router.post('/:id/demo-data', authenticate, createDemoData);
+
 // Update a restaurant
-router.put('/:id', auth, async (req, res) => {
+router.put('/:id', authenticate, async (req, res) => {
   try {
+    if (!req.params.id) {
+      return res.status(400).json({ message: 'Restaurant ID is required' });
+    }
+
     const restaurant = await Restaurant.findOne({ _id: req.params.id, owner: req.userId });
 
     if (!restaurant) {
@@ -63,8 +77,12 @@ router.put('/:id', auth, async (req, res) => {
 });
 
 // Delete a restaurant
-router.delete('/:id', auth, async (req, res) => {
+router.delete('/:id', authenticate, async (req, res) => {
   try {
+    if (!req.params.id) {
+      return res.status(400).json({ message: 'Restaurant ID is required' });
+    }
+
     const restaurant = await Restaurant.findOneAndDelete({ _id: req.params.id, owner: req.userId });
 
     if (!restaurant) {

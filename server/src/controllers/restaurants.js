@@ -65,6 +65,13 @@ exports.getRestaurants = async (req, res) => {
 // @access  Private
 exports.getRestaurant = async (req, res) => {
   try {
+    if (!req.params.id) {
+      return res.status(400).json({
+        success: false,
+        error: 'Restaurant ID is required'
+      });
+    }
+
     // Special case for mock user in development
     if (req.user.id === 'mock-user-id') {
       return res.json({
@@ -167,6 +174,13 @@ exports.createRestaurant = async (req, res) => {
 // @access  Private
 exports.updateRestaurant = async (req, res) => {
   try {
+    if (!req.params.id) {
+      return res.status(400).json({
+        success: false,
+        error: 'Restaurant ID is required'
+      });
+    }
+
     // Handle mock user in development
     if (req.user.id === 'mock-user-id') {
       return res.json({
@@ -219,6 +233,13 @@ exports.updateRestaurant = async (req, res) => {
 // @access  Private
 exports.deleteRestaurant = async (req, res) => {
   try {
+    if (!req.params.id) {
+      return res.status(400).json({
+        success: false,
+        error: 'Restaurant ID is required'
+      });
+    }
+
     // Handle mock user in development
     if (req.user.id === 'mock-user-id') {
       return res.json({
@@ -274,147 +295,68 @@ exports.createDemoData = async (req, res) => {
     const restaurant = await Restaurant.findById(req.params.id);
 
     if (!restaurant) {
-      return res.status(404).json({
-        success: false,
-        error: 'The requested restaurant does not exist.'
-      });
+      return res.status(404).json({ success: false, error: 'The requested restaurant does not exist.' });
     }
 
     // Make sure user owns the restaurant
     if (restaurant.user.toString() !== req.user.id) {
-      return res.status(403).json({
-        success: false,
-        error: 'You do not have permission to access this restaurant.'
-      });
+      return res.status(403).json({ success: false, error: 'You do not have permission to access this restaurant.' });
     }
 
-    // Create demo tables (if they don't exist)
+    // Create demo tables if none exist
     const existingTables = await Table.find({ restaurant: req.params.id });
-    
     if (existingTables.length === 0) {
-      const tablesCount = restaurant.tables || 10;
-      const tables = [];
-      
-      for (let i = 1; i <= tablesCount; i++) {
-        tables.push({
-          restaurant: req.params.id,
-          number: i,
-          capacity: Math.floor(Math.random() * 3) + 2, // 2-4 people
-          status: 'available'
-        });
-      }
-      
+      const tables = Array.from({ length: restaurant.tables || 10 }, (_, i) => ({
+        restaurant: req.params.id,
+        number: i + 1,
+        capacity: Math.floor(Math.random() * 3) + 2,
+        status: 'available'
+      }));
       await Table.insertMany(tables);
     }
 
-    // Create demo menu items
-    const menuCategories = ['Appetizers', 'Main Course', 'Desserts', 'Drinks'];
-    const menuItems = [
-      { name: 'Bruschetta', description: 'Toasted bread with tomatoes and herbs', price: 7.99, category: 'Appetizers' },
-      { name: 'Mozzarella Sticks', description: 'Breaded and fried mozzarella', price: 6.99, category: 'Appetizers' },
-      { name: 'Caesar Salad', description: 'Fresh romaine with Caesar dressing', price: 8.99, category: 'Appetizers' },
-      { name: 'Margherita Pizza', description: 'Classic tomato and mozzarella pizza', price: 12.99, category: 'Main Course' },
-      { name: 'Beef Burger', description: 'Juicy beef patty with lettuce and tomato', price: 13.99, category: 'Main Course' },
-      { name: 'Pasta Carbonara', description: 'Creamy pasta with pancetta', price: 14.99, category: 'Main Course' },
-      { name: 'Tiramisu', description: 'Classic Italian coffee dessert', price: 6.99, category: 'Desserts' },
-      { name: 'Chocolate Cake', description: 'Rich and moist chocolate cake', price: 5.99, category: 'Desserts' },
-      { name: 'Soft Drinks', description: 'Assorted sodas', price: 2.99, category: 'Drinks' },
-      { name: 'Coffee', description: 'Freshly brewed coffee', price: 3.49, category: 'Drinks' }
-    ];
-    
-    // Check existing menu items to avoid duplicates
+    // Create demo menu items if none exist
     const existingMenuItems = await MenuItem.find({ restaurant: req.params.id });
-    const existingNames = existingMenuItems.map(item => item.name);
-    
-    const newMenuItems = menuItems
-      .filter(item => !existingNames.includes(item.name))
-      .map(item => ({
-        ...item,
-        restaurant: req.params.id
-      }));
-    
-    if (newMenuItems.length > 0) {
-      await MenuItem.insertMany(newMenuItems);
+    if (existingMenuItems.length === 0) {
+      const menuItems = [
+        { name: 'Bruschetta', description: 'Toasted bread with tomatoes and herbs', price: 7.99, category: 'Appetizers' },
+        { name: 'Margherita Pizza', description: 'Classic tomato and mozzarella pizza', price: 12.99, category: 'Main Course' },
+        { name: 'Tiramisu', description: 'Classic Italian coffee dessert', price: 6.99, category: 'Desserts' },
+        { name: 'Soft Drinks', description: 'Assorted sodas', price: 2.99, category: 'Drinks' }
+      ].map(item => ({ ...item, restaurant: req.params.id }));
+      await MenuItem.insertMany(menuItems);
     }
-    
-    // Create a few sample orders if none exist
+
+    // Create sample orders if none exist
     const existingOrders = await Order.find({ restaurant: req.params.id });
-    
     if (existingOrders.length === 0) {
-      const tables = await Table.find({ restaurant: req.params.id });
-      const menuItems = await MenuItem.find({ restaurant: req.params.id });
-      
+      const [tables, menuItems] = await Promise.all([
+        Table.find({ restaurant: req.params.id }),
+        MenuItem.find({ restaurant: req.params.id })
+      ]);
+
       if (tables.length > 0 && menuItems.length > 0) {
-        // Create sample orders
-        const now = new Date();
-        const yesterday = new Date(now);
-        yesterday.setDate(yesterday.getDate() - 1);
-        
         const sampleOrders = [
           {
             restaurant: req.params.id,
             tableId: tables[0]._id,
             status: 'completed',
             items: [
-              { 
-                menuItemId: menuItems[0]._id, 
-                name: menuItems[0].name,
-                price: menuItems[0].price,
-                quantity: 2
-              },
-              { 
-                menuItemId: menuItems[3]._id, 
-                name: menuItems[3].name,
-                price: menuItems[3].price,
-                quantity: 1
-              }
+              { menuItemId: menuItems[0]._id, name: menuItems[0].name, price: menuItems[0].price, quantity: 2 },
+              { menuItemId: menuItems[1]._id, name: menuItems[1].name, price: menuItems[1].price, quantity: 1 }
             ],
-            total: (menuItems[0].price * 2) + menuItems[3].price,
-            createdAt: yesterday,
-            completedAt: yesterday
-          },
-          {
-            restaurant: req.params.id,
-            tableId: tables[1]._id,
-            status: 'in-progress',
-            items: [
-              { 
-                menuItemId: menuItems[1]._id,
-                name: menuItems[1].name,
-                price: menuItems[1].price,
-                quantity: 1 
-              },
-              { 
-                menuItemId: menuItems[4]._id,
-                name: menuItems[4].name,
-                price: menuItems[4].price,
-                quantity: 2
-              },
-              { 
-                menuItemId: menuItems[8]._id,
-                name: menuItems[8].name,
-                price: menuItems[8].price,
-                quantity: 3
-              }
-            ],
-            total: menuItems[1].price + (menuItems[4].price * 2) + (menuItems[8].price * 3),
-            createdAt: now
+            total: menuItems[0].price * 2 + menuItems[1].price,
+            createdAt: new Date(),
+            completedAt: new Date()
           }
         ];
-        
         await Order.insertMany(sampleOrders);
       }
     }
-    
-    res.json({
-      success: true,
-      data: { message: 'Demo data created successfully' }
-    });
+
+    res.json({ success: true, data: { message: 'Demo data created successfully' } });
   } catch (error) {
     console.error('Create demo data error:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
+    res.status(500).json({ success: false, error: error.message });
   }
 };
