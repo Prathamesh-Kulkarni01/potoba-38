@@ -22,7 +22,7 @@ const getApiBaseUrl = (): string => {
 };
 
 // Toggle this to use mock API or real API
-const USE_MOCK_API = true;
+const USE_MOCK_API = false; // Changed to false to use real API
 
 // Error handler helper
 const handleApiError = (error: any): never => {

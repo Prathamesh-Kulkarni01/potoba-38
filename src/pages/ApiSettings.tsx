@@ -1,24 +1,41 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Server, Save, CheckCircle, Code, Webhook, Database, FileJson } from 'lucide-react';
+import { Server, Save, Globe, Code, Webhook, Database, FileJson, RefreshCw } from 'lucide-react';
+import { ApiConnectionStatus } from '@/components/ApiConnectionStatus';
 
 const ApiSettings = () => {
   const [apiUrl, setApiUrl] = useState<string>(localStorage.getItem('apiBaseUrl') || 'http://localhost:5000/api');
+  const [mongoUrl, setMongoUrl] = useState<string>(localStorage.getItem('mongoUrl') || 'mongodb://localhost:27017/restaurant-app');
+  const [port, setPort] = useState<string>(localStorage.getItem('apiPort') || '5000');
   const [testStatus, setTestStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const { toast } = useToast();
+
+  useEffect(() => {
+    const checkConnection = async () => {
+      if (localStorage.getItem('connectionTested') === 'true') {
+        await testConnection();
+      }
+    };
+    
+    checkConnection();
+  }, []);
 
   const saveApiSettings = () => {
     try {
       localStorage.setItem('apiBaseUrl', apiUrl);
+      localStorage.setItem('mongoUrl', mongoUrl);
+      localStorage.setItem('apiPort', port);
+      
       toast({
-        description: "API settings saved successfully.",
+        description: "API settings saved successfully. Please restart your Node.js server with these settings.",
       });
+      
+      testConnection();
     } catch (error) {
       toast({
         title: "Error",
@@ -31,27 +48,33 @@ const ApiSettings = () => {
   const testConnection = async () => {
     setTestStatus('loading');
     try {
-      // This would be a real test when you have your backend
-      const response = await fetch(`${apiUrl}/health-check`, { 
+      const healthCheckUrl = apiUrl.endsWith('/') 
+        ? `${apiUrl}health-check` 
+        : `${apiUrl}/health-check`;
+      
+      const response = await fetch(healthCheckUrl, { 
         method: 'GET',
         headers: { 'Content-Type': 'application/json' }
       });
       
       if (response.ok) {
         setTestStatus('success');
+        localStorage.setItem('connectionTested', 'true');
         toast({
-          description: "Connection successful!",
+          description: "Connection successful! Your Node.js/MongoDB backend is running.",
         });
       } else {
         setTestStatus('error');
+        localStorage.setItem('connectionTested', 'false');
         toast({
           title: "Connection Error",
-          description: "Could not connect to the API server.",
+          description: "Could not connect to the API server. Please check your server is running.",
           variant: "destructive",
         });
       }
     } catch (error) {
       setTestStatus('error');
+      localStorage.setItem('connectionTested', 'false');
       toast({
         title: "Connection Error",
         description: "Could not connect to the API server. Please check the URL and ensure your server is running.",
@@ -62,7 +85,7 @@ const ApiSettings = () => {
 
   return (
     <div className="container mx-auto py-8">
-      <h1 className="text-2xl font-bold mb-6">API Settings & Documentation</h1>
+      <h1 className="text-2xl font-bold mb-6">API Settings & Backend Configuration</h1>
       
       <Tabs defaultValue="settings">
         <TabsList className="grid w-full grid-cols-3 mb-6">
@@ -76,7 +99,7 @@ const ApiSettings = () => {
             <CardHeader>
               <CardTitle className="flex items-center">
                 <Server className="mr-2 h-5 w-5" /> 
-                API Connection Configuration
+                Node.js & MongoDB Configuration
               </CardTitle>
               <CardDescription>
                 Configure your connection to your Node.js/Express/MongoDB backend
@@ -96,6 +119,36 @@ const ApiSettings = () => {
                 </p>
               </div>
               
+              <div className="space-y-2">
+                <Label htmlFor="mongo-url">MongoDB Connection String</Label>
+                <Input
+                  id="mongo-url"
+                  placeholder="mongodb://localhost:27017/restaurant-app"
+                  value={mongoUrl}
+                  onChange={(e) => setMongoUrl(e.target.value)}
+                />
+                <p className="text-sm text-muted-foreground">
+                  The MongoDB connection URL for your Node.js server (this is stored locally for your reference)
+                </p>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="port">API Server Port</Label>
+                <Input
+                  id="port"
+                  placeholder="5000"
+                  value={port}
+                  onChange={(e) => setPort(e.target.value)}
+                />
+                <p className="text-sm text-muted-foreground">
+                  The port your Node.js server is running on
+                </p>
+              </div>
+              
+              <div className="pt-2">
+                <ApiConnectionStatus status={testStatus} />
+              </div>
+              
               <div className="flex flex-col sm:flex-row gap-2">
                 <Button
                   onClick={saveApiSettings}
@@ -110,14 +163,39 @@ const ApiSettings = () => {
                   className="flex-1"
                   disabled={testStatus === 'loading'}
                 >
-                  {testStatus === 'loading' ? (
-                    <>Testing connection...</>
-                  ) : testStatus === 'success' ? (
-                    <><CheckCircle className="mr-2 h-4 w-4 text-green-500" /> Connected</>
-                  ) : (
-                    <>Test Connection</>
-                  )}
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Test Connection
                 </Button>
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <Globe className="mr-2 h-5 w-5" /> 
+                API Status
+              </CardTitle>
+              <CardDescription>
+                Current connection and server status
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="p-4 border rounded-md">
+                    <h3 className="font-medium mb-2">Backend Server</h3>
+                    <ApiConnectionStatus status={testStatus} />
+                  </div>
+                  
+                  <div className="p-4 border rounded-md">
+                    <h3 className="font-medium mb-2">API Mode</h3>
+                    <div className="flex items-center">
+                      <div className={`w-3 h-3 rounded-full mr-2 ${localStorage.getItem('connectionTested') === 'true' ? 'bg-green-500' : 'bg-amber-500'}`}></div>
+                      <span>{localStorage.getItem('connectionTested') === 'true' ? 'Live API' : 'Mock Data'}</span>
+                    </div>
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -279,7 +357,6 @@ const ApiSettings = () => {
                     </div>
                   </div>
                   
-                  {/* More restaurant endpoints would be documented here */}
                   <div className="text-center py-2">
                     <Button variant="link" onClick={() => window.open('/api-docs.pdf')}>
                       View Complete Restaurant API Documentation
@@ -318,7 +395,6 @@ const ApiSettings = () => {
                     </div>
                   </div>
                   
-                  {/* More menu endpoints would be documented here */}
                   <div className="text-center py-2">
                     <Button variant="link" onClick={() => window.open('/api-docs.pdf')}>
                       View Complete Menu API Documentation
@@ -355,7 +431,6 @@ const ApiSettings = () => {
                     </div>
                   </div>
                   
-                  {/* More table endpoints would be documented here */}
                   <div className="text-center py-2">
                     <Button variant="link" onClick={() => window.open('/api-docs.pdf')}>
                       View Complete Tables API Documentation
@@ -401,7 +476,6 @@ const ApiSettings = () => {
                     </div>
                   </div>
                   
-                  {/* More order endpoints would be documented here */}
                   <div className="text-center py-2">
                     <Button variant="link" onClick={() => window.open('/api-docs.pdf')}>
                       View Complete Orders API Documentation
@@ -576,7 +650,6 @@ module.exports = mongoose.model('Restaurant', RestaurantSchema);`}
                     </pre>
                   </div>
                   
-                  {/* Additional models would be shown here */}
                   <Button variant="outline" className="w-full" onClick={() => window.open('/backend-starter.zip')}>
                     Download Complete Backend Starter Code
                   </Button>
