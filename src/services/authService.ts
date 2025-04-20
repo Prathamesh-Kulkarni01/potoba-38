@@ -25,7 +25,7 @@ export const authService = {
   
   async register(email: string, password: string, name: string, role?: string) {
     try {
-      const response = await axios.post<AuthResponse>(`api/auth/register`, // Use the API_URL
+      const response = await axios.post<AuthResponse>(`/api/auth/register`, // Use the API_URL
         { email, password, name, role },
         { withCredentials: true }
       );
@@ -59,7 +59,7 @@ export const authService = {
       if (!token) throw new Error('Not authenticated');
 
       const response = await axios.put(
-        `${API_URL}/auth/users/${userId}/role`, // Use the API_URL
+        `/api/auth/users/${userId}/role`, // Use the API_URL
         { role, permissions },
         {
           headers: {
@@ -81,7 +81,7 @@ export const authService = {
       const token = this.getToken();
       if (!token) throw new Error('Not authenticated');
 
-      const response = await axios.get(`${API_URL}/auth/me`, { // Use the API_URL
+      const response = await axios.get(`/api/auth/me`, { // Use the API_URL
         headers: {
           Authorization: `Bearer ${token}`
         },
