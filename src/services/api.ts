@@ -1,9 +1,102 @@
 
 import { useAuth } from '@/contexts/AuthContext';
+import { ApiResponse, Restaurant, MenuItem, Table, Order } from '@/types/api';
 
 // Base API URL
 const API_URL = 'http://localhost:5000/api';
 
+// API client that doesn't use hooks (for use in components that can't use hooks)
+export const api = {
+  menu: {
+    getAll: async (restaurantId: string, token: string): Promise<ApiResponse<MenuItem[]>> => {
+      try {
+        const response = await fetch(`${API_URL}/restaurants/${restaurantId}/menu`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
+        if (!response.ok) {
+          return { success: false, error: 'Failed to fetch menu items' };
+        }
+        
+        const data = await response.json();
+        return { success: true, data: data.data || data };
+      } catch (error) {
+        console.error('Error fetching menu items:', error);
+        return { success: false, error: 'Network error' };
+      }
+    }
+  },
+  
+  tables: {
+    getAll: async (restaurantId: string, token: string): Promise<ApiResponse<Table[]>> => {
+      try {
+        const response = await fetch(`${API_URL}/restaurants/${restaurantId}/tables`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
+        if (!response.ok) {
+          return { success: false, error: 'Failed to fetch tables' };
+        }
+        
+        const data = await response.json();
+        return { success: true, data: data.data || data };
+      } catch (error) {
+        console.error('Error fetching tables:', error);
+        return { success: false, error: 'Network error' };
+      }
+    }
+  },
+  
+  orders: {
+    getAll: async (restaurantId: string, token: string): Promise<ApiResponse<Order[]>> => {
+      try {
+        const response = await fetch(`${API_URL}/restaurants/${restaurantId}/orders`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
+        if (!response.ok) {
+          return { success: false, error: 'Failed to fetch orders' };
+        }
+        
+        const data = await response.json();
+        return { success: true, data: data.data || data };
+      } catch (error) {
+        console.error('Error fetching orders:', error);
+        return { success: false, error: 'Network error' };
+      }
+    }
+  },
+  
+  restaurants: {
+    getAll: async (token: string): Promise<ApiResponse<Restaurant[]>> => {
+      try {
+        const response = await fetch(`${API_URL}/restaurants`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
+        if (!response.ok) {
+          return { success: false, error: 'Failed to fetch restaurants' };
+        }
+        
+        const data = await response.json();
+        return { success: true, data: data.data || data };
+      } catch (error) {
+        console.error('Error fetching restaurants:', error);
+        return { success: false, error: 'Network error' };
+      }
+    }
+  }
+};
+
+// Hook version for components
 export const useApi = () => {
   const { token } = useAuth();
 

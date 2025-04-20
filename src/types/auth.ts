@@ -1,6 +1,7 @@
 
 export interface User {
   id: string;
+  _id?: string; // MongoDB ID format support
   email: string;
   name?: string;
   role?: 'user' | 'admin' | 'manager' | 'staff';
@@ -10,6 +11,7 @@ export interface User {
 
 export interface Restaurant {
   id: string;
+  _id?: string; // MongoDB ID format support
   name: string;
   logo?: string;
   description?: string;

@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { CalendarDays, ChefHat, DollarSign, ShoppingBasket, Users } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import restaurantService from '@/services/restaurantService';
-import { toast } from '@/hooks/use-toast';
+import { toast } from '@/components/ui/use-toast';
 import { Restaurant, MenuItem, Table, Order } from '@/types/api';
 import { api } from '@/services/api';
 
@@ -32,7 +32,7 @@ const RestaurantDashboard = () => {
           return;
         }
 
-        const restaurantId = user.restaurants[0];
+        const restaurantId = user.restaurants[0].id || user.restaurants[0]._id || '';
         const token = localStorage.getItem('token');
         
         if (!token) {
@@ -85,7 +85,7 @@ const RestaurantDashboard = () => {
     
     try {
       setCreatingDemoData(true);
-      await restaurantService.createDemoData(restaurant.id || restaurant._id);
+      await restaurantService.createDemoData(restaurant.id || restaurant._id || '');
       
       toast({
         title: "Demo Data Created",
@@ -96,7 +96,7 @@ const RestaurantDashboard = () => {
       const token = localStorage.getItem('token');
       if (!token) return;
       
-      const restaurantId = restaurant.id || restaurant._id;
+      const restaurantId = restaurant.id || restaurant._id || '';
       const menuResponse = await api.menu.getAll(restaurantId, token);
       const tablesResponse = await api.tables.getAll(restaurantId, token);
       const ordersResponse = await api.orders.getAll(restaurantId, token);
@@ -149,6 +149,12 @@ const RestaurantDashboard = () => {
       </div>
     );
   }
+
+  // Find table by ID
+  const getTableNumberById = (tableId: string) => {
+    const table = tables.find(t => t.id === tableId || t._id === tableId);
+    return table ? table.number : 'N/A';
+  };
 
   return (
     <div className="p-4 space-y-6">
@@ -224,7 +230,7 @@ const RestaurantDashboard = () => {
                 {orders.slice(0, 5).map((order) => (
                   <div key={order.id || order._id} className="flex justify-between items-center">
                     <div>
-                      <div className="font-medium">Table {order.table?.number || 'N/A'}</div>
+                      <div className="font-medium">Table {getTableNumberById(order.tableId)}</div>
                       <div className="text-sm text-muted-foreground">
                         {new Date(order.createdAt).toLocaleString()}
                       </div>
