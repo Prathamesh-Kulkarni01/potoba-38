@@ -1,174 +1,169 @@
 
-import React, { createContext, useState, useContext, useEffect, ReactNode } from 'react';
-import { User, Restaurant } from '../types/auth';
-import authService from '../services/authService';
-import { toast } from '@/hooks/use-toast';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useToast } from '@/components/ui/use-toast';
+
+interface User {
+  _id: string;
+  name: string;
+  email: string;
+}
 
 interface AuthContextType {
   user: User | null;
-  loading: boolean;
-  error: string | null;
+  token: string | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, name: string, role?: string) => Promise<void>;
-  signup: (name: string, email: string, password: string, role?: string) => Promise<void>;
+  register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => void;
-  isAuthenticated: () => boolean;
-  hasRole: (role: string | string[]) => boolean;
-  hasPermission: (permission: string | string[]) => boolean;
-  getCurrentRestaurant: () => Restaurant | undefined;
-  currentRestaurantId: string | null;
-  setCurrentRestaurantId: (id: string) => void;
-  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [currentRestaurantId, setCurrentRestaurantId] = useState<string | null>(null);
-
-  const refreshUser = async () => {
-    try {
-      if (authService.isAuthenticated()) {
-        const currentUser = await authService.getCurrentUser();
-        setUser(currentUser);
-        
-        // Set the first restaurant as the current one when user changes
-        if (currentUser?.restaurants && currentUser.restaurants.length > 0 && !currentRestaurantId) {
-          setCurrentRestaurantId(currentUser.restaurants[0].id);
-        }
-      }
-    } catch (error) {
-      console.error('Failed to refresh user data', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [token, setToken] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const navigate = useNavigate();
+  const { toast } = useToast();
 
   useEffect(() => {
-    // Check if user is already logged in on component mount
-    refreshUser();
+    // Check for token in localStorage on initial load
+    const storedToken = localStorage.getItem('token');
+    if (storedToken) {
+      setToken(storedToken);
+      fetchCurrentUser(storedToken);
+    } else {
+      setIsLoading(false);
+    }
   }, []);
 
-  const login = async (email: string, password: string) => {
-    setLoading(true);
-    setError(null);
+  const fetchCurrentUser = async (authToken: string) => {
+    setIsLoading(true);
     try {
-      const { user } = await authService.login(email, password);
-      setUser(user);
-      
-      // Set the first restaurant as the current one if available
-      if (user.restaurants && user.restaurants.length > 0) {
-        setCurrentRestaurantId(user.restaurants[0].id);
+      const response = await fetch('http://localhost:5000/api/auth/me', {
+        headers: {
+          'Authorization': `Bearer ${authToken}`
+        }
+      });
+
+      if (response.ok) {
+        const userData = await response.json();
+        setUser(userData);
+      } else {
+        // Token is invalid, remove it
+        localStorage.removeItem('token');
+        setToken(null);
       }
-      
-      toast({
-        title: "Login successful",
-        description: `Welcome back, ${user.name || 'user'}!`,
-      });
-    } catch (err) {
-      const errorMsg = 'Failed to login. Please check your credentials.';
-      setError(errorMsg);
-      toast({
-        variant: "destructive",
-        title: "Login failed",
-        description: errorMsg,
-      });
-      console.error(err);
+    } catch (error) {
+      console.error('Error fetching user data:', error);
+      localStorage.removeItem('token');
+      setToken(null);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
-  const register = async (email: string, password: string, name: string, role?: string) => {
-    setLoading(true);
-    setError(null);
+  const login = async (email: string, password: string) => {
+    setIsLoading(true);
     try {
-      const { user } = await authService.register(email, password, name, role);
-      setUser(user);
-      toast({
-        title: "Registration successful",
-        description: `Welcome, ${user.name || 'user'}!`,
+      const response = await fetch('http://localhost:5000/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ email, password })
       });
-    } catch (err) {
-      const errorMsg = 'Failed to register. Please try again.';
-      setError(errorMsg);
+
+      const data = await response.json();
+
+      if (response.ok) {
+        localStorage.setItem('token', data.token);
+        setToken(data.token);
+        setUser(data.user);
+        toast({
+          title: "Login successful",
+          description: "You've been logged in",
+        });
+        navigate('/dashboard');
+      } else {
+        toast({
+          title: "Login failed",
+          description: data.message || "Invalid credentials",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Login error:', error);
       toast({
+        title: "Login error",
+        description: "Could not connect to the server",
         variant: "destructive",
-        title: "Registration failed",
-        description: errorMsg,
       });
-      console.error(err);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
-  // Alias for register to maintain compatibility
-  const signup = async (name: string, email: string, password: string, role?: string) => {
-    return register(email, password, name, role);
+  const register = async (name: string, email: string, password: string) => {
+    setIsLoading(true);
+    try {
+      const response = await fetch('http://localhost:5000/api/auth/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ name, email, password })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast({
+          title: "Registration successful",
+          description: "Your account has been created. Please log in.",
+        });
+        navigate('/login');
+      } else {
+        toast({
+          title: "Registration failed",
+          description: data.message || "Could not create account",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Registration error:', error);
+      toast({
+        title: "Registration error",
+        description: "Could not connect to the server",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const logout = () => {
-    authService.logout();
+    localStorage.removeItem('token');
     setUser(null);
-    setCurrentRestaurantId(null);
+    setToken(null);
     toast({
       title: "Logged out",
-      description: "You have been successfully logged out.",
+      description: "You've been logged out successfully",
     });
-  };
-
-  const isAuthenticated = () => {
-    return authService.isAuthenticated();
-  };
-
-  const hasRole = (roleToCheck: string | string[]) => {
-    if (!user) return false;
-    
-    const roles = Array.isArray(roleToCheck) ? roleToCheck : [roleToCheck];
-    
-    // Admin has all roles
-    if (user.role === 'admin') return true;
-    
-    return roles.includes(user.role || '');
-  };
-
-  const hasPermission = (permissionToCheck: string | string[]) => {
-    if (!user) return false;
-    
-    // Admin has all permissions
-    if (user.role === 'admin') return true;
-    
-    const permissions = Array.isArray(permissionToCheck) ? permissionToCheck : [permissionToCheck];
-    
-    return user.permissions?.some(p => permissions.includes(p)) || false;
-  };
-
-  const getCurrentRestaurant = () => {
-    if (!user || !user.restaurants || !currentRestaurantId) return undefined;
-    
-    return user.restaurants.find(restaurant => restaurant.id === currentRestaurantId);
+    navigate('/login');
   };
 
   return (
     <AuthContext.Provider value={{ 
       user, 
-      loading, 
-      error, 
+      token,
+      isAuthenticated: !!user, 
+      isLoading, 
       login, 
       register, 
-      signup,
-      logout, 
-      isAuthenticated,
-      hasRole,
-      hasPermission,
-      getCurrentRestaurant,
-      currentRestaurantId,
-      setCurrentRestaurantId,
-      refreshUser
+      logout 
     }}>
       {children}
     </AuthContext.Provider>

@@ -1,37 +1,99 @@
 
 const express = require('express');
 const router = express.Router();
-const { protect, authorize } = require('../middleware/auth');
-const {
-  getRestaurants,
-  getRestaurant,
-  createRestaurant,
-  updateRestaurant,
-  deleteRestaurant,
-  createDemoData
-} = require('../controllers/restaurants');
+const Restaurant = require('../models/Restaurant');
+const auth = require('../middleware/auth');
 
-// Restaurant routes - all routes require authentication
-router.route('/')
-  .get(protect, getRestaurants)
-  .post(protect, createRestaurant);
+// Get all restaurants for the logged in user
+router.get('/', auth, async (req, res) => {
+  try {
+    const restaurants = await Restaurant.find({ owner: req.userId });
+    res.json(restaurants);
+  } catch (error) {
+    console.error('Error fetching restaurants:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
 
-router.route('/:id')
-  .get(protect, getRestaurant)
-  .put(protect, updateRestaurant)
-  .delete(protect, deleteRestaurant);
+// Get a specific restaurant
+router.get('/:id', auth, async (req, res) => {
+  try {
+    const restaurant = await Restaurant.findOne({ 
+      _id: req.params.id, 
+      owner: req.userId 
+    });
+    
+    if (!restaurant) {
+      return res.status(404).json({ message: 'Restaurant not found' });
+    }
+    
+    res.json(restaurant);
+  } catch (error) {
+    console.error('Error fetching restaurant:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
 
-// Demo data route - requires authentication
-router.post('/:id/demo-data', protect, createDemoData);
+// Create a new restaurant
+router.post('/', auth, async (req, res) => {
+  try {
+    console.log('Creating restaurant for user:', req.userId);
+    console.log('Restaurant data:', req.body);
+    
+    const restaurant = new Restaurant({
+      ...req.body,
+      owner: req.userId
+    });
+    
+    await restaurant.save();
+    res.status(201).json(restaurant);
+  } catch (error) {
+    console.error('Error creating restaurant:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
 
-// Import nested routes
-const menuRouter = require('./menu');
-const tableRouter = require('./tables');
-const orderRouter = require('./orders');
+// Update a restaurant
+router.put('/:id', auth, async (req, res) => {
+  try {
+    const restaurant = await Restaurant.findOne({ 
+      _id: req.params.id, 
+      owner: req.userId 
+    });
+    
+    if (!restaurant) {
+      return res.status(404).json({ message: 'Restaurant not found' });
+    }
+    
+    Object.keys(req.body).forEach(key => {
+      restaurant[key] = req.body[key];
+    });
+    
+    await restaurant.save();
+    res.json(restaurant);
+  } catch (error) {
+    console.error('Error updating restaurant:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
 
-// Re-route into other resource routers
-router.use('/:restaurantId/menu', menuRouter);
-router.use('/:restaurantId/tables', tableRouter);
-router.use('/:restaurantId/orders', orderRouter);
+// Delete a restaurant
+router.delete('/:id', auth, async (req, res) => {
+  try {
+    const restaurant = await Restaurant.findOneAndDelete({ 
+      _id: req.params.id, 
+      owner: req.userId 
+    });
+    
+    if (!restaurant) {
+      return res.status(404).json({ message: 'Restaurant not found' });
+    }
+    
+    res.json({ message: 'Restaurant deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting restaurant:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
 
 module.exports = router;
