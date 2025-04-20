@@ -76,7 +76,7 @@ const Signup = () => {
         <div className="text-center mb-8">
           <Link to="/" className="inline-block">
             <motion.img
-              src="/images/potoba-logo.svg"
+              src="/images/icon-logo.png"
               alt="Potoba"
               className="h-20 mx-auto mb-3"
               initial={{ scale: 0.8, opacity: 0 }}

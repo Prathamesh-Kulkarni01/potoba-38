@@ -45,7 +45,7 @@ const Logo = () => (
     transition={{ duration: 0.5 }}
     className="inline-flex items-center justify-center p-2 bg-white rounded-full shadow-md mb-4"
   >
-    <img src="/images/potoba-logo.svg" alt="TableMaster" className="h-16" />
+    <img src="/images/icon-logo.png" alt="TableMaster" className="h-16" />
   </motion.div>
 );
 

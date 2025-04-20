@@ -66,7 +66,7 @@ Here is the detailed folder structure of the project:
 │   ├── images                 # Image assets
 │   │   ├── food-doodle-1.svg
 │   │   ├── food-doodle-2.svg
-│   │   └── potoba-logo.svg
+│   │   └── icon-logo.png
 │   └── placeholder.svg        # Placeholder image for menu items
 └── package.json               # Project dependencies and scripts
 ```

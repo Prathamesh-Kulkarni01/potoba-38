@@ -16,7 +16,7 @@ const USERS = [
       {
         id: "rest-1",
         name: "Potoba Restaurant",
-        logo: "/images/potoba-logo.svg",
+        logo: "/images/icon-logo.png",
         description: "Authentic cuisine with a modern twist",
         cuisine: "Fusion",
         tables: 20,
