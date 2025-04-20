@@ -1,4 +1,3 @@
-
 const mongoose = require('mongoose');
 
 const RestaurantSchema = new mongoose.Schema({
@@ -47,7 +46,7 @@ RestaurantSchema.virtual('menuItems', {
   justOne: false
 });
 
-RestaurantSchema.virtual('tables', {
+RestaurantSchema.virtual('virtualTables', {
   ref: 'Table',
   localField: '_id',
   foreignField: 'restaurant',

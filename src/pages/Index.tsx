@@ -1,4 +1,3 @@
-
 import React, { useEffect } from 'react';
 import {
   Header,
@@ -12,6 +11,7 @@ import {
   Cta,
   Footer
 } from '@/components/landing';
+import { toast } from '@/hooks/use-toast';
 
 const Index = () => {
   // Parallax effect on scroll
@@ -29,6 +29,26 @@ const Index = () => {
     
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  React.useEffect(() => {
+    const ws = new WebSocket('ws://localhost:8081');
+    
+    ws.onmessage = (event) => {
+      toast({
+        description: event.data,
+        variant: event.data.includes('disconnected') ? 'warning' : 'default',
+      });
+    };
+
+    ws.onclose = () => {
+      toast({
+        description: 'WebSocket connection closed',
+        variant: 'destructive',
+      });
+    };
+
+    return () => ws.close();
   }, []);
 
   return (

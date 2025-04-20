@@ -19,6 +19,7 @@ import NotFound from "./pages/NotFound";
 import ApiSettings from "./pages/ApiSettings";
 import ApiDocs from "./components/ApiDocs";
 import "./App.css";
+import { toast } from "./hooks/use-toast";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -28,6 +29,7 @@ const queryClient = new QueryClient({
     },
   },
 });
+
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
