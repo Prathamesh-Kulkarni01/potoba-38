@@ -28,9 +28,22 @@ const UserSchema = new mongoose.Schema({
   }],
   role: {
     type: String,
-    enum: ['user', 'admin'],
+    enum: ['user', 'admin', 'manager', 'staff'],
     default: 'user'
   },
+  permissions: [{
+    type: String,
+    enum: [
+      'view_dashboard',
+      'manage_tables',
+      'manage_menu',
+      'manage_orders',
+      'manage_marketing',
+      'manage_loyalty',
+      'manage_settings',
+      'manage_users'
+    ]
+  }],
   createdAt: {
     type: Date,
     default: Date.now
@@ -50,6 +63,12 @@ UserSchema.pre('save', async function(next) {
 // Match user entered password to hashed password in database
 UserSchema.methods.matchPassword = async function(enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
+};
+
+// Method to check if user has permission
+UserSchema.methods.hasPermission = function(permission) {
+  if (this.role === 'admin') return true; // Admin has all permissions
+  return this.permissions.includes(permission);
 };
 
 module.exports = mongoose.model('User', UserSchema);

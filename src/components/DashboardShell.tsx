@@ -31,7 +31,8 @@ import {
   MessageSquareText, 
   Bot, 
   BadgePercent,
-  Gift
+  Gift,
+  ShieldAlert
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "sonner";
@@ -39,6 +40,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import RestaurantSelector from "./RestaurantSelector";
 import { ThemeToggle } from "./theme/ThemeToggle";
 import { Separator } from "./ui/separator";
+import { Badge } from "./ui/badge";
 
 interface DashboardShellProps {
   children: React.ReactNode;
@@ -47,7 +49,7 @@ interface DashboardShellProps {
 export function DashboardShell({ children }: DashboardShellProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, logout, getCurrentRestaurant } = useAuth();
+  const { user, logout, getCurrentRestaurant, hasPermission } = useAuth();
   const currentRestaurant = user ? getCurrentRestaurant() : undefined;
 
   const isActive = (path: string) => {
@@ -66,74 +68,117 @@ export function DashboardShell({ children }: DashboardShellProps) {
     return (names[0].charAt(0) + names[names.length - 1].charAt(0)).toUpperCase();
   };
 
-  // Main navigation items
+  const getRoleBadge = () => {
+    if (!user?.role) return null;
+    
+    const roleStyles = {
+      admin: "bg-purple-500",
+      manager: "bg-blue-500",
+      staff: "bg-green-500",
+      user: "bg-gray-500",
+    };
+    
+    return (
+      <Badge className={roleStyles[user.role as keyof typeof roleStyles]}>
+        {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
+      </Badge>
+    );
+  };
+
+  // Main navigation items with permission checks
   const mainMenuItems = [
     {
       title: "Dashboard",
       path: "/dashboard",
       icon: LayoutDashboard,
+      permission: "view_dashboard",
     },
     {
       title: "Menu",
       path: "/dashboard/menu",
       icon: UtensilsCrossed,
+      permission: "manage_menu",
     },
     {
       title: "Tables",
       path: "/dashboard/tables",
       icon: TableProperties,
+      permission: "manage_tables",
     },
     {
       title: "Orders",
       path: "/dashboard/orders",
       icon: ReceiptText,
+      permission: "manage_orders",
     },
   ];
 
-  // Marketing menu items
+  // Marketing menu items with permission checks
   const marketingMenuItems = [
     {
       title: "Campaigns",
       path: "/dashboard/marketing/campaigns",
       icon: Megaphone,
+      permission: "manage_marketing",
     },
     {
       title: "WhatsApp Bot",
       path: "/dashboard/marketing/whatsapp",
       icon: MessageSquareText,
+      permission: "manage_marketing",
     },
     {
       title: "AI Assistant",
       path: "/dashboard/marketing/ai-assistant",
       icon: Bot,
+      permission: "manage_marketing",
     },
   ];
 
-  // Loyalty menu items
+  // Loyalty menu items with permission checks
   const loyaltyMenuItems = [
     {
       title: "Rewards",
       path: "/dashboard/loyalty/rewards",
       icon: Gift,
+      permission: "manage_loyalty",
     },
     {
       title: "Promotions",
       path: "/dashboard/loyalty/promotions",
       icon: BadgePercent,
+      permission: "manage_loyalty",
     },
     {
       title: "Members",
       path: "/dashboard/loyalty/members",
       icon: Award,
+      permission: "manage_loyalty",
     },
   ];
 
-  // Settings menu item
+  // Settings menu item with permission check
   const settingsMenuItem = {
     title: "API Settings",
     path: "/dashboard/api-settings",
     icon: Settings,
+    permission: "manage_settings",
   };
+
+  // Filter menu items based on user permissions
+  const filteredMainMenuItems = mainMenuItems.filter(item => 
+    hasPermission(item.permission)
+  );
+  
+  const filteredMarketingMenuItems = marketingMenuItems.filter(item => 
+    hasPermission(item.permission)
+  );
+  
+  const filteredLoyaltyMenuItems = loyaltyMenuItems.filter(item => 
+    hasPermission(item.permission)
+  );
+  
+  const showSettingsMenuItem = hasPermission(settingsMenuItem.permission);
 
   return (
     <SidebarProvider>
@@ -156,98 +201,106 @@ export function DashboardShell({ children }: DashboardShellProps) {
           
           <SidebarContent className="p-2">
             {/* Main Navigation */}
-            <SidebarGroup>
-              <SidebarGroupLabel>Main Navigation</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {mainMenuItems.map((item) => (
-                    <SidebarMenuItem key={item.path}>
-                      <SidebarMenuButton
-                        asChild
-                        isActive={isActive(item.path)}
-                        tooltip={item.title}
-                      >
-                        <button onClick={() => navigate(item.path)}>
-                          <item.icon className="h-4 w-4" />
-                          <span>{item.title}</span>
-                          <ChevronRight className="ml-auto h-4 w-4 opacity-0 group-data-[active=true]:opacity-70" />
-                        </button>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
+            {filteredMainMenuItems.length > 0 && (
+              <SidebarGroup>
+                <SidebarGroupLabel>Main Navigation</SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {filteredMainMenuItems.map((item) => (
+                      <SidebarMenuItem key={item.path}>
+                        <SidebarMenuButton
+                          asChild
+                          isActive={isActive(item.path)}
+                          tooltip={item.title}
+                        >
+                          <button onClick={() => navigate(item.path)}>
+                            <item.icon className="h-4 w-4" />
+                            <span>{item.title}</span>
+                            <ChevronRight className="ml-auto h-4 w-4 opacity-0 group-data-[active=true]:opacity-70" />
+                          </button>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    ))}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            )}
 
             {/* Marketing */}
-            <SidebarGroup>
-              <SidebarGroupLabel className="mt-4">Marketing</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {marketingMenuItems.map((item) => (
-                    <SidebarMenuItem key={item.path}>
-                      <SidebarMenuButton
-                        asChild
-                        isActive={isActive(item.path)}
-                        tooltip={item.title}
-                      >
-                        <button onClick={() => navigate(item.path)}>
-                          <item.icon className="h-4 w-4" />
-                          <span>{item.title}</span>
-                          <ChevronRight className="ml-auto h-4 w-4 opacity-0 group-data-[active=true]:opacity-70" />
-                        </button>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
+            {filteredMarketingMenuItems.length > 0 && (
+              <SidebarGroup>
+                <SidebarGroupLabel className="mt-4">Marketing</SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {filteredMarketingMenuItems.map((item) => (
+                      <SidebarMenuItem key={item.path}>
+                        <SidebarMenuButton
+                          asChild
+                          isActive={isActive(item.path)}
+                          tooltip={item.title}
+                        >
+                          <button onClick={() => navigate(item.path)}>
+                            <item.icon className="h-4 w-4" />
+                            <span>{item.title}</span>
+                            <ChevronRight className="ml-auto h-4 w-4 opacity-0 group-data-[active=true]:opacity-70" />
+                          </button>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    ))}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            )}
 
             {/* Loyalty */}
-            <SidebarGroup>
-              <SidebarGroupLabel className="mt-4">Loyalty</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {loyaltyMenuItems.map((item) => (
-                    <SidebarMenuItem key={item.path}>
+            {filteredLoyaltyMenuItems.length > 0 && (
+              <SidebarGroup>
+                <SidebarGroupLabel className="mt-4">Loyalty</SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {filteredLoyaltyMenuItems.map((item) => (
+                      <SidebarMenuItem key={item.path}>
+                        <SidebarMenuButton
+                          asChild
+                          isActive={isActive(item.path)}
+                          tooltip={item.title}
+                        >
+                          <button onClick={() => navigate(item.path)}>
+                            <item.icon className="h-4 w-4" />
+                            <span>{item.title}</span>
+                            <ChevronRight className="ml-auto h-4 w-4 opacity-0 group-data-[active=true]:opacity-70" />
+                          </button>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    ))}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            )}
+
+            {/* Settings */}
+            {showSettingsMenuItem && (
+              <SidebarGroup>
+                <SidebarGroupLabel className="mt-4">Settings</SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    <SidebarMenuItem>
                       <SidebarMenuButton
                         asChild
-                        isActive={isActive(item.path)}
-                        tooltip={item.title}
+                        isActive={isActive(settingsMenuItem.path)}
+                        tooltip={settingsMenuItem.title}
                       >
-                        <button onClick={() => navigate(item.path)}>
-                          <item.icon className="h-4 w-4" />
-                          <span>{item.title}</span>
+                        <button onClick={() => navigate(settingsMenuItem.path)}>
+                          <settingsMenuItem.icon className="h-4 w-4" />
+                          <span>{settingsMenuItem.title}</span>
                           <ChevronRight className="ml-auto h-4 w-4 opacity-0 group-data-[active=true]:opacity-70" />
                         </button>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-
-            {/* Settings */}
-            <SidebarGroup>
-              <SidebarGroupLabel className="mt-4">Settings</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  <SidebarMenuItem>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={isActive(settingsMenuItem.path)}
-                      tooltip={settingsMenuItem.title}
-                    >
-                      <button onClick={() => navigate(settingsMenuItem.path)}>
-                        <settingsMenuItem.icon className="h-4 w-4" />
-                        <span>{settingsMenuItem.title}</span>
-                        <ChevronRight className="ml-auto h-4 w-4 opacity-0 group-data-[active=true]:opacity-70" />
-                      </button>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            )}
           </SidebarContent>
           
           <SidebarFooter className="p-3">
@@ -260,8 +313,9 @@ export function DashboardShell({ children }: DashboardShellProps) {
                       <AvatarFallback>{getUserInitials()}</AvatarFallback>
                     </Avatar>
                     <div className="text-sm leading-none">
-                      <div className="font-medium text-sidebar-foreground group-data-[collapsible=icon]:hidden">
+                      <div className="font-medium text-sidebar-foreground group-data-[collapsible=icon]:hidden flex items-center gap-2">
                         {user.name}
+                        {getRoleBadge()}
                       </div>
                       <div className="text-xs text-sidebar-foreground/70 group-data-[collapsible=icon]:hidden mt-1">
                         {user.email}
@@ -298,7 +352,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
           {/* Bottom Navigation for Mobile */}
           <div className="fixed bottom-0 left-0 right-0 md:hidden bg-restaurant-primary text-white z-30">
             <div className="flex justify-around items-center p-3">
-              {mainMenuItems.slice(0, 4).map((item) => (
+              {filteredMainMenuItems.slice(0, 4).map((item) => (
                 <Button 
                   key={item.path}
                   variant="ghost"

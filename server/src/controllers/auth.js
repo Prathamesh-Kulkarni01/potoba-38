@@ -14,7 +14,7 @@ const generateToken = (id) => {
 // @access  Public
 exports.register = async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, role } = req.body;
 
     // Check if user exists
     const userExists = await User.findOne({ email });
@@ -26,11 +26,16 @@ exports.register = async (req, res) => {
       });
     }
 
+    // Set default permissions based on role
+    const permissions = getDefaultPermissions(role || 'user');
+
     // Create user
     const user = await User.create({
       name,
       email,
       password,
+      role: role || 'user',
+      permissions
     });
 
     if (user) {
@@ -44,6 +49,8 @@ exports.register = async (req, res) => {
             id: user._id,
             name: user.name,
             email: user.email,
+            role: user.role,
+            permissions: user.permissions,
             restaurants: user.restaurants
           },
           token: generateToken(user._id)
@@ -100,6 +107,8 @@ exports.login = async (req, res) => {
           id: user._id,
           name: user.name,
           email: user.email,
+          role: user.role,
+          permissions: user.permissions,
           restaurants: user.restaurants
         },
         token: generateToken(user._id)
@@ -143,6 +152,8 @@ exports.getMe = async (req, res) => {
           id: user._id,
           name: user.name,
           email: user.email,
+          role: user.role,
+          permissions: user.permissions,
           restaurants: user.restaurants
         }
       }
@@ -152,5 +163,92 @@ exports.getMe = async (req, res) => {
       success: false,
       error: error.message
     });
+  }
+};
+
+// @desc    Update user role and permissions
+// @route   PUT /api/auth/users/:id/role
+// @access  Private/Admin
+exports.updateUserRole = async (req, res) => {
+  try {
+    const { role, permissions } = req.body;
+    
+    const user = await User.findById(req.params.id);
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+    
+    // Update user role
+    if (role) {
+      user.role = role;
+      // Assign default permissions for the role if no custom permissions provided
+      if (!permissions) {
+        user.permissions = getDefaultPermissions(role);
+      }
+    }
+    
+    // Update permissions if provided
+    if (permissions) {
+      user.permissions = permissions;
+    }
+    
+    await user.save();
+    
+    res.json({
+      success: true,
+      data: {
+        user: {
+          id: user._id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          permissions: user.permissions
+        }
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
+// Helper function to get default permissions based on role
+const getDefaultPermissions = (role) => {
+  switch (role) {
+    case 'admin':
+      return [
+        'view_dashboard',
+        'manage_tables',
+        'manage_menu',
+        'manage_orders',
+        'manage_marketing',
+        'manage_loyalty',
+        'manage_settings',
+        'manage_users'
+      ];
+    case 'manager':
+      return [
+        'view_dashboard',
+        'manage_tables',
+        'manage_menu',
+        'manage_orders',
+        'manage_marketing',
+        'manage_loyalty'
+      ];
+    case 'staff':
+      return [
+        'view_dashboard',
+        'manage_tables',
+        'manage_orders'
+      ];
+    case 'user':
+    default:
+      return ['view_dashboard'];
   }
 };

@@ -3,7 +3,8 @@ export interface User {
   id: string;
   email: string;
   name?: string;
-  role?: string;
+  role?: 'user' | 'admin' | 'manager' | 'staff';
+  permissions?: string[];
   restaurants?: Restaurant[];
 }
 
