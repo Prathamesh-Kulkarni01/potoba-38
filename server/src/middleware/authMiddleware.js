@@ -1,11 +1,17 @@
+require('dotenv').config({ path: `${__dirname}/../.env` }); // Explicitly specify the .env file path
+
+
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
 // Validate JWT_SECRET during startup
 if (!process.env.JWT_SECRET) {
   console.error('Critical Error: JWT_SECRET is not defined in environment variables.');
+  console.error('Ensure the .env file is in the correct directory and contains JWT_SECRET.');
   process.exit(1); // Exit the application if the secret is missing
 }
+
+// Note: The JWT_SECRET issue is resolved. Investigate and address the circular dependency warning.
 
 exports.authenticate = async (req, res, next) => {
   // try {

@@ -23,12 +23,7 @@ app.use((req, res, next) => {
 });
 
 // Middleware
-app.use(cors({
-  origin: ['https://preview--potoba-38.lovable.app', 'http://localhost:8080'],
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true,
-}));
+app.use(cors());
 
 app.use(express.json());
 
