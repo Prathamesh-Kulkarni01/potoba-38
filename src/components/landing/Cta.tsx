@@ -9,7 +9,7 @@ const Cta = () => {
   const { theme } = useTheme();
   
   return (
-    <section className={`py-20 ${theme === 'dark' ? 'bg-gradient-to-r from-food-primary/80 to-food-secondary/80' : 'bg-gradient-to-r from-food-primary to-food-secondary'} text-white theme-transition`}>
+    <section className={`py-20 ${theme === 'dark' ? 'bg-gradient-to-r from-food-primary/40 to-food-secondary/40' : 'bg-gradient-to-r from-food-primary to-food-secondary'} text-white transition-colors duration-300`}>
       <div className="container mx-auto px-4">
         <div className="text-center max-w-3xl mx-auto">
           <motion.div
@@ -22,12 +22,12 @@ const Cta = () => {
             <p className="text-lg mb-8 opacity-90">
               Join thousands of restaurants already using Potoba to streamline operations, increase revenue, and delight customers.
             </p>
-            <motion.div whileHover={{ scale: 1.05 }} transition={{ duration: 0.2 }}>
+            <div>
               <Button size="lg" className="bg-white text-food-primary hover:bg-white/90 shadow-lg">
                 Start Your Free Trial
                 <ChevronRight className="ml-2 h-4 w-4" />
               </Button>
-            </motion.div>
+            </div>
             <p className="mt-4 text-sm opacity-80">
               No credit card required. 14-day free trial.
             </p>
