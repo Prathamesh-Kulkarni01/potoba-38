@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
@@ -6,7 +7,8 @@ import {
   QrCode,
   PlusCircle,
   Filter,
-  MoreHorizontal
+  MoreHorizontal,
+  Link as LinkIcon
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import {
@@ -222,6 +224,20 @@ const TableManagement = () => {
                       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
                     </Button>
                   </div>
+                </div>
+                
+                {/* Direct Table Customer Link - NEW */}
+                <div className="mt-2 flex justify-center">
+                  <Button 
+                    variant="default" 
+                    className="bg-restaurant-primary hover:bg-restaurant-primary/90"
+                    onClick={() => {
+                      window.open(`${window.location.origin}/order/${selectedTableId}`, '_blank');
+                    }}
+                  >
+                    <LinkIcon className="mr-2 h-4 w-4" />
+                    Open Customer Order Page
+                  </Button>
                 </div>
               </div>
             )}
