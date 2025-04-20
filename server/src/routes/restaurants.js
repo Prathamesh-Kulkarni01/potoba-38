@@ -7,7 +7,8 @@ const {
   getRestaurant,
   createRestaurant,
   updateRestaurant,
-  deleteRestaurant
+  deleteRestaurant,
+  createDemoData
 } = require('../controllers/restaurants');
 
 // Restaurant routes
@@ -19,6 +20,9 @@ router.route('/:id')
   .get(protect, getRestaurant)
   .put(protect, updateRestaurant)
   .delete(protect, deleteRestaurant);
+
+// Demo data route
+router.post('/:id/demo-data', protect, createDemoData);
 
 // Import nested routes
 const menuRouter = require('./menu');

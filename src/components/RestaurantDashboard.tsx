@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   Users, 
@@ -10,45 +10,16 @@ import {
   TrendingUp,
   Star,
   ChefHat,
-  Coffee
+  Coffee,
+  Loader2
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { motion } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import AiAnalytics from './AiAnalytics';
-
-// Sample data - in a real application, this would come from an API
-const generateDashboardData = (restaurantId: string) => {
-  // This is a dummy function that would normally fetch data from an API
-  // For now, we'll return mock data with slight variations based on restaurant ID
-  const randomVariation = parseInt(restaurantId.split('-')[1]?.[0] || '1') / 10;
-  
-  return {
-    tables: {
-      total: Math.floor(15 + 10 * randomVariation),
-      available: Math.floor(5 + 5 * randomVariation),
-      occupied: Math.floor(7 + 4 * randomVariation),
-      reserved: Math.floor(3 + 1 * randomVariation)
-    },
-    orders: {
-      total: Math.floor(35 + 15 * randomVariation),
-      pending: Math.floor(5 + 3 * randomVariation),
-      completed: Math.floor(30 + 12 * randomVariation)
-    },
-    revenue: {
-      today: Math.floor(1000 + 500 * randomVariation),
-      week: Math.floor(7000 + 3000 * randomVariation),
-      month: Math.floor(28000 + 10000 * randomVariation)
-    },
-    popular: [
-      { name: "Classic Burger", count: Math.floor(20 + 8 * randomVariation) },
-      { name: "Caesar Salad", count: Math.floor(15 + 6 * randomVariation) },
-      { name: "Margherita Pizza", count: Math.floor(12 + 8 * randomVariation) },
-      { name: "Chocolate Cake", count: Math.floor(10 + 5 * randomVariation) }
-    ]
-  };
-};
+import axios from 'axios';
+import { toast } from '@/hooks/use-toast';
 
 // Animation variants
 const containerVariants = {
@@ -77,6 +48,172 @@ const itemVariants = {
 const RestaurantDashboard = () => {
   const { getCurrentRestaurant } = useAuth();
   const currentRestaurant = getCurrentRestaurant();
+  const [loading, setLoading] = useState(true);
+  const [dashboardData, setDashboardData] = useState<any>(null);
+  const [loadingDemo, setLoadingDemo] = useState(false);
+  
+  // Function to fetch dashboard data
+  const fetchDashboardData = async () => {
+    if (!currentRestaurant) return;
+    
+    setLoading(true);
+    
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) throw new Error('Not authenticated');
+      
+      // Fetch tables
+      const tablesRes = await axios.get(
+        `http://localhost:5000/api/restaurants/${currentRestaurant.id}/tables`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      // Fetch menu items
+      const menuRes = await axios.get(
+        `http://localhost:5000/api/restaurants/${currentRestaurant.id}/menu`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      // Fetch orders
+      const ordersRes = await axios.get(
+        `http://localhost:5000/api/restaurants/${currentRestaurant.id}/orders`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      // Calculate dashboard metrics
+      const tables = tablesRes.data.data || [];
+      const menu = menuRes.data.data || [];
+      const orders = ordersRes.data.data || [];
+      
+      // Calculate table stats
+      const tableStats = {
+        total: tables.length,
+        available: tables.filter(t => t.status === 'available').length,
+        occupied: tables.filter(t => t.status === 'occupied').length,
+        reserved: tables.filter(t => t.status === 'reserved').length
+      };
+      
+      // Calculate order stats
+      const orderStats = {
+        total: orders.length,
+        pending: orders.filter(o => o.status === 'new' || o.status === 'in-progress').length,
+        completed: orders.filter(o => o.status === 'completed').length
+      };
+      
+      // Calculate revenue from orders
+      const revenue = {
+        today: orders
+          .filter(o => new Date(o.createdAt).toDateString() === new Date().toDateString())
+          .reduce((sum, o) => sum + o.total, 0),
+        week: orders
+          .filter(o => {
+            const orderDate = new Date(o.createdAt);
+            const weekAgo = new Date();
+            weekAgo.setDate(weekAgo.getDate() - 7);
+            return orderDate >= weekAgo;
+          })
+          .reduce((sum, o) => sum + o.total, 0),
+        month: orders
+          .filter(o => {
+            const orderDate = new Date(o.createdAt);
+            const monthAgo = new Date();
+            monthAgo.setMonth(monthAgo.getMonth() - 1);
+            return orderDate >= monthAgo;
+          })
+          .reduce((sum, o) => sum + o.total, 0)
+      };
+      
+      // Get popular items (simplified version)
+      const menuItemCounts = {};
+      orders.forEach(order => {
+        order.items.forEach(item => {
+          menuItemCounts[item.name] = (menuItemCounts[item.name] || 0) + item.quantity;
+        });
+      });
+      
+      const popularItems = Object.entries(menuItemCounts)
+        .map(([name, count]) => ({ name, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 4);
+      
+      setDashboardData({
+        tables: tableStats,
+        orders: orderStats,
+        revenue,
+        popular: popularItems.length > 0 ? popularItems : [
+          { name: "No orders yet", count: 0 }
+        ],
+        recentOrders: orders.slice(0, 3).map(order => ({
+          id: order.id,
+          tableId: order.tableId,
+          tableNumber: tables.find(t => t.id === order.tableId)?.number || 'Unknown',
+          items: order.items.length,
+          status: order.status,
+          createdAt: new Date(order.createdAt),
+          total: order.total
+        }))
+      });
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+      // Fallback to dummy data for demo purposes
+      setDashboardData({
+        tables: { total: 10, available: 5, occupied: 3, reserved: 2 },
+        orders: { total: 15, pending: 3, completed: 12 },
+        revenue: { today: 450, week: 2800, month: 12000 },
+        popular: [
+          { name: "Classic Burger", count: 12 },
+          { name: "Caesar Salad", count: 8 },
+          { name: "Margherita Pizza", count: 6 },
+          { name: "Chocolate Cake", count: 4 }
+        ],
+        recentOrders: []
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Initial data fetch
+  useEffect(() => {
+    if (currentRestaurant) {
+      fetchDashboardData();
+    }
+  }, [currentRestaurant]);
+  
+  // Function to create demo data
+  const handleCreateDemoData = async () => {
+    if (!currentRestaurant) return;
+    
+    setLoadingDemo(true);
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) throw new Error('Not authenticated');
+      
+      // Make API request to create demo data
+      await axios.post(
+        `http://localhost:5000/api/restaurants/${currentRestaurant.id}/demo-data`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      toast({
+        title: "Success",
+        description: "Demo data created successfully",
+      });
+      
+      // Refresh dashboard data
+      fetchDashboardData();
+    } catch (error) {
+      console.error('Error creating demo data:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to create demo data. Please try again.",
+      });
+    } finally {
+      setLoadingDemo(false);
+    }
+  };
   
   // If we don't have a current restaurant, show a message
   if (!currentRestaurant) {
@@ -91,15 +228,39 @@ const RestaurantDashboard = () => {
     );
   }
   
-  // Generate dummy data based on restaurant ID
-  const dashboardData = generateDashboardData(currentRestaurant.id);
+  if (loading || !dashboardData) {
+    return (
+      <div className="text-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin mx-auto text-restaurant-primary" />
+        <p className="mt-2 text-gray-600">Loading dashboard data...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      <h1 className="page-title mb-6 flex items-center">
-        <img src={currentRestaurant.logo || "/images/potoba-logo.svg"} alt={currentRestaurant.name} className="h-10 mr-2" />
-        <span>{currentRestaurant.name} Dashboard</span>
-      </h1>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="page-title flex items-center">
+          <img src={currentRestaurant.logo || "/images/potoba-logo.svg"} alt={currentRestaurant.name} className="h-10 mr-2" />
+          <span>{currentRestaurant.name} Dashboard</span>
+        </h1>
+        
+        <Button 
+          onClick={handleCreateDemoData} 
+          variant="outline" 
+          disabled={loadingDemo}
+          size="sm"
+        >
+          {loadingDemo ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Creating...
+            </>
+          ) : (
+            "Create Demo Data"
+          )}
+        </Button>
+      </div>
 
       {/* AI Analytics Section */}
       <AiAnalytics />
@@ -201,15 +362,15 @@ const RestaurantDashboard = () => {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">${dashboardData.revenue.today}</div>
+              <div className="text-2xl font-bold">${dashboardData.revenue.today.toFixed(2)}</div>
               <div className="text-xs text-muted-foreground">Today</div>
               <div className="mt-4 grid grid-cols-2 gap-2">
                 <div className="flex flex-col">
-                  <div className="text-sm font-medium">${dashboardData.revenue.week}</div>
+                  <div className="text-sm font-medium">${dashboardData.revenue.week.toFixed(2)}</div>
                   <div className="text-xs text-muted-foreground">This Week</div>
                 </div>
                 <div className="flex flex-col">
-                  <div className="text-sm font-medium">${dashboardData.revenue.month}</div>
+                  <div className="text-sm font-medium">${dashboardData.revenue.month.toFixed(2)}</div>
                   <div className="text-xs text-muted-foreground">This Month</div>
                 </div>
               </div>

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,6 +11,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { motion } from 'framer-motion';
 import { UtensilsCrossed, ChefHat, ArrowRight, Loader2 } from 'lucide-react';
 import { toast } from "sonner";
+import { restaurantService } from '../services/restaurantService';
 
 const cuisineTypes = [
   "American", "Italian", "Mexican", "Chinese", "Japanese", 
@@ -20,7 +22,8 @@ const cuisineTypes = [
 const RestaurantOnboarding = () => {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
-  const { addRestaurant, user } = useAuth();
+  const [createDemoData, setCreateDemoData] = useState(false);
+  const { user, currentRestaurantId, setCurrentRestaurantId } = useAuth();
   const navigate = useNavigate();
   
   // Form data
@@ -60,7 +63,8 @@ const RestaurantOnboarding = () => {
     
     setLoading(true);
     try {
-      const newRestaurant = await addRestaurant({
+      // Create the restaurant
+      const newRestaurant = await restaurantService.createRestaurant({
         name,
         description,
         address,
@@ -68,6 +72,20 @@ const RestaurantOnboarding = () => {
         cuisine,
         tables: parseInt(tableCount) || 10,
       });
+      
+      // Set as current restaurant
+      if (setCurrentRestaurantId) {
+        setCurrentRestaurantId(newRestaurant.id);
+      }
+      
+      // Create default tables
+      await restaurantService.createDefaultTables(newRestaurant.id, parseInt(tableCount) || 10);
+      
+      // If demo data is requested, create it
+      if (createDemoData) {
+        await restaurantService.createDemoData(newRestaurant.id);
+        toast.success("Demo data created successfully!");
+      }
       
       toast.success("Restaurant created successfully!");
       navigate('/dashboard');
@@ -223,6 +241,22 @@ const RestaurantOnboarding = () => {
                         value={tableCount}
                         onChange={(e) => setTableCount(e.target.value)}
                       />
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          id="demoData"
+                          checked={createDemoData}
+                          onChange={(e) => setCreateDemoData(e.target.checked)}
+                          className="rounded border-gray-300 text-restaurant-primary focus:ring-restaurant-primary"
+                        />
+                        <Label htmlFor="demoData">Create demo menu items</Label>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        This will create sample menu items and tables to help you get started
+                      </p>
                     </div>
                   </>
                 )}

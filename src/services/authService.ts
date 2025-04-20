@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { AuthResponse } from '../types/auth';
 
@@ -65,6 +64,24 @@ export const authService = {
       return response.data.data.user;
     } catch (error) {
       console.error('Update user role error:', error);
+      throw error;
+    }
+  },
+  
+  async getCurrentUser() {
+    try {
+      const token = this.getToken();
+      if (!token) throw new Error('Not authenticated');
+
+      const response = await axios.get(`${API_URL}/auth/me`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      
+      return response.data.data.user;
+    } catch (error) {
+      console.error('Get current user error:', error);
       throw error;
     }
   }

@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,10 +26,7 @@ const Signup = () => {
       console.log('Starting signup process...');
       await signup(name, email, password, role);
       
-      // Check if the token was saved correctly
-      const token = localStorage.getItem('token');
-      console.log('Token after signup:', token);
-      
+      // Redirect to restaurant onboarding right after signup
       navigate('/onboarding');
     } catch (error) {
       console.error('Signup error:', error);

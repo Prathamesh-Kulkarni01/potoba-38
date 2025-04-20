@@ -14,7 +14,7 @@ const Login = () => {
   const [email, setEmail] = useState('demo@example.com');
   const [password, setPassword] = useState('password');
   const [isLoading, setIsLoading] = useState(false);
-  const { login, isAuthenticated } = useAuth();
+  const { login, isAuthenticated, user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -22,12 +22,16 @@ const Login = () => {
   const searchParams = new URLSearchParams(location.search);
   const redirectPath = searchParams.get('redirect') || '/dashboard';
 
-  // If user is already logged in, redirect
+  // If user is already logged in, check if they have restaurants
   useEffect(() => {
-    if (isAuthenticated()) {
-      navigate(redirectPath);
+    if (isAuthenticated() && user) {
+      if (!user.restaurants || user.restaurants.length === 0) {
+        navigate('/onboarding');
+      } else {
+        navigate(redirectPath);
+      }
     }
-  }, [isAuthenticated, navigate, redirectPath]);
+  }, [isAuthenticated, navigate, redirectPath, user]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,7 +39,13 @@ const Login = () => {
     
     try {
       await login(email, password);
-      navigate(redirectPath);
+      
+      // After login, check if user has restaurants
+      if (user && (!user.restaurants || user.restaurants.length === 0)) {
+        navigate('/onboarding');
+      } else {
+        navigate(redirectPath);
+      }
     } catch (error) {
       console.error('Login error:', error);
       // Toast is handled in auth context
