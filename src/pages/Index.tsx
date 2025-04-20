@@ -2,8 +2,11 @@
 import { Link } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { QrCode, Utensils, Users, BarChart4 } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
 const Index = () => {
+  const { user } = useAuth();
+  
   return (
     <div className="min-h-screen bg-restaurant-background">
       <header className="bg-restaurant-primary text-white py-8">
@@ -16,12 +19,20 @@ const Index = () => {
               </p>
             </div>
             <div className="mt-4 md:mt-0 space-x-4">
-              <Button asChild variant="outline" className="text-white border-white hover:bg-white/10">
-                <Link to="/login">Log In</Link>
-              </Button>
-              <Button asChild className="bg-restaurant-secondary text-white hover:bg-restaurant-secondary/90">
-                <Link to="/signup">Get Started</Link>
-              </Button>
+              {user ? (
+                <Button asChild className="bg-restaurant-secondary text-white hover:bg-restaurant-secondary/90">
+                  <Link to="/dashboard">Go to Dashboard</Link>
+                </Button>
+              ) : (
+                <>
+                  <Button asChild variant="outline" className="text-white border-white hover:bg-white/10">
+                    <Link to="/login">Log In</Link>
+                  </Button>
+                  <Button asChild className="bg-restaurant-secondary text-white hover:bg-restaurant-secondary/90">
+                    <Link to="/signup">Get Started</Link>
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -75,9 +86,15 @@ const Index = () => {
           </div>
           
           <div className="mt-16">
-            <Button asChild className="bg-restaurant-primary hover:bg-restaurant-primary/90 px-8 py-6 text-lg">
-              <Link to="/dashboard">Go to Dashboard Demo</Link>
-            </Button>
+            {user ? (
+              <Button asChild className="bg-restaurant-primary hover:bg-restaurant-primary/90 px-8 py-6 text-lg">
+                <Link to="/dashboard">Go to Dashboard</Link>
+              </Button>
+            ) : (
+              <Button asChild className="bg-restaurant-primary hover:bg-restaurant-primary/90 px-8 py-6 text-lg">
+                <Link to="/signup">Start Free Trial</Link>
+              </Button>
+            )}
           </div>
         </div>
       </section>

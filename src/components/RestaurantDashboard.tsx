@@ -15,31 +15,38 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { motion } from 'framer-motion';
+import { useAuth } from '@/contexts/AuthContext';
 
 // Sample data - in a real application, this would come from an API
-const dashboardData = {
-  tables: {
-    total: 20,
-    available: 8,
-    occupied: 9,
-    reserved: 3
-  },
-  orders: {
-    total: 42,
-    pending: 7,
-    completed: 35
-  },
-  revenue: {
-    today: 1250,
-    week: 8450,
-    month: 32600
-  },
-  popular: [
-    { name: "Classic Burger", count: 24 },
-    { name: "Caesar Salad", count: 18 },
-    { name: "Margherita Pizza", count: 16 },
-    { name: "Chocolate Cake", count: 14 }
-  ]
+const generateDashboardData = (restaurantId: string) => {
+  // This is a dummy function that would normally fetch data from an API
+  // For now, we'll return mock data with slight variations based on restaurant ID
+  const randomVariation = parseInt(restaurantId.split('-')[1]?.[0] || '1') / 10;
+  
+  return {
+    tables: {
+      total: Math.floor(15 + 10 * randomVariation),
+      available: Math.floor(5 + 5 * randomVariation),
+      occupied: Math.floor(7 + 4 * randomVariation),
+      reserved: Math.floor(3 + 1 * randomVariation)
+    },
+    orders: {
+      total: Math.floor(35 + 15 * randomVariation),
+      pending: Math.floor(5 + 3 * randomVariation),
+      completed: Math.floor(30 + 12 * randomVariation)
+    },
+    revenue: {
+      today: Math.floor(1000 + 500 * randomVariation),
+      week: Math.floor(7000 + 3000 * randomVariation),
+      month: Math.floor(28000 + 10000 * randomVariation)
+    },
+    popular: [
+      { name: "Classic Burger", count: Math.floor(20 + 8 * randomVariation) },
+      { name: "Caesar Salad", count: Math.floor(15 + 6 * randomVariation) },
+      { name: "Margherita Pizza", count: Math.floor(12 + 8 * randomVariation) },
+      { name: "Chocolate Cake", count: Math.floor(10 + 5 * randomVariation) }
+    ]
+  };
 };
 
 // Animation variants
@@ -67,11 +74,30 @@ const itemVariants = {
 };
 
 const RestaurantDashboard = () => {
+  const { getCurrentRestaurant } = useAuth();
+  const currentRestaurant = getCurrentRestaurant();
+  
+  // If we don't have a current restaurant, show a message
+  if (!currentRestaurant) {
+    return (
+      <div className="text-center py-12">
+        <h2 className="text-2xl font-bold text-gray-800">No Restaurant Selected</h2>
+        <p className="mt-2 text-gray-600">Please select or create a restaurant to view the dashboard.</p>
+        <Button asChild className="mt-4">
+          <Link to="/onboarding">Add Restaurant</Link>
+        </Button>
+      </div>
+    );
+  }
+  
+  // Generate dummy data based on restaurant ID
+  const dashboardData = generateDashboardData(currentRestaurant.id);
+
   return (
     <div className="space-y-6">
       <h1 className="page-title mb-6 flex items-center">
-        <img src="/images/potoba-logo.svg" alt="Potoba" className="h-10 mr-2" />
-        <span>Dashboard</span>
+        <img src={currentRestaurant.logo || "/images/potoba-logo.svg"} alt={currentRestaurant.name} className="h-10 mr-2" />
+        <span>{currentRestaurant.name} Dashboard</span>
       </h1>
 
       <motion.div 

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
+import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import RestaurantDashboard from '../components/RestaurantDashboard';
 import TableManagement from '../components/TableManagement';
@@ -9,11 +9,25 @@ import OrderTable from '../components/OrderTable';
 import { motion } from 'framer-motion';
 import { Toaster } from 'sonner';
 import { CupSoda, Utensils } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
 const Dashboard = () => {
   const location = useLocation();
-  const [currentRestaurant] = useState("Potoba Restaurant");
+  const { user, loading, getCurrentRestaurant } = useAuth();
+  const navigate = useNavigate();
   const [showFoodIcon, setShowFoodIcon] = useState(false);
+  
+  const currentRestaurant = getCurrentRestaurant();
+  
+  // Redirect to login if not authenticated
+  if (!loading && !user) {
+    return <Navigate to="/login" replace />;
+  }
+  
+  // Redirect to onboarding if user has no restaurants
+  if (!loading && user && user.restaurants.length === 0) {
+    return <Navigate to="/onboarding" replace />;
+  }
   
   // Random food icons for decoration
   useEffect(() => {
@@ -49,9 +63,21 @@ const Dashboard = () => {
     return <Outlet />;
   };
   
+  // If still loading, show a simple loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-restaurant-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-restaurant-primary mx-auto"></div>
+          <p className="mt-4 text-restaurant-primary font-medium">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+  
   return (
     <div className="min-h-screen bg-restaurant-background bg-pattern">
-      <Navbar currentTenant={currentRestaurant} />
+      <Navbar currentTenant={currentRestaurant?.name} />
       
       <motion.main 
         className="container mx-auto px-4 py-6"
