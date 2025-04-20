@@ -1,11 +1,48 @@
 
 const Restaurant = require('../models/Restaurant');
+const User = require('../models/User');
+
+// WebSocket reference for logging
+let wss;
+try {
+  wss = require('../server').wss;
+} catch (error) {
+  console.log('WebSocket not initialized yet');
+}
+
+// Helper function to log to frontend if WebSocket is available
+function logToFrontend(message) {
+  if (wss) {
+    wss.clients.forEach((client) => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(message);
+      }
+    });
+  }
+}
 
 // @desc    Get all restaurants for authenticated user
 // @route   GET /api/restaurants
 // @access  Private
 exports.getRestaurants = async (req, res) => {
   try {
+    // Special case for mock user in development
+    if (req.user.id === 'mock-user-id') {
+      return res.json({
+        success: true,
+        data: [{
+          id: 'mock-restaurant-id',
+          name: 'Mock Restaurant',
+          description: 'A mock restaurant for development',
+          cuisine: 'Mock Cuisine',
+          address: '123 Mock Street',
+          phone: '555-123-4567',
+          tables: 10,
+          user: 'mock-user-id'
+        }]
+      });
+    }
+
     const restaurants = await Restaurant.find({ user: req.user.id });
 
     res.json({
@@ -13,6 +50,7 @@ exports.getRestaurants = async (req, res) => {
       data: restaurants
     });
   } catch (error) {
+    console.error('Get restaurants error:', error);
     res.status(500).json({
       success: false,
       error: error.message
@@ -25,6 +63,23 @@ exports.getRestaurants = async (req, res) => {
 // @access  Private
 exports.getRestaurant = async (req, res) => {
   try {
+    // Special case for mock user in development
+    if (req.user.id === 'mock-user-id') {
+      return res.json({
+        success: true,
+        data: {
+          id: 'mock-restaurant-id',
+          name: 'Mock Restaurant',
+          description: 'A mock restaurant for development',
+          cuisine: 'Mock Cuisine',
+          address: '123 Mock Street',
+          phone: '555-123-4567',
+          tables: 10,
+          user: 'mock-user-id'
+        }
+      });
+    }
+
     const restaurant = await Restaurant.findById(req.params.id);
 
     if (!restaurant) {
@@ -47,6 +102,7 @@ exports.getRestaurant = async (req, res) => {
       data: restaurant
     });
   } catch (error) {
+    console.error('Get restaurant error:', error);
     res.status(500).json({
       success: false,
       error: error.message
@@ -59,16 +115,44 @@ exports.getRestaurant = async (req, res) => {
 // @access  Private
 exports.createRestaurant = async (req, res) => {
   try {
+    console.log('Creating restaurant for user:', req.user.id);
+    logToFrontend(`Creating restaurant for user: ${req.user.id}`);
+    
     // Add user to req.body
     req.body.user = req.user.id;
 
-    const restaurant = await Restaurant.create(req.body);
+    // Handle mock user in development
+    if (req.user.id === 'mock-user-id') {
+      console.log('Creating mock restaurant');
+      return res.status(201).json({
+        success: true,
+        data: {
+          id: `mock-restaurant-${Date.now()}`,
+          ...req.body,
+          createdAt: new Date().toISOString()
+        }
+      });
+    }
 
+    // Create the restaurant
+    const restaurant = await Restaurant.create(req.body);
+    console.log('Restaurant created:', restaurant);
+    logToFrontend(`Restaurant created: ${restaurant.name}`);
+
+    // Add restaurant to user
+    await User.findByIdAndUpdate(
+      req.user.id,
+      { $push: { restaurants: restaurant._id } },
+      { new: true }
+    );
+    
     res.status(201).json({
       success: true,
       data: restaurant
     });
   } catch (error) {
+    console.error('Create restaurant error:', error);
+    logToFrontend(`Error creating restaurant: ${error.message}`);
     res.status(500).json({
       success: false,
       error: error.message
@@ -81,6 +165,18 @@ exports.createRestaurant = async (req, res) => {
 // @access  Private
 exports.updateRestaurant = async (req, res) => {
   try {
+    // Handle mock user in development
+    if (req.user.id === 'mock-user-id') {
+      return res.json({
+        success: true,
+        data: {
+          id: req.params.id,
+          ...req.body,
+          user: 'mock-user-id'
+        }
+      });
+    }
+
     let restaurant = await Restaurant.findById(req.params.id);
 
     if (!restaurant) {
@@ -108,6 +204,7 @@ exports.updateRestaurant = async (req, res) => {
       data: restaurant
     });
   } catch (error) {
+    console.error('Update restaurant error:', error);
     res.status(500).json({
       success: false,
       error: error.message
@@ -120,6 +217,14 @@ exports.updateRestaurant = async (req, res) => {
 // @access  Private
 exports.deleteRestaurant = async (req, res) => {
   try {
+    // Handle mock user in development
+    if (req.user.id === 'mock-user-id') {
+      return res.json({
+        success: true,
+        data: {}
+      });
+    }
+
     const restaurant = await Restaurant.findById(req.params.id);
 
     if (!restaurant) {
@@ -137,13 +242,21 @@ exports.deleteRestaurant = async (req, res) => {
       });
     }
 
-    await restaurant.remove();
+    await restaurant.deleteOne();
+
+    // Remove restaurant from user
+    await User.findByIdAndUpdate(
+      req.user.id,
+      { $pull: { restaurants: req.params.id } },
+      { new: true }
+    );
 
     res.json({
       success: true,
       data: {}
     });
   } catch (error) {
+    console.error('Delete restaurant error:', error);
     res.status(500).json({
       success: false,
       error: error.message

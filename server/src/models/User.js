@@ -22,21 +22,19 @@ const UserSchema = new mongoose.Schema({
     minlength: 6,
     select: false
   },
+  restaurants: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Restaurant'
+  }],
+  role: {
+    type: String,
+    enum: ['user', 'admin'],
+    default: 'user'
+  },
   createdAt: {
     type: Date,
     default: Date.now
   }
-}, {
-  toJSON: { virtuals: true },
-  toObject: { virtuals: true }
-});
-
-// Virtual for restaurants
-UserSchema.virtual('restaurants', {
-  ref: 'Restaurant',
-  localField: '_id',
-  foreignField: 'user',
-  justOne: false
 });
 
 // Encrypt password using bcrypt

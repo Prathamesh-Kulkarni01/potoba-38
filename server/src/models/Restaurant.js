@@ -1,3 +1,4 @@
+
 const mongoose = require('mongoose');
 
 const RestaurantSchema = new mongoose.Schema({
@@ -31,11 +32,21 @@ const RestaurantSchema = new mongoose.Schema({
 });
 
 // Cascade delete menu items, tables, and orders when a restaurant is deleted
-RestaurantSchema.pre('remove', async function(next) {
-  await this.model('MenuItem').deleteMany({ restaurant: this._id });
-  await this.model('Table').deleteMany({ restaurant: this._id });
-  await this.model('Order').deleteMany({ restaurant: this._id });
-  next();
+RestaurantSchema.pre('deleteOne', { document: true }, async function(next) {
+  console.log(`Deleting associated data for restaurant ${this._id}`);
+  try {
+    const MenuItem = mongoose.model('MenuItem');
+    const Table = mongoose.model('Table');
+    const Order = mongoose.model('Order');
+    
+    await MenuItem.deleteMany({ restaurant: this._id });
+    await Table.deleteMany({ restaurant: this._id });
+    await Order.deleteMany({ restaurant: this._id });
+    next();
+  } catch (err) {
+    console.error('Error in cascade delete:', err);
+    next(err);
+  }
 });
 
 // Reverse populate with virtuals

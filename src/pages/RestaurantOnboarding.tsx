@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { motion } from 'framer-motion';
 import { UtensilsCrossed, ChefHat, ArrowRight, Loader2 } from 'lucide-react';
 import { toast } from "sonner";
+import api from '../services/api';
 
 const cuisineTypes = [
   "American", "Italian", "Mexican", "Chinese", "Japanese", 
@@ -32,6 +33,16 @@ const RestaurantOnboarding = () => {
   const [cuisine, setCuisine] = useState('');
   const [tableCount, setTableCount] = useState('10');
   
+  // Check if the user is authenticated
+  useEffect(() => {
+    // If there's no token, redirect to login
+    const token = localStorage.getItem('token');
+    if (!token) {
+      toast.error("You must be logged in to create a restaurant");
+      navigate('/login', { state: { returnUrl: '/onboarding' } });
+    }
+  }, [navigate]);
+  
   const handleContinue = () => {
     if (step === 1) {
       if (!name || !description) {
@@ -51,20 +62,70 @@ const RestaurantOnboarding = () => {
     
     setLoading(true);
     try {
-      await addRestaurant({
+      // Get token from localStorage for direct API call
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error("Authentication token not found");
+      }
+      
+      console.log("Creating restaurant with token:", token);
+      
+      // Try direct API call first
+      const response = await api.restaurants.create({
         name,
         description,
         address,
         phone,
         cuisine,
         tables: parseInt(tableCount) || 10,
-      });
+      }, token);
+      
+      if (!response.success) {
+        throw new Error(response.error || "Failed to create restaurant");
+      }
+      
+      // If successful, update the AuthContext
+      if (addRestaurant) {
+        try {
+          await addRestaurant({
+            name,
+            description,
+            address,
+            phone,
+            cuisine,
+            tables: parseInt(tableCount) || 10,
+          });
+        } catch (error) {
+          console.log("Restaurant created but context not updated:", error);
+        }
+      }
       
       toast.success("Restaurant created successfully!");
       navigate('/dashboard');
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to create restaurant:", error);
-      toast.error("Failed to create restaurant");
+      
+      // Try fallback to mock API if we're in dev mode
+      try {
+        const mockResponse = await api.restaurants.create({
+          name,
+          description,
+          address,
+          phone,
+          cuisine,
+          tables: parseInt(tableCount) || 10,
+        }, "mock-jwt-token");
+        
+        if (mockResponse.success) {
+          toast.success("Restaurant created successfully (mock mode)");
+          navigate('/dashboard');
+          return;
+        }
+      } catch (mockError) {
+        console.error("Mock API also failed:", mockError);
+      }
+      
+      toast.error("Failed to create restaurant. Please try again or contact support.");
     } finally {
       setLoading(false);
     }

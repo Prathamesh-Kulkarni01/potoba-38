@@ -1,3 +1,4 @@
+
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -12,7 +13,7 @@ const app = express();
 // Middleware
 app.use(cors({
   origin: (origin, callback) => {
-    const allowedOrigins = [/^https?:\/\/.*\.lovable\.app$/, 'http://localhost:8080'];
+    const allowedOrigins = [/^https?:\/\/.*\.lovable\.app$/, 'http://localhost:8080', 'http://localhost:5173'];
     if (!origin || allowedOrigins.some((allowed) => allowed instanceof RegExp ? allowed.test(origin) : allowed === origin)) {
       callback(null, true);
     } else {
@@ -29,6 +30,7 @@ app.use(express.json());
 // Debugging CORS
 app.use((req, res, next) => {
   console.log(`CORS Debug: Origin - ${req.headers.origin}`);
+  console.log(`Auth Header: ${req.headers.authorization ? 'Present' : 'Not present'}`);
   next();
 });
 
@@ -56,6 +58,7 @@ app.post('/api/sync-databases', async (req, res) => {
 const PORT = process.env.PORT || 5000;
 const MONGO_URI = process.env.MONGO_URI || 'Unknown MongoDB URI';
 
+// Initialize WebSocket server
 const wss = new WebSocket.Server({ port: 8081 });
 
 wss.on('connection', (ws) => {
@@ -82,6 +85,10 @@ function logToFrontend(message) {
     }
   });
 }
+
+// Export WebSocket for use in other modules
+module.exports.wss = wss;
+module.exports.logToFrontend = logToFrontend;
 
 // Example: Log a message to the frontend
 logToFrontend('Backend is running');
