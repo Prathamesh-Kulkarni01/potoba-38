@@ -1,4 +1,3 @@
-
 // This file provides mock implementations of API endpoints
 // Replace with actual API calls when your backend is ready
 
@@ -123,7 +122,11 @@ export const mockApi = {
       
       return { 
         success: true, 
-        data: { user: USERS[0] } 
+        data: { 
+          data: {
+            user: USERS[0]
+          }
+        }
       };
     }
   },
@@ -160,7 +163,9 @@ export const mockApi = {
       
       return { 
         success: true, 
-        data: newRestaurant 
+        data: {
+          data: newRestaurant
+        }
       };
     },
     
@@ -179,7 +184,9 @@ export const mockApi = {
       
       return { 
         success: true, 
-        data: updatedRestaurant 
+        data: {
+          data: updatedRestaurant
+        }
       };
     },
     

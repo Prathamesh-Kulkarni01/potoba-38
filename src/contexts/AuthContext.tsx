@@ -36,19 +36,25 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
           console.log('Auth status response:', response);
           
           if (response.success && response.data) {
-            // Extract user from potentially nested data structure
-            // Note: response.data.user is the correct path according to types
-            const userData = response.data.user || response.data;
+            // Extract user from nested data structure
+            const userData = response.data.data && response.data.data.user 
+              ? response.data.data.user 
+              : response.data.user 
+                ? response.data.user 
+                : response.data;
+            
             console.log('Extracted user data:', userData);
             
-            setUser(userData);
+            // Ensure userData is a User object, not an object containing User
+            const actualUser = (userData as any).user ? (userData as any).user : userData;
+            setUser(actualUser as User);
             
             if (storedRestaurantId) {
               setCurrentRestaurantId(storedRestaurantId);
-            } else if (userData.restaurants && userData.restaurants.length > 0) {
+            } else if (actualUser.restaurants && actualUser.restaurants.length > 0) {
               // Set first restaurant as default if none selected
-              setCurrentRestaurantId(userData.restaurants[0].id);
-              localStorage.setItem('currentRestaurantId', userData.restaurants[0].id);
+              setCurrentRestaurantId(actualUser.restaurants[0].id);
+              localStorage.setItem('currentRestaurantId', actualUser.restaurants[0].id);
             }
           }
         } catch (error) {
@@ -83,8 +89,10 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
         throw new Error(response.error || "Login failed");
       }
       
-      // The direct response structure or nested structure
-      const { user, token } = response.data;
+      // Extract data from potentially nested response
+      const responseData = response.data.data || response.data;
+      const user = responseData.user;
+      const token = responseData.token;
       
       console.log('Extracted user:', user);
       console.log('Extracted token:', token);
@@ -127,8 +135,10 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
         throw new Error(response.error || "Registration failed");
       }
       
-      // AuthResponse already has the correct structure of { user, token }
-      const { user, token } = response.data;
+      // Handle the nested data structure in the response
+      const userData = response.data.data || response.data;
+      const user = userData.user;
+      const token = userData.token;
       
       console.log('Extracted user:', user);
       console.log('Extracted token:', token);
@@ -152,7 +162,9 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
         if (mockResponse.success && mockResponse.data) {
           console.log('Mock API signup response:', mockResponse.data);
           
-          const { user, token } = mockResponse.data;
+          const userData = mockResponse.data.data || mockResponse.data;
+          const user = userData.user;
+          const token = userData.token;
           
           console.log('Saving mock token to localStorage:', token);
           localStorage.setItem('token', token);
@@ -206,8 +218,8 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
         throw new Error(response.error || "Failed to add restaurant");
       }
       
-      // Extract restaurant from response
-      const newRestaurant = response.data;
+      // Extract restaurant from potentially nested response
+      const newRestaurant = response.data.data || response.data;
       console.log('Extracted restaurant:', newRestaurant);
       
       // Update user with new restaurant
@@ -229,9 +241,9 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
       
       // Try mock API as fallback
       try {
-        const mockResponse = await mockApi.restaurants.create(restaurant, "mock-jwt-token");
+        const mockResponse = await mockApi.restaurants.create(restaurant);
         if (mockResponse.success && mockResponse.data) {
-          const newRestaurant = mockResponse.data;
+          const newRestaurant = mockResponse.data.data || mockResponse.data;
           
           // Update user with new restaurant
           const updatedUser = {
