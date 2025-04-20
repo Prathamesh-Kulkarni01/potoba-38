@@ -1,10 +1,16 @@
 
 import React, { useState, useEffect } from 'react';
-import { Navigate, Outlet, useLocation } from 'react-router-dom';
+import { Navigate, Outlet, useLocation, Route, Routes } from 'react-router-dom';
 import RestaurantDashboard from '../components/RestaurantDashboard';
 import TableManagement from '../components/TableManagement';
 import MenuManagement from '../components/MenuManagement';
 import OrderTable from '../components/OrderTable';
+import MarketingCampaigns from '../components/marketing/MarketingCampaigns';
+import WhatsAppBot from '../components/marketing/WhatsAppBot';
+import AiAssistant from '../components/marketing/AiAssistant';
+import RewardsManagement from '../components/loyalty/RewardsManagement';
+import PromotionsManagement from '../components/loyalty/PromotionsManagement';
+import MembersManagement from '../components/loyalty/MembersManagement';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import { DashboardShell } from '@/components/DashboardShell';
@@ -34,6 +40,7 @@ const Dashboard = () => {
   const renderDashboardContent = () => {
     const path = location.pathname;
     
+    // Main navigation routes
     if (path === '/dashboard') {
       return <RestaurantDashboard />;
     } else if (path === '/dashboard/tables') {
@@ -42,6 +49,24 @@ const Dashboard = () => {
       return <MenuManagement />;
     } else if (path === '/dashboard/orders') {
       return <OrderTable />;
+    }
+    
+    // Marketing routes
+    else if (path === '/dashboard/marketing/campaigns') {
+      return <MarketingCampaigns />;
+    } else if (path === '/dashboard/marketing/whatsapp') {
+      return <WhatsAppBot />;
+    } else if (path === '/dashboard/marketing/ai-assistant') {
+      return <AiAssistant />;
+    }
+    
+    // Loyalty routes
+    else if (path === '/dashboard/loyalty/rewards') {
+      return <RewardsManagement />;
+    } else if (path === '/dashboard/loyalty/promotions') {
+      return <PromotionsManagement />;
+    } else if (path === '/dashboard/loyalty/members') {
+      return <MembersManagement />;
     }
     
     // Render the Outlet for any other sub-routes

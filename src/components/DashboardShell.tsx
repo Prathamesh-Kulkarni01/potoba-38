@@ -18,7 +18,21 @@ import {
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { LayoutDashboard, UtensilsCrossed, TableProperties, ReceiptText, Settings, LogOut, ChevronRight } from "lucide-react";
+import { 
+  LayoutDashboard, 
+  UtensilsCrossed, 
+  TableProperties, 
+  ReceiptText, 
+  Settings, 
+  LogOut, 
+  ChevronRight, 
+  Megaphone, 
+  Award, 
+  MessageSquareText, 
+  Bot, 
+  BadgePercent,
+  Gift
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "sonner";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -52,8 +66,8 @@ export function DashboardShell({ children }: DashboardShellProps) {
     return (names[0].charAt(0) + names[names.length - 1].charAt(0)).toUpperCase();
   };
 
-  // All hooks are guaranteed to be called regardless of conditional rendering
-  const menuItems = [
+  // Main navigation items
+  const mainMenuItems = [
     {
       title: "Dashboard",
       path: "/dashboard",
@@ -74,12 +88,52 @@ export function DashboardShell({ children }: DashboardShellProps) {
       path: "/dashboard/orders",
       icon: ReceiptText,
     },
-    {
-      title: "API Settings",
-      path: "/dashboard/api-settings",
-      icon: Settings,
-    }
   ];
+
+  // Marketing menu items
+  const marketingMenuItems = [
+    {
+      title: "Campaigns",
+      path: "/dashboard/marketing/campaigns",
+      icon: Megaphone,
+    },
+    {
+      title: "WhatsApp Bot",
+      path: "/dashboard/marketing/whatsapp",
+      icon: MessageSquareText,
+    },
+    {
+      title: "AI Assistant",
+      path: "/dashboard/marketing/ai-assistant",
+      icon: Bot,
+    },
+  ];
+
+  // Loyalty menu items
+  const loyaltyMenuItems = [
+    {
+      title: "Rewards",
+      path: "/dashboard/loyalty/rewards",
+      icon: Gift,
+    },
+    {
+      title: "Promotions",
+      path: "/dashboard/loyalty/promotions",
+      icon: BadgePercent,
+    },
+    {
+      title: "Members",
+      path: "/dashboard/loyalty/members",
+      icon: Award,
+    },
+  ];
+
+  // Settings menu item
+  const settingsMenuItem = {
+    title: "API Settings",
+    path: "/dashboard/api-settings",
+    icon: Settings,
+  };
 
   return (
     <SidebarProvider>
@@ -101,11 +155,12 @@ export function DashboardShell({ children }: DashboardShellProps) {
           </SidebarHeader>
           
           <SidebarContent className="p-2">
+            {/* Main Navigation */}
             <SidebarGroup>
               <SidebarGroupLabel>Main Navigation</SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>
-                  {menuItems.map((item) => (
+                  {mainMenuItems.map((item) => (
                     <SidebarMenuItem key={item.path}>
                       <SidebarMenuButton
                         asChild
@@ -120,6 +175,76 @@ export function DashboardShell({ children }: DashboardShellProps) {
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+
+            {/* Marketing */}
+            <SidebarGroup>
+              <SidebarGroupLabel className="mt-4">Marketing</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {marketingMenuItems.map((item) => (
+                    <SidebarMenuItem key={item.path}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={isActive(item.path)}
+                        tooltip={item.title}
+                      >
+                        <button onClick={() => navigate(item.path)}>
+                          <item.icon className="h-4 w-4" />
+                          <span>{item.title}</span>
+                          <ChevronRight className="ml-auto h-4 w-4 opacity-0 group-data-[active=true]:opacity-70" />
+                        </button>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+
+            {/* Loyalty */}
+            <SidebarGroup>
+              <SidebarGroupLabel className="mt-4">Loyalty</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {loyaltyMenuItems.map((item) => (
+                    <SidebarMenuItem key={item.path}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={isActive(item.path)}
+                        tooltip={item.title}
+                      >
+                        <button onClick={() => navigate(item.path)}>
+                          <item.icon className="h-4 w-4" />
+                          <span>{item.title}</span>
+                          <ChevronRight className="ml-auto h-4 w-4 opacity-0 group-data-[active=true]:opacity-70" />
+                        </button>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+
+            {/* Settings */}
+            <SidebarGroup>
+              <SidebarGroupLabel className="mt-4">Settings</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={isActive(settingsMenuItem.path)}
+                      tooltip={settingsMenuItem.title}
+                    >
+                      <button onClick={() => navigate(settingsMenuItem.path)}>
+                        <settingsMenuItem.icon className="h-4 w-4" />
+                        <span>{settingsMenuItem.title}</span>
+                        <ChevronRight className="ml-auto h-4 w-4 opacity-0 group-data-[active=true]:opacity-70" />
+                      </button>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>
@@ -173,7 +298,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
           {/* Bottom Navigation for Mobile */}
           <div className="fixed bottom-0 left-0 right-0 md:hidden bg-restaurant-primary text-white z-30">
             <div className="flex justify-around items-center p-3">
-              {menuItems.map((item) => (
+              {mainMenuItems.slice(0, 4).map((item) => (
                 <Button 
                   key={item.path}
                   variant="ghost"
