@@ -7,7 +7,10 @@ const API_URL = 'http://localhost:5000/api';
 export const authService = {
   async login(email: string, password: string) {
     try {
-      const response = await axios.post<AuthResponse>(`${API_URL}/auth/login`, { email, password });
+      const response = await axios.post<AuthResponse>(`${API_URL}/auth/login`, 
+        { email, password },
+        { withCredentials: true }
+      );
       const { token, user } = response.data.data;
       
       // Store token in localStorage
@@ -22,7 +25,10 @@ export const authService = {
   
   async register(email: string, password: string, name: string, role?: string) {
     try {
-      const response = await axios.post<AuthResponse>(`${API_URL}/auth/register`, { email, password, name, role });
+      const response = await axios.post<AuthResponse>(`${API_URL}/auth/register`, 
+        { email, password, name, role },
+        { withCredentials: true }
+      );
       const { token, user } = response.data.data;
       
       // Store token in localStorage
@@ -58,7 +64,8 @@ export const authService = {
         {
           headers: {
             Authorization: `Bearer ${token}`
-          }
+          },
+          withCredentials: true
         }
       );
       
@@ -77,7 +84,8 @@ export const authService = {
       const response = await axios.get(`${API_URL}/auth/me`, {
         headers: {
           Authorization: `Bearer ${token}`
-        }
+        },
+        withCredentials: true
       });
       
       return response.data.data.user;

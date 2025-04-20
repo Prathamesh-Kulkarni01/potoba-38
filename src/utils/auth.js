@@ -86,7 +86,8 @@ export const authFetch = async (endpoint, options = {}) => {
   
   const config = {
     ...options,
-    headers
+    headers,
+    credentials: 'include'
   };
   
   try {
@@ -133,7 +134,8 @@ export const loginUser = async (credentials) => {
     const response = await fetch(`${API_URL}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(credentials)
+      body: JSON.stringify(credentials),
+      credentials: 'include'
     });
     
     const data = await response.json();
@@ -159,7 +161,8 @@ export const registerUser = async (userData) => {
     const response = await fetch(`${API_URL}/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(userData)
+      body: JSON.stringify(userData),
+      credentials: 'include'
     });
     
     const data = await response.json();

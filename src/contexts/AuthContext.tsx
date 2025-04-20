@@ -42,7 +42,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, navigate }
   const { toast } = useToast();
 
   useEffect(() => {
-    // Check for token in localStorage on initial load
     const storedToken = localStorage.getItem('token');
     if (storedToken) {
       setToken(storedToken);
@@ -51,14 +50,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, navigate }
       setIsLoading(false);
     }
     
-    // Load current restaurant from localStorage if available
     const storedRestaurantId = localStorage.getItem('currentRestaurantId');
     if (storedRestaurantId) {
       setCurrentRestaurantId(storedRestaurantId);
     }
   }, []);
 
-  // Update localStorage when currentRestaurantId changes
   useEffect(() => {
     if (currentRestaurantId) {
       localStorage.setItem('currentRestaurantId', currentRestaurantId);
@@ -71,14 +68,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, navigate }
       const response = await fetch('http://localhost:5000/api/auth/me', {
         headers: {
           'Authorization': `Bearer ${authToken}`
-        }
+        },
+        credentials: 'include'
       });
 
       if (response.ok) {
         const userData = await response.json();
         console.log("Fetched user data:", userData);
         
-        // Ensure user data has role and permissions
         const userWithDefaults = {
           ...userData.data.user,
           role: userData.data.user.role || 'user',
@@ -88,7 +85,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, navigate }
         console.log("User with defaults:", userWithDefaults);
         setUser(userWithDefaults);
         
-        // Safely check if restaurants exist before trying to set default restaurant
         if (userWithDefaults.restaurants && userWithDefaults.restaurants.length > 0) {
           const firstRestaurant = userWithDefaults.restaurants[0];
           if (!currentRestaurantId && firstRestaurant) {
@@ -96,7 +92,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, navigate }
           }
         }
       } else {
-        // Token is invalid, remove it
         console.error("Failed to fetch current user:", await response.text());
         localStorage.removeItem('token');
         setToken(null);
@@ -118,7 +113,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, navigate }
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ email, password }),
+        credentials: 'include'
       });
 
       const data = await response.json();
@@ -128,7 +124,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, navigate }
         localStorage.setItem('token', data.token);
         setToken(data.token);
         
-        // Ensure user data has role and permissions
         const userRole = data.user?.role || 'user';
         console.log("User role from server:", userRole);
         
@@ -141,7 +136,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, navigate }
         console.log("User with defaults:", userWithDefaults);
         setUser(userWithDefaults);
         
-        // Safely check if restaurants exist and set default restaurant if available
         if (userWithDefaults.restaurants && userWithDefaults.restaurants.length > 0) {
           const firstRestaurant = userWithDefaults.restaurants[0];
           const restaurantId = firstRestaurant.id || firstRestaurant._id;
@@ -168,7 +162,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, navigate }
         description: "Could not connect to the server",
         variant: "destructive",
       });
-      throw error; // Re-throw error so the calling code can handle it
+      throw error;
     } finally {
       setIsLoading(false);
     }
@@ -182,7 +176,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, navigate }
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ name, email, password })
+        body: JSON.stringify({ name, email, password }),
+        credentials: 'include'
       });
 
       const data = await response.json();
@@ -220,17 +215,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, navigate }
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ name, email, password, role })
+        body: JSON.stringify({ name, email, password, role }),
+        credentials: 'include'
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        // Auto login after signup
         localStorage.setItem('token', data.data.token);
         setToken(data.data.token);
         
-        // Ensure user data has role and permissions
         const userWithDefaults = {
           ...data.data.user,
           role: data.data.user.role || 'user',
@@ -285,7 +279,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, navigate }
       return undefined;
     }
     
-    // If we have a currentRestaurantId, find that restaurant
     if (currentRestaurantId) {
       const restaurant = user.restaurants.find(r => 
         (r.id === currentRestaurantId || r._id === currentRestaurantId)
@@ -295,23 +288,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, navigate }
       }
     }
     
-    // Otherwise return first restaurant
     return user.restaurants[0];
   };
   
   const hasPermission = (permission: string): boolean => {
     if (!user) return false;
     
-    // Admin has all permissions
     if (user.role === 'admin') return true;
     
-    // Check user's permissions array
     if (!user.permissions) return false;
     
     return user.permissions.includes(permission);
   };
   
-  // Helper function to get default permissions based on role
   const getDefaultPermissions = (role: string): string[] => {
     switch (role) {
       case 'admin':
