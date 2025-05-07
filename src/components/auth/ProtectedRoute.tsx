@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
@@ -14,21 +13,25 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   requiredRole, 
   children 
 }) => {
-  const { user, isAuthenticated } = useAuth();
+  const { user, token, loading } = useAuth();
+
+  // Show nothing while loading
+  if (loading) {
+    return null;
+  }
 
   // Check if user is authenticated
-  if (!isAuthenticated()) {
+  if (!token || !user) {
     return <Navigate to="/login" replace />;
   }
 
   // If a specific role is required, check it
-  if (requiredRole && user?.role !== requiredRole) {
+  if (requiredRole && user.role !== requiredRole) {
     return <Navigate to="/unauthorized" replace />;
   }
 
   // If a specific permission is required, check it
-  if (requiredPermission && 
-      !user?.permissions?.includes(requiredPermission)) {
+  if (requiredPermission && !user.permissions.includes(requiredPermission)) {
     return <Navigate to="/unauthorized" replace />;
   }
 

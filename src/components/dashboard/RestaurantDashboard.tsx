@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -9,12 +8,11 @@ import { CalendarDays, ChefHat, DollarSign, IndianRupee, ShoppingBasket, Users }
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/components/ui/use-toast';
 import { Restaurant, MenuItem, Table, Order } from '@/types/api';
-import useApi from '@/services/api';
+import { collection, query, getDocs, doc, getDoc, addDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 const RestaurantDashboard = () => {
-  const { user } = useAuth();
-  const api = useApi();
-  const { currentRestaurantId } = useAuth()
+  const { user, currentRestaurantId } = useAuth();
   const navigate = useNavigate();
 
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
@@ -22,7 +20,6 @@ const RestaurantDashboard = () => {
   const [tables, setTables] = useState<Table[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
   const [creatingDemoData, setCreatingDemoData] = useState(false);
 
   useEffect(() => {
@@ -33,38 +30,50 @@ const RestaurantDashboard = () => {
           return;
         }
 
-        const token = localStorage.getItem('token');
-
-        if (!token) {
+        if (!currentRestaurantId) {
           toast({
-            title: "Authentication Error",
-            description: "Please log in again.",
+            title: "Error",
+            description: "No restaurant selected",
             variant: "destructive"
           });
-          navigate('/login');
+          navigate('/dashboard');
           return;
         }
 
         // Fetch restaurant data
-        const restaurantData = await api.restaurant.getById(currentRestaurantId);
-        setRestaurant(restaurantData);
-
-        // Fetch menu items, tables, and orders
-        const menuResponse = await api.menu.get(currentRestaurantId);
-        const tablesResponse = await api.table.get(currentRestaurantId);
-        const ordersResponse = await api.order.get(currentRestaurantId);
-
-        if (menuResponse) {
-          setMenuItems(menuResponse || []);
+        const restaurantRef = doc(db, 'restaurants', currentRestaurantId);
+        const restaurantDoc = await getDoc(restaurantRef);
+        if (restaurantDoc.exists()) {
+          setRestaurant({ id: restaurantDoc.id, ...restaurantDoc.data() } as Restaurant);
         }
 
-        if (tablesResponse) {
-          setTables(tablesResponse || []);
-        }
+        // Fetch menu items
+        const menuRef = collection(db, 'restaurants', currentRestaurantId, 'menu');
+        const menuSnapshot = await getDocs(menuRef);
+        const menuData = menuSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as MenuItem[];
+        setMenuItems(menuData);
 
-        if (ordersResponse) {
-          setOrders(ordersResponse || []);
-        }
+        // Fetch tables
+        const tablesRef = collection(db, 'restaurants', currentRestaurantId, 'tables');
+        const tablesSnapshot = await getDocs(tablesRef);
+        const tablesData = tablesSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as Table[];
+        setTables(tablesData);
+
+        // Fetch orders
+        const ordersRef = collection(db, 'restaurants', currentRestaurantId, 'orders');
+        const ordersSnapshot = await getDocs(ordersRef);
+        const ordersData = ordersSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as Order[];
+        setOrders(ordersData);
+
       } catch (error) {
         console.error('Error loading restaurant data:', error);
         toast({
@@ -81,37 +90,61 @@ const RestaurantDashboard = () => {
   }, [user, navigate, currentRestaurantId]);
 
   const createDemoData = async () => {
-    if (!restaurant) return;
-    console.log({ restaurant })
+    if (!currentRestaurantId) return;
+
     try {
       setCreatingDemoData(true);
-      await api.restaurant.createDemoData(restaurant.id || restaurant._id || '');
+
+      // Create demo menu items
+      const menuRef = collection(db, 'restaurants', currentRestaurantId, 'menu');
+      const demoMenuItems = [
+        {
+          name: 'Margherita Pizza',
+          description: 'Classic tomato and mozzarella pizza',
+          price: 12.99,
+          category: 'Main Course',
+          available: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        },
+        {
+          name: 'Caesar Salad',
+          description: 'Fresh romaine lettuce with Caesar dressing',
+          price: 8.99,
+          category: 'Appetizers',
+          available: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }
+      ];
+
+      for (const item of demoMenuItems) {
+        await addDoc(menuRef, item);
+      }
+
+      // Create demo tables
+      const tablesRef = collection(db, 'restaurants', currentRestaurantId, 'tables');
+      const demoTables = [
+        { number: 1, capacity: 4, status: 'available' },
+        { number: 2, capacity: 2, status: 'available' },
+        { number: 3, capacity: 6, status: 'available' }
+      ];
+
+      for (const table of demoTables) {
+        await addDoc(tablesRef, {
+          ...table,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+      }
 
       toast({
         title: "Demo Data Created",
-        description: "Sample menu items, tables and orders have been created for your restaurant.",
+        description: "Sample menu items and tables have been created for your restaurant.",
       });
 
       // Reload data
-      const token = localStorage.getItem('token');
-      if (!token) return;
-
-      const restaurantId = restaurant.id || restaurant._id || '';
-      const menuResponse = await api.menu.get(restaurantId);
-      const tablesResponse = await api.table.get(restaurantId);
-      const ordersResponse = await api.order.get(restaurantId);
-
-      if (menuResponse) {
-        setMenuItems(menuResponse || []);
-      }
-
-      if (tablesResponse) {
-        setTables(tablesResponse || []);
-      }
-
-      if (ordersResponse) {
-        setOrders(ordersResponse || []);
-      }
+      // loadData();
     } catch (error) {
       console.error('Error creating demo data:', error);
       toast({

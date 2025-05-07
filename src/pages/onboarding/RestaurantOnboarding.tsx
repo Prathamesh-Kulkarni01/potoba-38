@@ -10,7 +10,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { motion } from 'framer-motion';
 import { UtensilsCrossed, ChefHat, ArrowRight, Loader2 } from 'lucide-react';
 import { toast } from "sonner";
-import useApi from '@/services/api';
+import { db } from '@/lib/firebase';
+import { collection, addDoc, updateDoc, doc, arrayUnion } from 'firebase/firestore';
 
 const cuisineTypes = [
   "American", "Italian", "Mexican", "Chinese", "Japanese", 
@@ -79,7 +80,6 @@ const RestaurantOnboarding = () => {
   const [loading, setLoading] = useState(false);
   const [createDemoData, setCreateDemoData] = useState(false);
   const { user, currentRestaurantId, setCurrentRestaurantId } = useAuth();
-  const api = useApi();
   const navigate = useNavigate();
 
   // Form data
@@ -92,12 +92,11 @@ const RestaurantOnboarding = () => {
 
   // Check if the user is authenticated
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) {
+    if (!user) {
       toast.error("You must be logged in to create a restaurant");
       navigate('/login', { state: { returnUrl: '/onboarding' } });
     }
-  }, [navigate]);
+  }, [user, navigate]);
 
   const handleContinue = () => {
     if (step === 1) {
@@ -109,6 +108,55 @@ const RestaurantOnboarding = () => {
     }
   };
 
+  const createDefaultTables = async (restaurantId: string, count: number) => {
+    const tablesCollection = collection(db, 'restaurants', restaurantId, 'tables');
+    const tables = [];
+
+    for (let i = 1; i <= count; i++) {
+      const tableDoc = await addDoc(tablesCollection, {
+        number: i,
+        status: 'available',
+        capacity: 4,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+      tables.push(tableDoc.id);
+    }
+
+    return tables;
+  };
+
+  const createDemoMenuItems = async (restaurantId: string) => {
+    const menuCollection = collection(db, 'restaurants', restaurantId, 'menu');
+    const demoItems = [
+      {
+        name: 'Classic Burger',
+        description: 'Juicy beef patty with fresh vegetables',
+        price: 12.99,
+        category: 'Main Course',
+        image: 'https://example.com/burger.jpg',
+        available: true
+      },
+      {
+        name: 'Caesar Salad',
+        description: 'Fresh romaine lettuce with Caesar dressing',
+        price: 8.99,
+        category: 'Appetizers',
+        image: 'https://example.com/salad.jpg',
+        available: true
+      },
+      // Add more demo items as needed
+    ];
+
+    for (const item of demoItems) {
+      await addDoc(menuCollection, {
+        ...item,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !description || !address || !phone || !cuisine) {
@@ -116,38 +164,54 @@ const RestaurantOnboarding = () => {
       return;
     }
 
+    if (!user) {
+      toast.error("You must be logged in to create a restaurant");
+      return;
+    }
+
     setLoading(true);
     try {
-      const newRestaurant = await api.restaurant.create({
+      // Create restaurant document
+      const restaurantRef = await addDoc(collection(db, 'restaurants'), {
         name,
         description,
         address,
         phone,
         cuisine,
-        tables: parseInt(tableCount) || 10,
+        ownerId: user.id,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       });
-      if (!newRestaurant || !(newRestaurant.id || newRestaurant._id)) {
-        throw new Error('Failed to create restaurant. Missing restaurant ID.');
-      }
 
-      const restaurantId = newRestaurant.id || newRestaurant._id;
+      // Create default tables
+      await createDefaultTables(restaurantRef.id, parseInt(tableCount) || 10);
 
-      if (setCurrentRestaurantId) {
-        setCurrentRestaurantId(newRestaurant.id);
-      }
-
-      await api.table.createDefault(restaurantId, parseInt(tableCount) || 10);
-
+      // Create demo data if requested
       if (createDemoData) {
-        await api.restaurant.createDemoData(restaurantId);
+        await createDemoMenuItems(restaurantRef.id);
         toast.success("Demo data created successfully!");
+      }
+
+      // Update user's restaurants array
+      const userRef = doc(db, 'users', user.id);
+      await updateDoc(userRef, {
+        restaurants: arrayUnion({
+          id: restaurantRef.id,
+          name,
+          role: 'owner'
+        })
+      });
+
+      // Set current restaurant
+      if (setCurrentRestaurantId) {
+        setCurrentRestaurantId(restaurantRef.id);
       }
 
       toast.success("Restaurant created successfully!");
       navigate('/dashboard');
     } catch (error: any) {
       console.error("Failed to create restaurant:", error);
-      toast.error("Failed to create restaurant. Please try again.");
+      toast.error(error.message || "Failed to create restaurant. Please try again.");
     } finally {
       setLoading(false);
     }

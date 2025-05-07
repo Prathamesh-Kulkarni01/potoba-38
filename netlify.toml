@@ -11,3 +11,10 @@
   from = "/*"
   to = "/index.html"
   status = 200
+
+# Handle subdomains
+[[redirects]]
+  from = "https://*.potoba-pos.netlify.app/*"
+  to = "/index.html"
+  status = 200
+  force = true

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   SidebarProvider,
@@ -45,24 +45,133 @@ import RestaurantSelector from "./RestaurantSelector";
 import { ThemeToggle } from "../theme/ThemeToggle";
 import { Separator } from "../ui/separator";
 import { Badge } from "../ui/badge";
+import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { getSubdomain, getFullDomain, getCurrentProtocol } from '@/utils/subdomain';
 
 interface DashboardShellProps {
   children: React.ReactNode;
 }
 
+interface Restaurant {
+  id: string;
+  name: string;
+  role: string;
+}
+
 export function DashboardShell({ children }: DashboardShellProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, logout, getCurrentRestaurant, hasPermission } = useAuth();
-  const currentRestaurant = user ? getCurrentRestaurant() : undefined;
+  const { user, logout, currentRestaurantId, setCurrentRestaurantId } = useAuth();
+  const [userRestaurants, setUserRestaurants] = useState<Restaurant[]>([]);
+  const [currentRestaurant, setCurrentRestaurant] = useState<Restaurant | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
+
+  useEffect(() => {
+    const initializeRestaurant = async () => {
+      if (!user) {
+        setIsLoading(false);
+        setIsInitialLoad(false);
+        return;
+      }
+
+      try {
+        // Fetch user's restaurants
+        const userRef = doc(db, 'users', user.id);
+        const userDoc = await getDoc(userRef);
+        
+        if (!userDoc.exists()) {
+          setIsLoading(false);
+          setIsInitialLoad(false);
+          return;
+        }
+
+        const userData = userDoc.data();
+        const restaurants = userData.restaurants || [];
+        setUserRestaurants(restaurants);
+
+        // Get current subdomain
+        const subdomain = getSubdomain();
+        
+        // Find restaurant matching current subdomain
+        const matchingRestaurant = restaurants.find(r => r.id === subdomain);
+        
+        if (matchingRestaurant) {
+          setCurrentRestaurantId(matchingRestaurant.id);
+          setCurrentRestaurant(matchingRestaurant);
+        } else if (restaurants.length > 0) {
+          // If no matching restaurant found, default to first one
+          setCurrentRestaurantId(restaurants[0].id);
+          setCurrentRestaurant(restaurants[0]);
+        }
+      } catch (error) {
+        console.error('Failed to initialize restaurant:', error);
+      } finally {
+        setIsLoading(false);
+        setIsInitialLoad(false);
+      }
+    };
+
+    initializeRestaurant();
+  }, [user, setCurrentRestaurantId, navigate, location.pathname, isInitialLoad]);
+
+  // Add effect to update currentRestaurant when currentRestaurantId changes
+  useEffect(() => {
+    if (currentRestaurantId && userRestaurants.length > 0) {
+      const restaurant = userRestaurants.find(r => r.id === currentRestaurantId);
+      if (restaurant) {
+        setCurrentRestaurant(restaurant);
+      }
+    }
+  }, [currentRestaurantId, userRestaurants]);
+
+  // If loading, show loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-restaurant-primary"></div>
+      </div>
+    );
+  }
+
+  // If not authenticated, redirect to login
+  if (!user) {
+    navigate('/login');
+    return null;
+  }
+
+  // If no restaurants, show message
+  if (userRestaurants.length === 0) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <div className="text-center p-8 bg-white rounded-lg shadow-lg max-w-md">
+          <ShieldAlert className="h-16 w-16 text-yellow-500 mx-auto mb-4" />
+          <h1 className="text-2xl font-bold mb-4">No Restaurants Found</h1>
+          <p className="text-gray-600 mb-6">
+            You don't have access to any restaurants yet. Please contact your administrator for access.
+          </p>
+          <Button
+            onClick={() => navigate('/onboarding')}
+          >
+            Create Restaurant
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   const isActive = (path: string) => {
     return location.pathname.startsWith(path);
   };
 
-  const handleLogout = () => {
-    logout();
-    navigate("/login");
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate("/login");
+    } catch (error) {
+      console.error('Failed to logout:', error);
+    }
   };
 
   const getUserInitials = () => {
@@ -173,18 +282,18 @@ export function DashboardShell({ children }: DashboardShellProps) {
 
   // Filter menu items based on user permissions
   const filteredMainMenuItems = mainMenuItems.filter((item) =>
-    hasPermission(item.permission)
+    user?.permissions?.includes(item.permission)
   );
 
   const filteredMarketingMenuItems = marketingMenuItems.filter((item) =>
-    hasPermission(item.permission)
+    user?.permissions?.includes(item.permission)
   );
 
   const filteredLoyaltyMenuItems = loyaltyMenuItems.filter((item) =>
-    hasPermission(item.permission)
+    user?.permissions?.includes(item.permission)
   );
 
-  const showSettingsMenuItem = hasPermission(settingsMenuItem.permission);
+  const showSettingsMenuItem = user?.permissions?.includes(settingsMenuItem.permission);
 
   return (
     <SidebarProvider>
@@ -206,7 +315,11 @@ export function DashboardShell({ children }: DashboardShellProps) {
               <ThemeToggle />
             </div>
 
-            <RestaurantSelector />
+            <RestaurantSelector 
+              restaurants={userRestaurants}
+              currentRestaurant={currentRestaurant}
+              onRestaurantChange={(restaurantId) => setCurrentRestaurantId?.(restaurantId)}
+            />
           </SidebarHeader>
 
           <SidebarContent className="p-2">

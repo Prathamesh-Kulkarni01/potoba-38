@@ -28,6 +28,7 @@ const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:8080',
   'https://potoba-pos.netlify.app',
+  'https://*.potoba-pos.netlify.app', // Allow all subdomains
   'https://potoba-38.onrender.com',
   process.env.CORS_ORIGIN, // e.g., https://your-prod-domain.com
 ].filter(Boolean); // Remove undefined/null values
@@ -35,7 +36,13 @@ const allowedOrigins = [
 // Enhanced CORS middleware
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (!origin || allowedOrigins.some(allowedOrigin => {
+      if (allowedOrigin.includes('*')) {
+        const pattern = new RegExp('^' + allowedOrigin.replace('*', '.*') + '$');
+        return pattern.test(origin);
+      }
+      return allowedOrigin === origin;
+    })) {
       callback(null, true);
     } else {
       console.warn(`Blocked by CORS: ${origin}`);

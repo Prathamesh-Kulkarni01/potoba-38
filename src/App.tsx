@@ -3,14 +3,14 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, useNavigate } from "react-router-dom";
-import { AuthProvider } from "./contexts/AuthContext";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { ThemeProvider } from "./components/theme/ThemeProvider";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import Index from "./pages/LandingPage";
 import Login from "./pages/auth/Login";
 import Signup from "./pages/auth/Signup";
-import Unauthorized from "./pages/auth/Unauthorized";
+import Unauthorized from "./pages/Unauthorized";
 import RestaurantOnboarding from "./pages/onboarding/RestaurantOnboarding";
 import Dashboard from "./pages/dashboard/Dashboard";
 import TableDetail from "./pages/table/TableDetail";
@@ -32,10 +32,8 @@ const queryClient = new QueryClient({
 
 // Create a wrapper component to provide navigate function
 const AuthProviderWithRouter: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const navigate = useNavigate();
-
   return (
-    <AuthProvider navigate={navigate}>
+    <AuthProvider>
       {children}
     </AuthProvider>
   );
@@ -134,7 +132,7 @@ const App = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
-        <BrowserRouter>
+        <Router>
           <TooltipProvider>
             <Toaster />
             <Sonner />
@@ -164,7 +162,7 @@ const App = () => {
               </div>
             </AuthProviderWithRouter>
           </TooltipProvider>
-        </BrowserRouter>
+        </Router>
       </ThemeProvider>
     </QueryClientProvider>
   );

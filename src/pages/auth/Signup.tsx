@@ -1,19 +1,20 @@
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import { Utensils, ChefHat } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
+import { useToast } from "@/components/ui/use-toast";
 
 const Signup = () => {
-  const [name, setName] = useState("");
+  const [restaurantName, setRestaurantName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState("user");
   const [isLoading, setIsLoading] = useState(false);
-  const { signup } = useAuth();
+  const { signUp } = useAuth();
   const navigate = useNavigate();
+  const { toast } = useToast();
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -21,53 +22,24 @@ const Signup = () => {
       setIsLoading(true);
 
       try {
-        console.log("Starting signup process...");
-        await signup(name, email, password, role);
-        navigate("/onboarding");
-      } catch (error) {
+        await signUp(email, password, restaurantName);
+        toast({
+          title: "Account created",
+          description: "Your restaurant account has been created successfully.",
+        });
+        navigate("/dashboard");
+      } catch (error: any) {
         console.error("Signup error:", error);
+        toast({
+          title: "Signup failed",
+          description: error.message || "Please try again with different credentials.",
+          variant: "destructive",
+        });
       } finally {
         setIsLoading(false);
       }
     },
-    [name, email, password, role, signup, navigate]
-  );
-
-  const nameInputProps = useMemo(
-    () => ({
-      id: "name",
-      placeholder: "Your Name",
-      value: name,
-      onChange: (e: React.ChangeEvent<HTMLInputElement>) => setName(e.target.value),
-      required: true,
-      className: "input",
-    }),
-    [name]
-  );
-
-  const emailInputProps = useMemo(
-    () => ({
-      id: "email",
-      type: "email",
-      placeholder: "you@example.com",
-      value: email,
-      onChange: (e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value),
-      required: true,
-      className: "input",
-    }),
-    [email]
-  );
-
-  const passwordInputProps = useMemo(
-    () => ({
-      id: "password",
-      type: "password",
-      value: password,
-      onChange: (e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value),
-      required: true,
-      className: "input",
-    }),
-    [password]
+    [email, password, restaurantName, signUp, navigate, toast]
   );
 
   return (
@@ -98,7 +70,7 @@ const Signup = () => {
             animate={{ y: 0, opacity: 1 }}
             transition={{ delay: 0.2, duration: 0.4 }}
           >
-            Create your account to get started
+            Create your restaurant account
           </motion.p>
         </div>
 
@@ -111,17 +83,22 @@ const Signup = () => {
             <CardHeader>
               <CardTitle>Sign Up</CardTitle>
               <CardDescription>
-                Enter your details to create an account
+                Enter your restaurant details to get started
               </CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
-                  <label htmlFor="name" className="block text-sm font-medium text-muted-foreground">
-                    Name
+                  <label htmlFor="restaurantName" className="block text-sm font-medium text-muted-foreground">
+                    Restaurant Name
                   </label>
                   <input
-                    {...nameInputProps}
+                    id="restaurantName"
+                    type="text"
+                    placeholder="Your Restaurant Name"
+                    value={restaurantName}
+                    onChange={(e) => setRestaurantName(e.target.value)}
+                    required
                     className="block w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                   />
                 </div>
@@ -130,7 +107,12 @@ const Signup = () => {
                     Email
                   </label>
                   <input
-                    {...emailInputProps}
+                    id="email"
+                    type="email"
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
                     className="block w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                   />
                 </div>
@@ -139,36 +121,25 @@ const Signup = () => {
                     Password
                   </label>
                   <input
-                    {...passwordInputProps}
+                    id="password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    minLength={6}
                     className="block w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                   />
-                </div>
-                <div className="space-y-2">
-                  <label htmlFor="role" className="block text-sm font-medium text-muted-foreground">
-                    Role
-                  </label>
-                  <select
-                    id="role"
-                    value={role}
-                    onChange={(e) => setRole(e.target.value)}
-                    className="block w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                  >
-                    <option value="user">User</option>
-                    <option value="staff">Staff</option>
-                    <option value="manager">Manager</option>
-                    <option value="admin">Administrator</option>
-                  </select>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Note: This is for demo purposes. In a real application, role assignment would be managed by administrators.
+                    Password must be at least 6 characters long
                   </p>
                 </div>
-                <button
+                <Button
                   type="submit"
-                  className="w-full inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:opacity-50"
+                  className="w-full"
                   disabled={isLoading}
                 >
                   {isLoading ? "Creating account..." : "Sign up"}
-                </button>
+                </Button>
               </form>
             </CardContent>
             <CardFooter className="flex justify-center">

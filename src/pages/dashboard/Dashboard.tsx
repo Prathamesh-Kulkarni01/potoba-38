@@ -13,26 +13,62 @@ import MembersManagement from '../../components/loyalty/MembersManagement';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import { DashboardShell } from '@/components/dashboard/DashboardShell';
-import authService from '@/services/authService';
+import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import AddMenuItem from '../menu/AddMenuItem';
+import { useToast } from '@/components/ui/use-toast';
+
+interface Restaurant {
+  id: string;
+  name: string;
+  description: string;
+  address: string;
+  phone: string;
+  cuisine: string;
+  ownerId: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
 const Dashboard = () => {
   const location = useLocation();
-  const { user, isLoading, updateUser } = useAuth();
+  const { user, restaurantId, loading, token } = useAuth();
   const [showFoodIcon, setShowFoodIcon] = useState(false);
+  const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
+  const { toast } = useToast();
 
   useEffect(() => {
-    const fetchUser = async () => {
-      try {
-        const userData = await authService.getCurrentUser();
-        updateUser(userData);
-      } catch (error) {
-        console.error('Failed to fetch user:', error);
+    const fetchRestaurant = async () => {
+      if (restaurantId) {
+        try {
+          const restaurantRef = doc(db, 'restaurants', restaurantId);
+          const restaurantDoc = await getDoc(restaurantRef);
+          
+          if (restaurantDoc.exists()) {
+            setRestaurant({
+              id: restaurantDoc.id,
+              ...restaurantDoc.data()
+            } as Restaurant);
+          } else {
+            toast({
+              title: "Error",
+              description: "Restaurant not found",
+              variant: "destructive",
+            });
+          }
+        } catch (error) {
+          console.error('Failed to fetch restaurant:', error);
+          toast({
+            title: "Error",
+            description: "Failed to load restaurant data",
+            variant: "destructive",
+          });
+        }
       }
     };
 
-    fetchUser();
-  }, [updateUser]);
+    fetchRestaurant();
+  }, [restaurantId, toast]);
 
   useEffect(() => {
     const timer = setTimeout(() => setShowFoodIcon(true), 1000);
@@ -46,27 +82,27 @@ const Dashboard = () => {
   };
 
   const dashboardRoutes = {
-    '/dashboard': <RestaurantDashboard />,
-    '/dashboard/tables': <TableManagement />,
-    '/dashboard/menu': <MenuManagement />,
-    '/dashboard/orders': <OrderTable />,
-    '/dashboard/marketing/campaigns': <MarketingCampaigns />,
-    '/dashboard/marketing/whatsapp': <WhatsAppBot />,
-    '/dashboard/marketing/ai-assistant': <AiAssistant />,
-    '/dashboard/loyalty/rewards': <RewardsManagement />,
-    '/dashboard/loyalty/promotions': <PromotionsManagement />,
-    '/dashboard/loyalty/members': <MembersManagement />,
-    '/dashboard/menu/add': <AddMenuItem />
+    '/dashboard': <RestaurantDashboard restaurant={restaurant} />,
+    '/dashboard/tables': <TableManagement restaurantId={restaurantId} />,
+    '/dashboard/menu': <MenuManagement restaurantId={restaurantId} />,
+    '/dashboard/orders': <OrderTable restaurantId={restaurantId} />,
+    '/dashboard/marketing/campaigns': <MarketingCampaigns restaurantId={restaurantId} />,
+    '/dashboard/marketing/whatsapp': <WhatsAppBot restaurantId={restaurantId} />,
+    '/dashboard/marketing/ai-assistant': <AiAssistant restaurantId={restaurantId} />,
+    '/dashboard/loyalty/rewards': <RewardsManagement restaurantId={restaurantId} />,
+    '/dashboard/loyalty/promotions': <PromotionsManagement restaurantId={restaurantId} />,
+    '/dashboard/loyalty/members': <MembersManagement restaurantId={restaurantId} />,
+    '/dashboard/menu/add': <AddMenuItem restaurantId={restaurantId} />
   };
 
   const renderDashboardContent = () => {
     if (location.pathname.startsWith('/dashboard/menu/edit')) {
-      return <AddMenuItem />;
+      return <AddMenuItem restaurantId={restaurantId} />;
     }
     return dashboardRoutes[location.pathname] || <Outlet />;
   };
 
-  if (isLoading) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-restaurant-background flex items-center justify-center">
         <div className="text-center">
@@ -77,11 +113,11 @@ const Dashboard = () => {
     );
   }
 
-  if (!user) {
+  if (!token || !user) {
     return <Navigate to="/login" replace />;
   }
 
-  if (user.restaurants?.length === 0) {
+  if (!restaurantId) {
     return <Navigate to="/onboarding" replace />;
   }
 
