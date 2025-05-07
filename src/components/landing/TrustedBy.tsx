@@ -1,5 +1,7 @@
 import React from 'react';
 import { useTheme } from '../theme/ThemeProvider';
+import { motion, useScroll, useTransform } from 'framer-motion';
+import { useMediaQuery } from 'react-responsive';
 
 const indianBrands = [
   {
@@ -42,6 +44,9 @@ const indianBrands = [
 
 const TrustedBy = () => {
   const { theme } = useTheme();
+  const isMobile = useMediaQuery({ maxWidth: 768 });
+  const { scrollY } = useScroll();
+  const x = useTransform(scrollY, [700, 2500], [0, isMobile ? -400 : 0]);
 
   return (
     <section className="py-16 bg-background text-foreground transition-colors duration-300">
@@ -51,37 +56,38 @@ const TrustedBy = () => {
             Trusted by Top Indian Restaurants
           </h2>
         </header>
-        <ul className="flex flex-wrap justify-center items-center gap-6 md:gap-10">
-          {indianBrands.map((brand) => (
-            <li
-              key={brand.id}
-              style={{
-                animation: 'fadeSlideIn 0.5s ease forwards',
-                animationDelay: `${brand.id * 0.2}s`,
-                opacity: 0,
-                transform: 'translateY(20px)',
-              }}
-              className="text-base md:text-lg font-semibold text-foreground/70 dark:text-foreground/60 px-5 py-2 rounded-full bg-muted/10 hover:bg-muted/20 transition-all duration-300  flex flex-col items-center"
-            >
-              <img
-                src={brand.image}
-                alt={brand.name}
-                className="w-16 h-16 rounded-full mb-2 object-cover"
-              />
-              <span>{brand.name}</span>
-              <span className="text-sm text-foreground/50">{brand.location}</span>
-            </li>
-          ))}
-        </ul>
+        <div className="overflow-hidden">
+          <motion.ul
+            className="flex flex-nowrap gap-6 md:gap-10 justify-center"
+            style={{ x }}
+          >
+            {indianBrands.map((brand) => (
+              <li
+                key={brand.id}
+                className="text-base md:text-lg font-semibold md:min-w-[00px] text-foreground/70 dark:text-foreground/60 px-5 py-2 rounded-full  hover:bg-muted/20 transition-all duration-300  flex flex-col items-center"
+              >
+                <img
+                  src={brand.image}
+                  alt={brand.name}
+                  className="w-16 h-16 rounded-full mb-2 object-cover"
+                />
+                <span>{brand.name}</span>
+                <span className="text-sm text-foreground/50">{brand.location}</span>
+              </li>
+            ))}
+          </motion.ul>
+        </div>
       </div>
 
       {/* Animation Styles */}
       <style jsx>{`
-        @keyframes fadeSlideIn {
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
+        ul {
+          -ms-overflow-style: none; /* Internet Explorer 10+ */
+          scrollbar-width: none; /* Firefox */
+        }
+
+        ul::-webkit-scrollbar {
+          display: none; /* Safari and Chrome */
         }
       `}</style>
     </section>
