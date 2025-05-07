@@ -71,8 +71,8 @@ const TrustedBy = () => {
                   alt={brand.name}
                   className="w-16 h-16 rounded-full mb-2 object-cover"
                 />
-                <span>{brand.name}</span>
-                <span className="text-sm text-foreground/50">{brand.location}</span>
+                <span className=' text-center'>{brand.name}</span>
+                <span className="text-sm text-foreground/50 text-center">{brand.location}</span>
               </li>
             ))}
           </motion.ul>
