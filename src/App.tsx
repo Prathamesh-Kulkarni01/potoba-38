@@ -17,8 +17,7 @@ import TableDetail from "./pages/table/TableDetail";
 import CustomerOrder from "./pages/customer/CustomerOrder";
 import ScanLanding from "./pages/customer/ScanLanding";
 import NotFound from "./pages/NotFound";
-import ApiSettings from "./pages/settings/ApiSettings";
-import ApiDocs from "./components/settings/ApiDocs";
+import Settings from "./pages/settings/Settings";
 import "./App.css";
 
 const queryClient = new QueryClient({
@@ -88,8 +87,7 @@ const protectedRoutes = [
   {
     permission: "manage_settings",
     routes: [
-      { path: "/dashboard/api-settings", element: <ApiSettings /> },
-      { path: "/dashboard/api-docs", element: <ApiDocs /> },
+      { path: "/dashboard/settings", element: <Settings /> },
     ],
   },
   {

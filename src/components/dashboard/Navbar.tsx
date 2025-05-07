@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Menu, X, LogOut, User, Settings } from 'lucide-react';
@@ -35,7 +34,7 @@ const Navbar = ({ currentTenant }: NavbarProps) => {
   };
   
   // Ensure we don't call getCurrentRestaurant if user is null
-  const currentRestaurant = user ? getCurrentRestaurant() : undefined;
+  const currentRestaurant = user ? getCurrentRestaurant() : null;
   
   const getUserInitials = () => {
     if (!user) return "U";
@@ -44,12 +43,25 @@ const Navbar = ({ currentTenant }: NavbarProps) => {
     return (names[0].charAt(0) + names[names.length - 1].charAt(0)).toUpperCase();
   };
 
+  // Mock data for restaurants - in a real app, this would come from your auth context or API
+  const restaurants = user?.restaurants || [];
+  const handleRestaurantChange = (restaurantId: string) => {
+    // Handle restaurant change - in a real app, this would update your auth context or API
+    console.log('Changing restaurant to:', restaurantId);
+  };
+
   return (
     <nav className="bg-restaurant-primary text-white p-4 shadow-md">
       <div className="container mx-auto flex justify-between items-center">
         <div className="flex items-center space-x-2">
           <Link to="/" className="text-xl font-bold">Potoba</Link>
-          {user && <RestaurantSelector />}
+          {user && (
+            <RestaurantSelector 
+              restaurants={restaurants}
+              currentRestaurant={currentRestaurant}
+              onRestaurantChange={handleRestaurantChange}
+            />
+          )}
         </div>
 
         {isMobile ? (
@@ -125,6 +137,13 @@ const Navbar = ({ currentTenant }: NavbarProps) => {
                       >
                         Orders
                       </Link>
+                      <Link 
+                        to="/dashboard/settings" 
+                        className="hover:bg-white/10 px-3 py-2 rounded"
+                        onClick={() => setIsOpen(false)}
+                      >
+                        Settings
+                      </Link>
                       <Button 
                         variant="ghost" 
                         className="justify-start hover:bg-white/10 px-3 py-2 text-white"
@@ -167,6 +186,7 @@ const Navbar = ({ currentTenant }: NavbarProps) => {
                   <Link to="/dashboard/tables" className="hover:text-restaurant-secondary">Tables</Link>
                   <Link to="/dashboard/menu" className="hover:text-restaurant-secondary">Menu</Link>
                   <Link to="/dashboard/orders" className="hover:text-restaurant-secondary">Orders</Link>
+                  <Link to="/dashboard/settings" className="hover:text-restaurant-secondary">Settings</Link>
                 </div>
                 
                 <DropdownMenu>

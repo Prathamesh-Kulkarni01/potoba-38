@@ -274,8 +274,8 @@ export function DashboardShell({ children }: DashboardShellProps) {
 
   // Settings menu item with permission check
   const settingsMenuItem = {
-    title: "API Settings",
-    path: "/dashboard/api-settings",
+    title: "Settings",
+    path: "/dashboard/settings",
     icon: Settings,
     permission: "manage_settings",
   };
