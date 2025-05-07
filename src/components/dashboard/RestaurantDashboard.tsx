@@ -11,6 +11,7 @@ import { Restaurant, MenuItem, Table, Order } from '@/types/api';
 import { collection, query, getDocs, doc, getDoc, addDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useLanguage } from '@/hooks/use-language';
+import AiAnalytics from './AiAnalytics';
 
 
 const RestaurantDashboard = () => {
@@ -315,6 +316,7 @@ const RestaurantDashboard = () => {
           </CardContent>
         </Card>
       </div>
+      <AiAnalytics />
     </div>
   );
 };
