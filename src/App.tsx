@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, Suspense } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -19,6 +19,8 @@ import ScanLanding from "./pages/customer/ScanLanding";
 import NotFound from "./pages/NotFound";
 import Settings from "./pages/settings/Settings";
 import "./App.css";
+import i18n from './i18n/config';
+import { I18nextProvider } from 'react-i18next';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -107,9 +109,10 @@ const protectedRoutes = [
     ],
   },
 ];
+
 const API_URL = import.meta.env.VITE_API_URL;
 
-const App = () => {
+const AppContent = () => {
   useEffect(() => {
     const checkApiHealth = async () => {
       try {
@@ -163,6 +166,42 @@ const App = () => {
         </Router>
       </ThemeProvider>
     </QueryClientProvider>
+  );
+};
+
+// Create a wrapper component for i18n
+const I18nApp = () => {
+  const [isI18nReady, setIsI18nReady] = React.useState(false);
+
+  React.useEffect(() => {
+    const initI18n = async () => {
+      try {
+        await i18n.init();
+        setIsI18nReady(true);
+      } catch (error) {
+        console.error('Failed to initialize i18n:', error);
+      }
+    };
+
+    initI18n();
+  }, []);
+
+  if (!isI18nReady) {
+    return <div>Loading...</div>;
+  }
+
+  return (
+    <I18nextProvider i18n={i18n}>
+      <AppContent />
+    </I18nextProvider>
+  );
+};
+
+const App = () => {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <I18nApp />
+    </Suspense>
   );
 };
 

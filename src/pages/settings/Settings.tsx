@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DashboardShell } from '@/components/dashboard/DashboardShell';
 import { useToast } from "@/hooks/use-toast";
+import { useLanguage } from '@/hooks/use-language';
 import {
   Select,
   SelectContent,
@@ -17,10 +18,11 @@ import { Switch } from "@/components/ui/switch";
 import { Globe, Palette, Wifi, WifiOff, Bell, Shield, Save, Settings as SettingsIcon } from 'lucide-react';
 
 const Settings = () => {
+  const { currentLanguage, changeLanguage, t } = useLanguage();
   const { toast } = useToast();
   
   // Language settings
-  const [language, setLanguage] = useState('en');
+  const [language, setLanguage] = useState(currentLanguage);
   const [dateFormat, setDateFormat] = useState('MM/DD/YYYY');
   const [timeFormat, setTimeFormat] = useState('12h');
   
@@ -43,10 +45,24 @@ const Settings = () => {
   const [twoFactorAuth, setTwoFactorAuth] = useState(false);
   const [sessionTimeout, setSessionTimeout] = useState('30');
   const [passwordExpiry, setPasswordExpiry] = useState('90');
+
+  const handleLanguageChange = async (newLanguage: string) => {
+    const success = await changeLanguage(newLanguage);
+    if (success) {
+      setLanguage(newLanguage);
+    }
+  };
+
+  // Effect to sync language with i18n
+  useEffect(() => {
+    if (currentLanguage !== language) {
+      setLanguage(currentLanguage);
+    }
+  }, [currentLanguage]);
   
   const handleSaveSettings = () => {
     toast({
-      description: "Settings saved successfully!",
+      description: t('settings.saved', 'Settings saved successfully!'),
     });
   };
   
@@ -56,36 +72,36 @@ const Settings = () => {
         <CardHeader>
           <div className="flex items-center gap-2">
             <SettingsIcon className="h-5 w-5" />
-            <CardTitle className="text-xl">Settings</CardTitle>
+            <CardTitle className="text-xl">{t('settings.title')}</CardTitle>
           </div>
           <CardDescription>
-            Configure your application settings and preferences
+            {t('settings.description')}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="general" className="w-full">
             <TabsList className="grid w-full grid-cols-6">
-              <TabsTrigger value="general">General</TabsTrigger>
-              <TabsTrigger value="language">Language</TabsTrigger>
-              <TabsTrigger value="theme">Theme</TabsTrigger>
-              <TabsTrigger value="connection">Connection</TabsTrigger>
-              <TabsTrigger value="notifications">Notifications</TabsTrigger>
-              <TabsTrigger value="security">Security</TabsTrigger>
+              <TabsTrigger value="general">{t('settings.general.title')}</TabsTrigger>
+              <TabsTrigger value="language">{t('settings.language.title')}</TabsTrigger>
+              <TabsTrigger value="theme">{t('settings.theme.title')}</TabsTrigger>
+              <TabsTrigger value="connection">{t('settings.connection.title')}</TabsTrigger>
+              <TabsTrigger value="notifications">{t('settings.notifications.title')}</TabsTrigger>
+              <TabsTrigger value="security">{t('settings.security.title')}</TabsTrigger>
             </TabsList>
             
             {/* General Settings */}
             <TabsContent value="general" className="space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-md">General Settings</CardTitle>
-                  <CardDescription>Configure basic application settings</CardDescription>
+                  <CardTitle className="text-md">{t('settings.general.title')}</CardTitle>
+                  <CardDescription>{t('settings.general.description')}</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
-                      <Label>Auto-save changes</Label>
+                      <Label>{t('settings.general.autoSave')}</Label>
                       <p className="text-sm text-muted-foreground">
-                        Automatically save changes when editing
+                        {t('settings.general.autoSaveDesc')}
                       </p>
                     </div>
                     <Switch defaultChecked />
@@ -93,9 +109,9 @@ const Settings = () => {
                   
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
-                      <Label>Show tooltips</Label>
+                      <Label>{t('settings.general.tooltips')}</Label>
                       <p className="text-sm text-muted-foreground">
-                        Display helpful tooltips throughout the application
+                        {t('settings.general.tooltipsDesc')}
                       </p>
                     </div>
                     <Switch defaultChecked />
@@ -110,36 +126,37 @@ const Settings = () => {
                 <CardHeader>
                   <div className="flex items-center">
                     <Globe className="h-5 w-5 mr-2" />
-                    <CardTitle className="text-md">Language & Regional Settings</CardTitle>
+                    <CardTitle className="text-md">{t('settings.language.title')}</CardTitle>
                   </div>
-                  <CardDescription>Configure language and regional preferences</CardDescription>
+                  <CardDescription>{t('settings.language.description')}</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div>
-                    <Label htmlFor="language">Interface Language</Label>
-                    <Select value={language} onValueChange={setLanguage}>
+                    <Label htmlFor="language">{t('settings.language.interfaceLanguage')}</Label>
+                    <Select value={language} onValueChange={handleLanguageChange}>
                       <SelectTrigger id="language">
-                        <SelectValue placeholder="Select language" />
+                        <SelectValue placeholder={t('settings.language.selectLanguage', 'Select language')} />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="en">English</SelectItem>
-                        <SelectItem value="es">Spanish</SelectItem>
-                        <SelectItem value="fr">French</SelectItem>
-                        <SelectItem value="de">German</SelectItem>
-                        <SelectItem value="it">Italian</SelectItem>
-                        <SelectItem value="pt">Portuguese</SelectItem>
-                        <SelectItem value="ru">Russian</SelectItem>
-                        <SelectItem value="zh">Chinese</SelectItem>
-                        <SelectItem value="ja">Japanese</SelectItem>
+                        <SelectItem value="hi">हिंदी (Hindi)</SelectItem>
+                        <SelectItem value="bn">বাংলা (Bengali)</SelectItem>
+                        <SelectItem value="te">తెలుగు (Telugu)</SelectItem>
+                        <SelectItem value="mr">मराठी (Marathi)</SelectItem>
+                        <SelectItem value="ta">தமிழ் (Tamil)</SelectItem>
+                        <SelectItem value="gu">ગુજરાતી (Gujarati)</SelectItem>
+                        <SelectItem value="kn">ಕನ್ನಡ (Kannada)</SelectItem>
+                        <SelectItem value="ml">മലയാളം (Malayalam)</SelectItem>
+                        <SelectItem value="pa">ਪੰਜਾਬੀ (Punjabi)</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   
                   <div>
-                    <Label htmlFor="date-format">Date Format</Label>
+                    <Label htmlFor="date-format">{t('settings.language.dateFormat')}</Label>
                     <Select value={dateFormat} onValueChange={setDateFormat}>
                       <SelectTrigger id="date-format">
-                        <SelectValue placeholder="Select date format" />
+                        <SelectValue placeholder={t('settings.language.selectDateFormat', 'Select date format')} />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="MM/DD/YYYY">MM/DD/YYYY</SelectItem>
@@ -150,10 +167,10 @@ const Settings = () => {
                   </div>
                   
                   <div>
-                    <Label htmlFor="time-format">Time Format</Label>
+                    <Label htmlFor="time-format">{t('settings.language.timeFormat')}</Label>
                     <Select value={timeFormat} onValueChange={setTimeFormat}>
                       <SelectTrigger id="time-format">
-                        <SelectValue placeholder="Select time format" />
+                        <SelectValue placeholder={t('settings.language.selectTimeFormat', 'Select time format')} />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="12h">12-hour (AM/PM)</SelectItem>
@@ -363,7 +380,7 @@ const Settings = () => {
         <CardFooter className="flex justify-end">
           <Button onClick={handleSaveSettings}>
             <Save className="mr-2 h-4 w-4" />
-            Save All Settings
+            {t('settings.saveAll', 'Save All Settings')}
           </Button>
         </CardFooter>
       </Card>

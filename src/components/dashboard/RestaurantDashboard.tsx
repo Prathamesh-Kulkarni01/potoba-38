@@ -10,10 +10,13 @@ import { toast } from '@/components/ui/use-toast';
 import { Restaurant, MenuItem, Table, Order } from '@/types/api';
 import { collection, query, getDocs, doc, getDoc, addDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { useLanguage } from '@/hooks/use-language';
+
 
 const RestaurantDashboard = () => {
   const { user, currentRestaurantId } = useAuth();
   const navigate = useNavigate();
+  const { t } = useLanguage();
 
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -207,7 +210,7 @@ const RestaurantDashboard = () => {
             onClick={createDemoData}
             disabled={creatingDemoData}
           >
-            {creatingDemoData ? 'Creating...' : 'Create Demo Data'}
+            {creatingDemoData ? t('Creating...') : t('Create Demo Data')}
           </Button>
         </div>
       </div>
