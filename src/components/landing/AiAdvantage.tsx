@@ -1,9 +1,9 @@
-
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Sparkles, Check } from 'lucide-react';
 import { Badge } from "@/components/ui/badge";
 import AiAnalytics from '../dashboard/AiAnalytics';
+import HeroScrollDemo from "@/components/ui/container-scroll-animation-demo";
 
 const AiAdvantage = () => {
   const advantages = [
@@ -56,12 +56,10 @@ const AiAdvantage = () => {
           >
             <div className="relative">
               <div className="absolute inset-0 bg-gradient-to-br from-food-primary/40 to-food-secondary/40 rounded-xl blur-3xl opacity-30"></div>
-              {/* <img 
-                src="https://placehold.co/600x400/FFF8F6/FF6B35?text=AI+Insights+Dashboard&font=montserrat" 
-                alt="AI Insights Dashboard" 
-                className="relative z-10 rounded-xl shadow-lg w-full"
-              /> */}
+              
+              <HeroScrollDemo text1="" text2="">
               <AiAnalytics useDummyData={true} />
+              </HeroScrollDemo>
               <div className="absolute -right-4 -bottom-4 z-0 w-32 h-32 bg-food-accent/20 rounded-full animate-pulse-subtle"></div>
               <div className="absolute -left-4 -top-4 z-0 w-24 h-24 bg-food-secondary/20 rounded-full animate-pulse-subtle"></div>
             </div>

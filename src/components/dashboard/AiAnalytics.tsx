@@ -517,8 +517,8 @@ const AiAnalytics: React.FC<AiAnalyticsProps> = ({ useDummyData = true }) => {
     const topCategory = salesByCategory[0];
     const bestTimeSlot = salesByTime.reduce((a, b) => a.amount > b.amount ? a : b);
     
-    return `Sales ${timeFrame} totaled $${totalSales.toFixed(2)} with an average order value of $${averageOrderValue.toFixed(2)}. ` +
-           `${topCategory.category} was the top performing category, generating $${topCategory.amount.toFixed(2)} in sales. ` +
+    return `Sales ${timeFrame} totaled ₹${totalSales.toFixed(2)} with an average order value of ₹${averageOrderValue.toFixed(2)}. ` +
+           `${topCategory.category} was the top performing category, generating ₹${topCategory.amount.toFixed(2)} in sales. ` +
            `The ${bestTimeSlot.time} period saw the highest sales activity. ` +
            `Top selling items included ${topSellingItems.slice(0, 3).map(item => item.name).join(', ')}.`;
   };
