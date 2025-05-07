@@ -1,10 +1,17 @@
 
-import React from 'react';
-import { motion } from 'framer-motion';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronRight, Sparkles, Star, TrendingUp, Users, ChefHat } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+
+import {
+  motion,
+  useTransform,
+  AnimatePresence,
+  useMotionValue,
+  useSpring,
+} from "framer-motion";
 
 const Hero = () => {
   return (
@@ -36,9 +43,10 @@ const Hero = () => {
         </div>
         <div className="mt-8 flex items-center space-x-6">
           <div className="flex -space-x-2">
-            {[1, 2, 3, 4].map((i) => (
+            {/* {[1, 2, 3, 4].map((i) => (
               <div key={i} className="w-8 h-8 rounded-full border-2 border-white bg-gray-200" />
-            ))}
+            ))} */}
+            <TestimonialTooltip/>
           </div>
           <div className="text-sm">
             <span className="text-food-primary font-bold">1,000+</span> restaurants
@@ -160,3 +168,129 @@ const Hero = () => {
 };
 
 export default Hero;
+
+
+export const TestimonialTooltip = () => {
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+
+  const springConfig = { stiffness: 100, damping: 5 };
+
+  const x = useMotionValue(0); // going to set this value on mouse move
+
+  // rotate the tooltip
+  const rotate = useSpring(
+    useTransform(x, [-100, 100], [-45, 45]),
+    springConfig
+  );
+
+  // translate the tooltip
+  const translateX = useSpring(
+    useTransform(x, [-100, 100], [-50, 50]),
+    springConfig
+  );
+
+  const handleMouseMove = (event: any) => {
+    const halfWidth = event.target.offsetWidth / 2;
+    x.set(event.nativeEvent.offsetX - halfWidth); // set the x value, which is then used in transform and rotate
+  };
+
+  const people = [
+    {
+      id: 1,
+      name: "Aditi's Biryani",
+      location: "Mumbai",
+      image:
+        "https://images.unsplash.com/photo-1736239092023-ba677fd6751c?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8MTB8fHJlc3RhdXJhbnQlMjBmb29kJTIwbG9nb3MlMjBtYWhhcmFzdHJhfGVufDB8fDB8fHww",
+    },
+    {
+      id: 2,
+      name: "Shree Dattaguru Hotel",
+      location: "Pune",
+      image:
+        "https://images.unsplash.com/photo-1727198826762-8a2bd0cb107b?q=80&w=2080&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
+    },
+    {
+      id: 3,
+      name: "Prakash Upahaar Kendra",
+      location: "Thane",
+      image:
+        "https://plus.unsplash.com/premium_photo-1670740967011-86730910a2e5?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8NXx8cmVzdGF1cmFudCUyMGZvb2QlMjBsb2dvcyUyMG1haGFyYXN0cmF8ZW58MHx8MHx8fDA%3D",
+    },
+    {
+      id: 4,
+      name: "Vihar Restaurant",
+      location: "Navi Mumbai",
+      image:
+        "https://images.unsplash.com/photo-1659354218902-b9e12df1c828?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
+    },
+    {
+      id: 5,
+      name: "Chaitanya Restaurant",
+      location: "Aurangabad",
+      image:
+        "https://images.unsplash.com/photo-1668236543090-82eba5ee5976?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
+    },
+    {
+      id: 6,
+      name: "Kailash Prabhu Hotel",
+      location: "Kolhapur",
+      image:
+        "https://images.unsplash.com/photo-1607672694490-d46176973e52?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
+    },
+  ];
+
+  return (
+    <div className="flex flex-row items-center justify-center   w-full">
+      {people.map((testimonial, idx) => (
+        <div
+          className="-mr-4  relative group"
+          key={testimonial.name}
+          onMouseEnter={() => setHoveredIndex(testimonial.id)}
+          onMouseLeave={() => setHoveredIndex(null)}
+        >
+           <AnimatePresence mode="wait">
+              {hoveredIndex === testimonial.id && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20, scale: 0.6 }}
+                  animate={{
+                    opacity: 1,
+                    y: 0,
+                    scale: 1,
+                    transition: {
+                      type: "spring",
+                      stiffness: 260,
+                      damping: 10,
+                    },
+                  }}
+                  exit={{ opacity: 0, y: 20, scale: 0.6 }}
+                  style={{
+                    translateX: translateX,
+                    rotate: rotate,
+                    whiteSpace: "nowrap",
+                  }}
+                  className="absolute -top-16 -left-1/2 translate-x-1/2 flex text-xs  flex-col items-center justify-center rounded-md bg-black z-50 shadow-xl px-4 py-2"
+                >
+                  <div className="absolute inset-x-10 z-30 w-[20%] -bottom-px bg-gradient-to-r from-transparent via-emerald-500 to-transparent h-px " />
+                  <div className="absolute left-10 w-[40%] z-30 -bottom-px bg-gradient-to-r from-transparent via-sky-500 to-transparent h-px " />
+                  <div className="font-bold text-white relative z-30 text-base">
+                    {testimonial.name}
+                  </div>
+                  <div className="text-white text-xs">
+                    {testimonial.location}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          <img
+            onMouseMove={handleMouseMove}
+            height={50}
+            width={50}
+            src={testimonial.image}
+            alt={testimonial.name}
+            className="object-cover !m-0 !p-0 object-top rounded-full h-10 w-10 border-2 group-hover:scale-105 group-hover:z-30 border-white  relative transition duration-500"
+          />
+        </div>
+      ))}
+    </div>
+  );
+};
