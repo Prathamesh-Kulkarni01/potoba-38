@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { useTranslation } from 'react-i18next';
 import {
   SidebarProvider,
   Sidebar,
@@ -63,6 +64,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout, currentRestaurantId, setCurrentRestaurantId } = useAuth();
+  const { t } = useTranslation();
   const [userRestaurants, setUserRestaurants] = useState<Restaurant[]>([]);
   const [currentRestaurant, setCurrentRestaurant] = useState<Restaurant | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -147,14 +149,14 @@ export function DashboardShell({ children }: DashboardShellProps) {
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
         <div className="text-center p-8 bg-white rounded-lg shadow-lg max-w-md">
           <ShieldAlert className="h-16 w-16 text-yellow-500 mx-auto mb-4" />
-          <h1 className="text-2xl font-bold mb-4">No Restaurants Found</h1>
+          <h1 className="text-2xl font-bold mb-4">{t('No Restaurants Found')}</h1>
           <p className="text-gray-600 mb-6">
-            You don't have access to any restaurants yet. Please contact your administrator for access.
+            {t('You don\'t have access to any restaurants yet. Please contact your administrator for access.')}
           </p>
           <Button
             onClick={() => navigate('/onboarding')}
           >
-            Create Restaurant
+            {t('Create Restaurant')}
           </Button>
         </div>
       </div>
@@ -203,25 +205,25 @@ export function DashboardShell({ children }: DashboardShellProps) {
   // Main navigation items with permission checks
   const mainMenuItems = [
     {
-      title: "Dashboard",
+      title: t('Dashboard'),
       path: "/dashboard",
       icon: LayoutDashboard,
       permission: "view_dashboard",
     },
     {
-      title: "Menu",
+      title: t('Menu'),
       path: "/dashboard/menu",
       icon: UtensilsCrossed,
       permission: "manage_menu",
     },
     {
-      title: "Tables",
+      title: t('Tables'),
       path: "/dashboard/tables",
       icon: TableProperties,
       permission: "manage_tables",
     },
     {
-      title: "Orders",
+      title: t('Orders'),
       path: "/dashboard/orders",
       icon: ReceiptText,
       permission: "manage_orders",
@@ -231,19 +233,19 @@ export function DashboardShell({ children }: DashboardShellProps) {
   // Marketing menu items with permission checks
   const marketingMenuItems = [
     {
-      title: "Campaigns",
+      title: t('Campaigns'),
       path: "/dashboard/marketing/campaigns",
       icon: Megaphone,
       permission: "manage_marketing",
     },
     {
-      title: "WhatsApp Bot",
+      title: t('WhatsApp Bot'),
       path: "/dashboard/marketing/whatsapp",
       icon: MessageSquareText,
       permission: "manage_marketing",
     },
     {
-      title: "AI Assistant",
+      title: t('AI Assistant'),
       path: "/dashboard/marketing/ai-assistant",
       icon: Bot,
       permission: "manage_marketing",
@@ -253,19 +255,19 @@ export function DashboardShell({ children }: DashboardShellProps) {
   // Loyalty menu items with permission checks
   const loyaltyMenuItems = [
     {
-      title: "Rewards",
+      title: t('Rewards'),
       path: "/dashboard/loyalty/rewards",
       icon: Gift,
       permission: "manage_loyalty",
     },
     {
-      title: "Promotions",
+      title: t('Promotions'),
       path: "/dashboard/loyalty/promotions",
       icon: BadgePercent,
       permission: "manage_loyalty",
     },
     {
-      title: "Members",
+      title: t('Members'),
       path: "/dashboard/loyalty/members",
       icon: Award,
       permission: "manage_loyalty",
@@ -326,7 +328,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
             {/* Main Navigation */}
             {filteredMainMenuItems.length > 0 && (
               <SidebarGroup>
-                <SidebarGroupLabel>Main Navigation</SidebarGroupLabel>
+                <SidebarGroupLabel>{t('Main Navigation')}</SidebarGroupLabel>
                 <SidebarGroupContent>
                   <SidebarMenu>
                     {filteredMainMenuItems.map((item) => (
@@ -353,7 +355,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
             {filteredMarketingMenuItems.length > 0 && (
               <SidebarGroup>
                 <SidebarGroupLabel className="mt-4">
-                  Marketing
+                  {t('Marketing')}
                 </SidebarGroupLabel>
                 <SidebarGroupContent>
                   <SidebarMenu>
@@ -380,7 +382,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
             {/* Loyalty */}
             {filteredLoyaltyMenuItems.length > 0 && (
               <SidebarGroup>
-                <SidebarGroupLabel className="mt-4">Loyalty</SidebarGroupLabel>
+                <SidebarGroupLabel className="mt-4">{t('Loyalty')}</SidebarGroupLabel>
                 <SidebarGroupContent>
                   <SidebarMenu>
                     {filteredLoyaltyMenuItems.map((item) => (
@@ -406,7 +408,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
             {/* Settings */}
             {showSettingsMenuItem && (
               <SidebarGroup>
-                <SidebarGroupLabel className="mt-4">Settings</SidebarGroupLabel>
+                <SidebarGroupLabel className="mt-4">{t('Settings')}</SidebarGroupLabel>
                 <SidebarGroupContent>
                   <SidebarMenu>
                     <SidebarMenuItem>
@@ -417,7 +419,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
                       >
                         <button onClick={() => navigate(settingsMenuItem.path)}>
                           <settingsMenuItem.icon className="h-4 w-4" />
-                          <span>{settingsMenuItem.title}</span>
+                          <span>{t(settingsMenuItem.title)}</span>
                           <ChevronRight className="ml-auto h-4 w-4 opacity-0 group-data-[active=true]:opacity-70" />
                         </button>
                       </SidebarMenuButton>
@@ -459,7 +461,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p>Logout</p>
+                      <p>{t('Logout')}</p>
                     </TooltipContent>
                   </Tooltip>
                 </div>

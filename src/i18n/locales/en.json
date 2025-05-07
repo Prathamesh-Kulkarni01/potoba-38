@@ -1,94 +1,86 @@
 {
-  "settings": {
-    "title": "Settings",
-    "description": "Configure your application settings and preferences",
-    "general": {
-      "title": "General Settings",
-      "description": "Configure basic application settings",
-      "autoSave": "Auto-save changes",
-      "autoSaveDesc": "Automatically save changes when editing",
-      "tooltips": "Show tooltips",
-      "tooltipsDesc": "Display helpful tooltips throughout the application"
-    },
-    "language": {
-      "title": "Language & Regional Settings",
-      "description": "Configure language and regional preferences",
-      "interfaceLanguage": "Interface Language",
-      "dateFormat": "Date Format",
-      "timeFormat": "Time Format"
-    },
-    "theme": {
-      "title": "Theme & Appearance",
-      "description": "Customize the look and feel of the application",
-      "theme": "Theme",
-      "fontSize": "Font Size",
-      "animations": "Animations",
-      "animationsDesc": "Enable smooth animations throughout the app"
-    },
-    "connection": {
-      "title": "Connection Settings",
-      "description": "Manage online/offline mode and sync settings",
-      "onlineMode": "Online Mode",
-      "onlineModeDesc": "Enable real-time synchronization",
-      "autoSync": "Auto-sync",
-      "autoSyncDesc": "Automatically sync changes when online",
-      "offlineAccess": "Offline Access",
-      "offlineAccessDesc": "Allow access to data when offline"
-    },
-    "notifications": {
-      "title": "Notification Settings",
-      "description": "Configure how you receive notifications",
-      "emailNotifications": "Email Notifications",
-      "emailNotificationsDesc": "Receive notifications via email",
-      "pushNotifications": "Push Notifications",
-      "pushNotificationsDesc": "Receive push notifications",
-      "notificationSound": "Notification Sound",
-      "notificationSoundDesc": "Play sound for notifications"
-    },
-    "security": {
-      "title": "Security Settings",
-      "description": "Manage security and privacy settings",
-      "twoFactorAuth": "Two-Factor Authentication",
-      "twoFactorAuthDesc": "Add an extra layer of security to your account",
-      "sessionTimeout": "Session Timeout (minutes)",
-      "passwordExpiry": "Password Expiry (days)"
-    }
-  },
-  "landing": {
-    "cta": {
-      "title": "Ready to Transform Your Restaurant?",
-      "description": "Join thousands of restaurants already using Potoba to streamline operations, increase revenue, and delight customers.",
-      "button": "Start Your Free Trial",
-      "trial": "No credit card required. 14-day free trial."
-    },
-    "features": {
-      "badge": "Features",
-      "title": "Everything You Need to Run Your Restaurant",
-      "description": "Powerful tools and features designed specifically for modern restaurants",
-      "analytics": {
-        "title": "AI-Powered Analytics",
-        "description": "Gain deep insights into customer preferences, predict busy periods, and optimize your menu based on real-time data."
-      },
-      "menu": {
-        "title": "Smart Menu Management",
-        "description": "Automatically generate menu suggestions, optimize pricing, and highlight your most profitable dishes."
-      },
-      "ordering": {
-        "title": "Group Ordering System",
-        "description": "Let customers at the same table order individually from their phones with our seamless group ordering feature."
-      },
-      "qr": {
-        "title": "Secure QR Code System",
-        "description": "Generate unique QR codes for each table that customers can scan to place orders directly from their devices."
-      },
-      "recommendations": {
-        "title": "Smart Recommendations",
-        "description": "Offer personalized menu recommendations to your customers based on their preferences and ordering history."
-      },
-      "marketing": {
-        "title": "AI-Driven Marketing",
-        "description": "Create targeted promotions that convert, personalized for each customer segment based on AI insights."
-      }
-    }
-  }
+  "Settings": "Settings",
+  "Configure your application settings and preferences": "Configure your application settings and preferences",
+  "General": "General",
+  "Language": "Language",
+  "Theme": "Theme",
+  "Connection": "Connection",
+  "Notifications": "Notifications",
+  "Security": "Security",
+  "General Settings": "General Settings",
+  "Configure basic application settings": "Configure basic application settings",
+  "Auto-save changes": "Auto-save changes",
+  "Automatically save changes when editing": "Automatically save changes when editing",
+  "Show tooltips": "Show tooltips",
+  "Display helpful tooltips throughout the application": "Display helpful tooltips throughout the application",
+  "Language Settings": "Language Settings",
+  "Configure language and regional preferences": "Configure language and regional preferences",
+  "Interface Language": "Interface Language",
+  "Select language": "Select language",
+  "Date Format": "Date Format",
+  "Select date format": "Select date format",
+  "Time Format": "Time Format",
+  "Select time format": "Select time format",
+  "Theme & Appearance": "Theme & Appearance",
+  "Customize the look and feel of the application": "Customize the look and feel of the application",
+  "Select theme": "Select theme",
+  "Light": "Light",
+  "Dark": "Dark",
+  "System": "System",
+  "Font Size": "Font Size",
+  "Select font size": "Select font size",
+  "Small": "Small",
+  "Medium": "Medium",
+  "Large": "Large",
+  "Animations": "Animations",
+  "Enable smooth animations throughout the app": "Enable smooth animations throughout the app",
+  "Connection Settings": "Connection Settings",
+  "Manage online/offline mode and sync settings": "Manage online/offline mode and sync settings",
+  "Online Mode": "Online Mode",
+  "Enable real-time synchronization": "Enable real-time synchronization",
+  "Auto-sync": "Auto-sync",
+  "Automatically sync changes when online": "Automatically sync changes when online",
+  "Offline Access": "Offline Access",
+  "Allow access to data when offline": "Allow access to data when offline",
+  "Notification Settings": "Notification Settings",
+  "Configure how you receive notifications": "Configure how you receive notifications",
+  "Email Notifications": "Email Notifications",
+  "Receive notifications via email": "Receive notifications via email",
+  "Push Notifications": "Push Notifications",
+  "Receive push notifications": "Receive push notifications",
+  "Notification Sound": "Notification Sound",
+  "Play sound for notifications": "Play sound for notifications",
+  "Security Settings": "Security Settings",
+  "Manage security and privacy settings": "Manage security and privacy settings",
+  "Two-Factor Authentication": "Two-Factor Authentication",
+  "Add an extra layer of security to your account": "Add an extra layer of security to your account",
+  "Session Timeout (minutes)": "Session Timeout (minutes)",
+  "Select timeout": "Select timeout",
+  "minutes": "minutes",
+  "hour": "hour",
+  "hours": "hours",
+  "Password Expiry (days)": "Password Expiry (days)",
+  "Select expiry": "Select expiry",
+  "days": "days",
+  "Save All Settings": "Save All Settings",
+  "Settings saved successfully!": "Settings saved successfully!",
+  "Ready to Transform Your Restaurant?": "Ready to Transform Your Restaurant?",
+  "Join thousands of restaurants already using Potoba to streamline operations, increase revenue, and delight customers.": "Join thousands of restaurants already using Potoba to streamline operations, increase revenue, and delight customers.",
+  "Start Your Free Trial": "Start Your Free Trial",
+  "No credit card required. 14-day free trial.": "No credit card required. 14-day free trial.",
+  "Features": "Features",
+  "Everything You Need to Run Your Restaurant": "Everything You Need to Run Your Restaurant",
+  "Powerful tools and features designed specifically for modern restaurants": "Powerful tools and features designed specifically for modern restaurants",
+  "AI-Powered Analytics": "AI-Powered Analytics",
+  "Gain deep insights into customer preferences, predict busy periods, and optimize your menu based on real-time data.": "Gain deep insights into customer preferences, predict busy periods, and optimize your menu based on real-time data.",
+  "Smart Menu Management": "Smart Menu Management",
+  "Automatically generate menu suggestions, optimize pricing, and highlight your most profitable dishes.": "Automatically generate menu suggestions, optimize pricing, and highlight your most profitable dishes.",
+  "Group Ordering System": "Group Ordering System",
+  "Let customers at the same table order individually from their phones with our seamless group ordering feature.": "Let customers at the same table order individually from their phones with our seamless group ordering feature.",
+  "Secure QR Code System": "Secure QR Code System",
+  "Generate unique QR codes for each table that customers can scan to place orders directly from their devices.": "Generate unique QR codes for each table that customers can scan to place orders directly from their devices.",
+  "Smart Recommendations": "Smart Recommendations",
+  "Offer personalized menu recommendations to your customers based on their preferences and ordering history.": "Offer personalized menu recommendations to your customers based on their preferences and ordering history.",
+  "AI-Driven Marketing": "AI-Driven Marketing",
+  "Create targeted promotions that convert, personalized for each customer segment based on AI insights.": "Create targeted promotions that convert, personalized for each customer segment based on AI insights."
 } 
