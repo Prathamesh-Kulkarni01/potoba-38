@@ -200,6 +200,12 @@ export async function addMenuItem(restaurantId: string, categoryId: string, subc
   if (itemData.upsellItems === undefined) delete dataToSave.upsellItems;
   if (itemData.dietaryTags === undefined) delete dataToSave.dietaryTags;
   if (itemData.allergenInfo === undefined) delete dataToSave.allergenInfo;
+  
+  if (itemData.imageUrl === '') {
+    dataToSave.imageUrl = null;
+  } else if (itemData.imageUrl === undefined) {
+    delete dataToSave.imageUrl;
+  }
 
 
   const docRef = await addDoc(itemsColPath, dataToSave);
@@ -224,12 +230,21 @@ export async function updateMenuItem(restaurantId: string, categoryId: string, s
     itemRefPath = doc(db, 'restaurants', restaurantId, 'menuCategories', categoryId, 'menuItems', itemId);
   }
   
-  const dataToUpdate: any = { ...data, updatedAt: serverTimestamp() };
+  // Create a mutable copy of data to clean it
+  const cleanedData: { [key: string]: any } = { ...data };
 
-  // Ensure optional fields are handled correctly for updates (e.g., explicitly set to null or remove if undefined)
-  // For firestore, if a field is undefined in `data`, it won't be updated. 
-  // If you want to remove a field, you'd typically use `deleteField()` or set it to null if appropriate.
-  // The current structure assumes `Partial` means only provided fields are updated.
+  // Remove any fields that are undefined, as Firestore updateDoc doesn't support them
+  Object.keys(cleanedData).forEach(key => {
+    if (cleanedData[key] === undefined) {
+      delete cleanedData[key];
+    }
+    // Convert empty string imageUrl to null
+    if (key === 'imageUrl' && cleanedData[key] === '') {
+      cleanedData[key] = null;
+    }
+  });
+  
+  const dataToUpdate = { ...cleanedData, updatedAt: serverTimestamp() };
 
   await updateDoc(itemRefPath, dataToUpdate);
 }
