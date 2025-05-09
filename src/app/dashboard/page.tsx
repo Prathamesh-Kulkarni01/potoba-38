@@ -3,7 +3,7 @@
 import { useAuth } from '@/lib/auth/context';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ChefHat, BarChart3, Utensils, Settings, UserCog } from 'lucide-react';
+import { ChefHat, BarChart3, Utensils, Settings, UserCog, Users, SquareMenu } from 'lucide-react';
 import Image from 'next/image';
 
 function AdminDashboard() {
