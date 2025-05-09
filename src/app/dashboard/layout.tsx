@@ -1,13 +1,12 @@
 'use client';
 
 import { useEffect, type ReactNode } from 'react';
-import { usePathname, useRouter } from 'next/navigation'; // usePathname
+import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useAuth } from '@/lib/auth/context';
 import LoadingSpinner from '@/components/shared/loading-spinner';
 import UserNav from '@/components/dashboard/user-nav';
-// import { Button } from '@/components/ui/button'; // Not used directly, remove if SidebarTrigger handles it
 import {
   SidebarProvider,
   Sidebar,
@@ -21,51 +20,54 @@ import {
   SidebarInset,
   SidebarSeparator,
 } from '@/components/ui/sidebar';
-import { LayoutDashboard, Users, Utensils, ChefHat, SquareMenu, Settings, ShieldCheck, Store } from 'lucide-react';
+import { LayoutDashboard, Users, Utensils, ChefHat, SquareMenu, Settings, ShieldCheck, Store, UserRole } from 'lucide-react'; // Added UserRole, though not used directly as icon
+
+const FullScreenLoader = () => (
+  <div className="flex h-screen items-center justify-center bg-background">
+    <LoadingSpinner className="h-12 w-12 text-primary" />
+  </div>
+);
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
-  const { user, role, initialLoading } = useAuth();
+  const { user, role: authContextRole, initialLoading, loading: authContextLoading } = useAuth();
   const router = useRouter();
-  const pathname = usePathname(); // Get current pathname
+  const pathname = usePathname();
 
   useEffect(() => {
-    if (!initialLoading) {
+    // Wait for all auth loading to complete before making redirection decisions
+    if (!initialLoading && !authContextLoading) {
       if (!user) {
         router.replace('/login');
-      } else if (user.role === 'owner' && user.onboardingComplete === false) {
+      } else if (authContextRole === 'owner' && user.onboardingComplete === false) {
         router.replace('/onboarding/restaurant-setup');
+      } else if (!authContextRole && user) {
+        // User exists, loading finished, but role is null. This is an error state for dashboard.
+        console.error("DashboardLayout: User has a null role after all loading. Redirecting to login. This indicates a profile issue.");
+        router.replace('/login'); // Or an error page
       }
+      // If user is present, role is determined, and (if owner) onboarding is complete, they stay.
     }
-  }, [user, initialLoading, router]);
+  }, [user, authContextRole, initialLoading, authContextLoading, router]);
 
-  // Conditions for showing the loader screen
-  let showLoader = initialLoading;
-  if (!initialLoading) {
-    if (!user || (user && user.role === 'owner' && user.onboardingComplete === false)) {
-      showLoader = true;
-    }
+  // Determine if we should show the loader screen
+  if (initialLoading || authContextLoading) {
+    return <FullScreenLoader />;
   }
 
-  if (showLoader) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-background">
-        <LoadingSpinner className="h-12 w-12 text-primary" />
-      </div>
-    );
+  // If loading is done, but conditions for redirection are met (handled by useEffect)
+  // or user/role is unexpectedly null, show loader.
+  if (!user || !authContextRole) {
+    // This case should ideally be handled by the useEffect redirecting to /login or onboarding.
+    // Showing loader as a fallback during the brief period before redirect.
+    return <FullScreenLoader />;
+  }
+  if (authContextRole === 'owner' && user.onboardingComplete === false) {
+     // Also should be handled by useEffect. Loader while redirecting.
+    return <FullScreenLoader />;
   }
   
-  // If user is null here, it means initialLoading is false but user is still null (should have been caught by redirect)
-  // However, to prevent runtime errors if redirects are slow or useAuth() state updates with a delay:
-  if (!user) {
-     return ( // Fallback loader, though ideally redirect logic handles this
-      <div className="flex h-screen items-center justify-center bg-background">
-        <LoadingSpinner className="h-12 w-12 text-primary" />
-      </div>
-    );
-  }
+  // At this point, user is authenticated, role is known, and (if owner) onboarding is complete.
 
-
-  // Define navigation items based on roles (owner, staff, admin)
   const commonNavItems = [
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['owner', 'staff', 'admin', 'user'] },
     { href: '/dashboard/profile', label: 'Profile', icon: ChefHat, roles: ['owner', 'staff', 'admin', 'user'], hint: "user profile" },
@@ -76,7 +78,6 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     { href: '/dashboard/recipes', label: 'Recipes', icon: Utensils, roles: ['owner', 'staff'], hint: "food recipes" },
     { href: '/dashboard/meal-planner', label: 'Meal Planner', icon: SquareMenu, roles: ['owner', 'staff'], hint: "meal plan" },
     { href: '/dashboard/staff', label: 'Staff Management', icon: Users, roles: ['owner'], hint: "manage staff" },
-    // Add more owner-specific items like Menu Management, Inventory, Settings (Restaurant)
   ];
 
   const superAdminNavItems = [
@@ -87,17 +88,14 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
   let navItemsToDisplay: typeof commonNavItems = [...commonNavItems];
 
-  if (role === 'owner') {
+  if (authContextRole === 'owner') {
     navItemsToDisplay = [...navItemsToDisplay, ...ownerNavItems];
-  } else if (role === 'staff') {
-    // Staff might see a subset of owner items, or specific staff tools
-    // For now, let's give them recipes and meal planner from ownerNavItems
+  } else if (authContextRole === 'staff') {
     navItemsToDisplay = [
       ...navItemsToDisplay,
       ...ownerNavItems.filter(item => ['/dashboard/recipes', '/dashboard/meal-planner'].includes(item.href)),
     ];
   }
-  // 'user' role currently has only common items.
 
   const getFilteredNavItems = (items: typeof commonNavItems, currentRole: UserRole | null) => {
     if (!currentRole) return [];
@@ -115,7 +113,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         </SidebarHeader>
         <SidebarContent>
           <SidebarMenu>
-            {getFilteredNavItems(navItemsToDisplay, role).map((item) => (
+            {getFilteredNavItems(navItemsToDisplay, authContextRole).map((item) => (
               <SidebarMenuItem key={item.href}>
                 <SidebarMenuButton
                   asChild
@@ -129,13 +127,13 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                 </SidebarMenuButton>
               </SidebarMenuItem>
             ))}
-            {role === 'admin' && (
+            {authContextRole === 'admin' && (
               <>
                 <SidebarSeparator className="my-4" />
                 <SidebarMenuItem>
                   <div className="px-2 py-1 text-xs font-semibold text-sidebar-foreground/70 group-data-[collapsible=icon]:hidden">Platform Admin</div>
                 </SidebarMenuItem>
-                {getFilteredNavItems(superAdminNavItems, role).map((item) => (
+                {getFilteredNavItems(superAdminNavItems, authContextRole).map((item) => (
                   <SidebarMenuItem key={item.href}>
                      <SidebarMenuButton
                        asChild
@@ -154,14 +152,12 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           </SidebarMenu>
         </SidebarContent>
         <SidebarFooter className="p-2 border-t border-sidebar-border">
-           {/* User info or quick actions can go here */}
         </SidebarFooter>
       </Sidebar>
       <SidebarInset>
         <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b bg-background/80 px-4 backdrop-blur-md sm:px-6">
           <div className="flex items-center">
             <SidebarTrigger className="md:hidden" />
-            {/* Breadcrumbs or page title can go here */}
           </div>
           <UserNav />
         </header>

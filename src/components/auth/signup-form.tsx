@@ -20,7 +20,7 @@ import LoadingSpinner from '@/components/shared/loading-spinner';
 import type { UserRole } from '@/types';
 
 const formSchema = z.object({
-  restaurantName: z.string().min(2, { message: 'Restaurant name must be at least 2 characters.' }).optional(), // Optional now, only relevant for owner
+  restaurantName: z.string().min(2, { message: 'Restaurant name must be at least 2 characters.' }).optional(),
   email: z.string().email({ message: 'Invalid email address.' }),
   password: z.string().min(6, { message: 'Password must be at least 6 characters.' }),
   confirmPassword: z.string(),
@@ -46,7 +46,7 @@ export default function SignupForm() {
       email: '',
       password: '',
       confirmPassword: '',
-      role: 'owner', // Default role
+      role: 'owner', 
     },
   });
 
@@ -62,16 +62,16 @@ export default function SignupForm() {
       await createUserProfile(
         userCredential.user.uid,
         userCredential.user.email,
-        values.role as UserRole, // Pass selected role
+        values.role, // values.role is guaranteed by Zod schema
         restaurantData
       );
 
       toast({ title: 'Signup Successful', description: 'Your account has been created.' });
 
       if (values.role === 'owner') {
-        router.push('/onboarding/restaurant-setup'); // Redirect owner to onboarding
-      } else {
-        router.push('/dashboard'); // Redirect staff/user to dashboard
+        router.push('/onboarding/restaurant-setup'); 
+      } else { // staff or user
+        router.push('/dashboard'); // Corrected: staff/user go to dashboard
       }
 
     } catch (error: any) {
