@@ -1,3 +1,4 @@
+
 'use client';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -17,6 +18,7 @@ import { signOut } from 'firebase/auth';
 import { LogOut, UserCircle, ChefHat } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
+import { ThemeToggle } from '@/components/shared/theme-toggle';
 
 export default function UserNav() {
   const { user, role } = useAuth();
@@ -46,38 +48,41 @@ export default function UserNav() {
   };
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="relative h-10 w-10 rounded-full">
-          <Avatar className="h-10 w-10 border-2 border-primary">
-            {/* Placeholder image, replace with actual user image if available */}
-            <AvatarImage src={`https://picsum.photos/seed/${user.uid}/40/40`} alt={user.email || 'User Avatar'} data-ai-hint="user avatar" />
-            <AvatarFallback className="bg-primary text-primary-foreground font-semibold">
-              {getInitials(user.email)}
-            </AvatarFallback>
-          </Avatar>
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent className="w-56" align="end" forceMount>
-        <DropdownMenuLabel className="font-normal">
-          <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium leading-none">{user.displayName || user.email?.split('@')[0]}</p>
-            <p className="text-xs leading-none text-muted-foreground">{user.email}</p>
-          </div>
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuGroup>
-          <DropdownMenuItem className="cursor-pointer">
-            <ChefHat className="mr-2 h-4 w-4" />
-            <span>Role: {role || 'N/A'}</span>
+    <div className="flex items-center gap-2">
+      <ThemeToggle />
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" className="relative h-10 w-10 rounded-full">
+            <Avatar className="h-10 w-10 border-2 border-primary">
+              {/* Placeholder image, replace with actual user image if available */}
+              <AvatarImage src={`https://picsum.photos/seed/${user.uid}/40/40`} alt={user.email || 'User Avatar'} data-ai-hint="user avatar" />
+              <AvatarFallback className="bg-primary text-primary-foreground font-semibold">
+                {getInitials(user.email)}
+              </AvatarFallback>
+            </Avatar>
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent className="w-56" align="end" forceMount>
+          <DropdownMenuLabel className="font-normal">
+            <div className="flex flex-col space-y-1">
+              <p className="text-sm font-medium leading-none">{user.displayName || user.email?.split('@')[0]}</p>
+              <p className="text-xs leading-none text-muted-foreground">{user.email}</p>
+            </div>
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuGroup>
+            <DropdownMenuItem className="cursor-pointer">
+              <ChefHat className="mr-2 h-4 w-4" />
+              <span>Role: {role || 'N/A'}</span>
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={handleSignOut} className="cursor-pointer text-red-500 hover:!text-red-500 focus:text-red-500 focus:bg-red-500/10">
+            <LogOut className="mr-2 h-4 w-4" />
+            Sign Out
           </DropdownMenuItem>
-        </DropdownMenuGroup>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={handleSignOut} className="cursor-pointer text-red-500 hover:!text-red-500 focus:text-red-500 focus:bg-red-500/10">
-          <LogOut className="mr-2 h-4 w-4" />
-          Sign Out
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
   );
 }
