@@ -3,13 +3,15 @@ import { getAuth, Auth } from 'firebase/auth';
 import { getFirestore, Firestore } from 'firebase/firestore';
 
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
+  apiKey: "AIzaSyAU8FrdgZgvtbGvvd0pXugKohODjlo0CXI",
+  authDomain: "app1-65be0.firebaseapp.com",
+  // databaseURL: "https://app1-65be0.firebaseio.com", // databaseURL is not used in modern Firebase SDKs for Firestore
+  projectId: "app1-65be0",
+  storageBucket: "app1-65be0.appspot.com", // Corrected storage bucket format
+  messagingSenderId: "1081840443655",
+  appId: "1:1081840443655:web:b16feb9b7b4e406c8365a2",
+  // measurementId is optional and not provided, so it's removed.
+  // measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
 let app: FirebaseApp;
@@ -27,6 +29,11 @@ if (typeof window !== 'undefined' && !getApps().length) {
 } else {
   // For server-side, you might initialize differently or not at all if only client-side SDK is used
   // This scaffold focuses on client-side Firebase
+  // To avoid errors during Next.js build/server-side rendering when Firebase client SDK is imported,
+  // we can conditionally initialize or provide placeholder objects.
+  // However, for this setup, we assume client-side only usage for auth and db.
+  // If server-side Firebase Admin SDK were used, its initialization would be separate.
 }
 
 export { app, auth, db };
+
