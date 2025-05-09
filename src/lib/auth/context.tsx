@@ -1,11 +1,11 @@
 // auth-context.tsx
 'use client';
 
-import React, { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, ReactNode, useRef } from 'react';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
-import { auth } from '@/lib/firebase/config';
-import { getUserProfile } from '@/lib/firebase/firestore';
-import type { AuthUser, UserRole } from '@/types';
+import { auth, db } from '@/lib/firebase/config'; // Added db
+import { doc, onSnapshot } from 'firebase/firestore'; // Added doc, onSnapshot
+import type { AuthUser, UserRole, UserProfile as UserProfileType } from '@/types';
 import LoadingSpinner from '@/components/shared/loading-spinner';
 
 interface AuthContextType {
@@ -27,70 +27,90 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [role, setRole] = useState<UserRole | null>(null);
   const [loading, setLoading] = useState(true);
-  const [initialLoadingState, setInitialLoadingState] = useState(true); // Renamed to avoid conflict in useCallback
+  const [initialLoadingState, setInitialLoadingState] = useState(true);
+  const initialLoadingStateRef = useRef(true); // Ref to manage initial loading flag
 
-  const fetchProfileAndSetUser = useCallback(async (
-    firebaseUser: FirebaseUser,
-    attempt = 1
-  ): Promise<void> => {
-    setLoading(true); // Ensure loading is true during fetch attempts
-    try {
-      const userProfileData = await getUserProfile(firebaseUser.uid);
-      if (userProfileData) {
-        const authUser: AuthUser = {
-          ...firebaseUser,
-          role: userProfileData.role,
-          restaurantId: userProfileData.restaurantId || null,
-          onboardingComplete: typeof userProfileData.onboardingComplete === 'boolean' ? userProfileData.onboardingComplete : false,
-        };
-        setUser(authUser);
-        setRole(userProfileData.role);
-        setLoading(false);
-        if (initialLoadingState) setInitialLoadingState(false);
-      } else {
-        const creationTime = new Date(firebaseUser.metadata.creationTime!).getTime();
-        const isLikelyNewUser = Date.now() - creationTime < 10000; // User created in the last 10 seconds
+  useEffect(() => {
+    setLoading(true); // Start with loading true
+    let unsubscribeProfile: (() => void) | null = null;
 
-        if (isLikelyNewUser && attempt < 4) {
-          console.warn(`Profile for new user ${firebaseUser.uid} not found on attempt ${attempt}. Retrying...`);
-          setTimeout(() => fetchProfileAndSetUser(firebaseUser, attempt + 1), attempt * 1500); // Adjusted retry delay
-          // setLoading remains true, initialLoadingState remains true
-          return; 
-        } else {
-          console.warn(`User profile not found for UID: ${firebaseUser.uid} (new: ${isLikelyNewUser}, attempt: ${attempt}). Defaulting role to null.`);
-          const authUser: AuthUser = { ...firebaseUser, role: null, restaurantId: null, onboardingComplete: false };
+    const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser: FirebaseUser | null) => {
+      // If there was a previous profile listener, unsubscribe from it
+      if (unsubscribeProfile) {
+        unsubscribeProfile();
+        unsubscribeProfile = null;
+      }
+
+      if (firebaseUser) {
+        setLoading(true); // Loading while fetching/listening to profile
+        const userDocRef = doc(db, 'users', firebaseUser.uid);
+        
+        unsubscribeProfile = onSnapshot(userDocRef, (docSnap) => {
+          setLoading(true); // Profile data might be updating
+          if (docSnap.exists()) {
+            const userProfileData = docSnap.data() as UserProfileType;
+            const authUser: AuthUser = {
+              ...(firebaseUser as FirebaseUser), // Ensures all FirebaseUser props are spread
+              role: userProfileData.role,
+              restaurantId: userProfileData.restaurantId || null,
+              onboardingComplete: typeof userProfileData.onboardingComplete === 'boolean' ? userProfileData.onboardingComplete : false,
+            };
+            setUser(authUser);
+            setRole(userProfileData.role);
+          } else {
+            // Profile doesn't exist yet, might be a new user whose profile creation is pending
+            // This case should ideally be short-lived for new users.
+            // If persistent, indicates an issue in profile creation.
+            console.warn(`User profile not found for UID: ${firebaseUser.uid} during snapshot listening. Setting role to null.`);
+            const authUser: AuthUser = {
+              ...(firebaseUser as FirebaseUser),
+              role: null,
+              restaurantId: null,
+              onboardingComplete: false,
+            };
+            setUser(authUser);
+            setRole(null);
+          }
+          setLoading(false);
+          if (initialLoadingStateRef.current) {
+            setInitialLoadingState(false);
+            initialLoadingStateRef.current = false;
+          }
+        }, (error) => {
+          console.error("Error listening to user profile:", error);
+          const authUser: AuthUser = {
+            ...(firebaseUser as FirebaseUser),
+            role: null,
+            restaurantId: null,
+            onboardingComplete: false,
+          };
           setUser(authUser);
           setRole(null);
           setLoading(false);
-          if (initialLoadingState) setInitialLoadingState(false);
-        }
-      }
-    } catch (error) {
-      console.error("Error fetching user profile:", error);
-      const authUser: AuthUser = { ...firebaseUser, role: null, restaurantId: null, onboardingComplete: false };
-      setUser(authUser);
-      setRole(null);
-      setLoading(false);
-      if (initialLoadingState) setInitialLoadingState(false);
-    }
-  }, [initialLoadingState]); // Dependency on initialLoadingState to correctly manage its first set to false
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentFirebaseUser: FirebaseUser | null) => {
-      setLoading(true); // Set loading at the start of any auth change
-      
-      if (currentFirebaseUser) {
-        await fetchProfileAndSetUser(currentFirebaseUser, 1);
+          if (initialLoadingStateRef.current) {
+            setInitialLoadingState(false);
+            initialLoadingStateRef.current = false;
+          }
+        });
       } else {
+        // No Firebase user (logged out)
         setUser(null);
         setRole(null);
         setLoading(false);
-        if (initialLoadingState) setInitialLoadingState(false);
+        if (initialLoadingStateRef.current) {
+          setInitialLoadingState(false);
+          initialLoadingStateRef.current = false;
+        }
       }
     });
 
-    return () => unsubscribe();
-  }, [fetchProfileAndSetUser, initialLoadingState]); // Added fetchProfileAndSetUser and initialLoadingState
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeProfile) {
+        unsubscribeProfile();
+      }
+    };
+  }, []); // Empty dependency array: listeners set up once and clean up on unmount.
 
   return (
     <AuthContext.Provider value={{ user, role, loading, initialLoading: initialLoadingState }}>
