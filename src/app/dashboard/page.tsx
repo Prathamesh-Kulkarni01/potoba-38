@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/auth/context';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ChefHat, BarChart3, Utensils, Settings, UserCog, Users, SquareMenu, Store, DollarSign, ShoppingCart, Star, TrendingUp, LineChart } from 'lucide-react';
+import { ChefHat, BarChart3, Utensils, Settings, UserCog, Users, SquareMenu, Store, DollarSign, ShoppingCart, Star, LineChart, BookCopy, ShieldCheck, ScanText } from 'lucide-react'; // Added BookCopy, ShieldCheck, ScanText
 import Image from 'next/image';
 import Link from 'next/link';
 import { getRestaurantsByOwner, getRestaurant } from '@/lib/firebase/firestore'; // For fetching restaurant name
@@ -35,6 +35,15 @@ function AdminDashboard() {
             imageUrl="https://picsum.photos/seed/usermanagement/400/200"
             dataAiHint="user list interface"
           />
+           <DashboardNavigationCard
+            title="Restaurant Management"
+            description="Oversee all restaurants on the platform."
+            icon={<ShieldCheck className="h-8 w-8 text-accent" />}
+            actionText="Manage Restaurants"
+            actionHref="/dashboard/admin/restaurants"
+            imageUrl="https://picsum.photos/seed/restomanage/400/200"
+            dataAiHint="restaurant directory"
+          />
           <DashboardNavigationCard
             title="System Analytics"
             description="Monitor application performance and user activity."
@@ -47,7 +56,7 @@ function AdminDashboard() {
            <DashboardNavigationCard
             title="Content Moderation"
             description="Review and manage user-generated content."
-            icon={<Utensils className="h-8 w-8 text-accent" />}
+            icon={<ScanText className="h-8 w-8 text-accent" />}
             actionText="Moderate Content"
             actionHref="/dashboard/admin/content"
             imageUrl="https://picsum.photos/seed/contentmoderation/400/200"
@@ -87,10 +96,6 @@ const mockPopularItems = [
 
 function OwnerDashboard() {
   const { user } = useAuth();
-  // Note: For the main dashboard, selectedRestaurantId might not be in URL params.
-  // It's managed in DashboardLayout state. For this page to reflect it,
-  // it would need to be passed down or read from a shared context.
-  // For simplicity, we'll try to get it from localStorage if not passed, or use user's primary.
   const [currentRestaurantName, setCurrentRestaurantName] = useState<string | null>(null);
   const [selectedRestaurantId, setSelectedRestaurantId] = useState<string | null>(null);
 
@@ -106,7 +111,6 @@ function OwnerDashboard() {
           }
         });
       } else {
-        // Attempt to load all restaurants if no specific one is selected or primary is null
         getRestaurantsByOwner(user.uid).then(restaurants => {
           if (restaurants.length > 0) {
             const firstRestaurantId = restaurants[0].id;
@@ -142,7 +146,6 @@ function OwnerDashboard() {
   }
 
   if (!selectedRestaurantId && user?.role !== 'owner') {
-    // This shouldn't happen if routing is correct, but as a fallback:
     return <p>Loading restaurant data...</p>;
   }
 
@@ -225,7 +228,7 @@ function OwnerDashboard() {
                             </div>
                         ))}
                          <Button variant="outline" size="sm" className="w-full mt-4" asChild>
-                            <Link href={`/dashboard/recipes/${selectedRestaurantId}`}>Manage Recipes</Link>
+                            <Link href={`/dashboard/menu-management/${selectedRestaurantId}`}>Manage Menu</Link>
                         </Button>
                     </CardContent>
                 </Card>
@@ -236,31 +239,34 @@ function OwnerDashboard() {
                 <CardHeader>
                     <CardTitle className="text-lg">Quick Actions</CardTitle>
                 </CardHeader>
-                <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <Button variant="outline" asChild>
+                <CardContent className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                    <Button variant="outline" asChild className="flex-1">
                         <Link href={`/dashboard/restaurant/${selectedRestaurantId}`}>
-                            <Store className="mr-2 h-4 w-4"/> View Details
+                            <Store className="mr-2 h-4 w-4"/> Details
                         </Link>
                     </Button>
-                    <Button variant="outline" asChild>
+                     <Button variant="outline" asChild className="flex-1">
+                        <Link href={`/dashboard/menu-management/${selectedRestaurantId}`}>
+                            <BookCopy className="mr-2 h-4 w-4"/> Menu
+                        </Link>
+                    </Button>
+                    <Button variant="outline" asChild className="flex-1">
                         <Link href={`/dashboard/staff/${selectedRestaurantId}`}>
-                            <Users className="mr-2 h-4 w-4"/> Manage Staff
+                            <Users className="mr-2 h-4 w-4"/> Staff
                         </Link>
                     </Button>
-                    <Button variant="outline" asChild>
+                    <Button variant="outline" asChild className="flex-1">
                          <Link href={`/dashboard/meal-planner/${selectedRestaurantId}`}>
-                            <SquareMenu className="mr-2 h-4 w-4"/> Meal Planner
+                            <SquareMenu className="mr-2 h-4 w-4"/> Planner
                         </Link>
                     </Button>
-                    <Button variant="outline" asChild>
+                    <Button variant="outline" asChild className="flex-1">
                         <Link href={`/dashboard/restaurant/${selectedRestaurantId}/settings`}>
                             <Settings className="mr-2 h-4 w-4"/> Settings
                         </Link>
                     </Button>
                 </CardContent>
             </Card>
-
-
         </CardContent>
       </Card>
     </div>
@@ -269,8 +275,8 @@ function OwnerDashboard() {
 
 
 function UserDashboard() {
-  // For staff, selectedRestaurantId would ideally come from user.restaurantId
   const { user } = useAuth();
+  const restaurantContextId = user?.restaurantId || 'default'; // Fallback for general users if needed
 
   return (
     <div className="space-y-6">
@@ -280,16 +286,16 @@ function UserDashboard() {
             <ChefHat className="mr-3 h-7 w-7" />
             Your Culinary Hub
           </CardTitle>
-          <CardDescription>Explore recipes, plan your meals, and manage your culinary profile in AuthZen.</CardDescription>
+          <CardDescription>Explore menus, plan your meals, and manage your culinary profile in AuthZen.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           <DashboardNavigationCard
-            title="Discover Recipes"
-            description="Browse a vast collection of delicious recipes."
-            icon={<Utensils className="h-8 w-8 text-accent" />}
-            actionText="Find Recipes"
-            actionHref={`/dashboard/recipes${user?.role === 'staff' && user.restaurantId ? `/${user.restaurantId}` : ''}`}
-            imageUrl="https://picsum.photos/seed/recipes/400/200"
+            title="Browse Menus"
+            description="Discover delicious dishes from various restaurants."
+            icon={<BookCopy className="h-8 w-8 text-accent" />} // Changed from Utensils to BookCopy
+            actionText="Find Menus"
+            actionHref={`/dashboard/menu-management/${restaurantContextId}`} // Generic or context-based link
+            imageUrl="https://picsum.photos/seed/menus/400/200"
             dataAiHint="food variety"
           />
           <DashboardNavigationCard
@@ -297,7 +303,7 @@ function UserDashboard() {
             description="Organize your weekly meals effortlessly."
             icon={<SquareMenu className="h-8 w-8 text-accent" />}
             actionText="Plan Meals"
-            actionHref={`/dashboard/meal-planner${user?.role === 'staff' && user.restaurantId ? `/${user.restaurantId}` : ''}`}
+            actionHref={`/dashboard/meal-planner/${restaurantContextId}`}
             imageUrl="https://picsum.photos/seed/mealplanner/400/200"
             dataAiHint="calendar schedule"
           />
@@ -381,7 +387,7 @@ export default function DashboardPage() {
     dashboardComponent = <AdminDashboard />;
   } else if (role === 'owner') {
     dashboardComponent = <OwnerDashboard />;
-  } else {
+  } else { // Covers 'staff' and 'user'
     dashboardComponent = <UserDashboard />;
   }
 

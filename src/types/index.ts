@@ -29,3 +29,39 @@ export interface RestaurantProfile {
   stripeCustomerId?: string;
   subscriptionStatus?: 'active' | 'inactive' | 'trialing';
 }
+
+export interface MenuCategory {
+  id: string;
+  restaurantId: string;
+  name: string;
+  order: number; // For sorting categories
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+export interface MenuSubcategory {
+  id: string;
+  restaurantId: string;
+  categoryId: string;
+  name: string;
+  order: number; // For sorting subcategories within a category
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+export interface MenuItem {
+  id: string;
+  restaurantId: string;
+  categoryId: string;
+  subcategoryId?: string | null; // Optional, if item is directly under a category
+  name: string;
+  description: string;
+  price: number;
+  imageUrl?: string | null;
+  availability: boolean; // true if available, false if not
+  dietaryTags?: string[]; // e.g., ['vegan', 'gluten-free']
+  allergenInfo?: string[];
+  order: number; // For sorting items within a category/subcategory
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}

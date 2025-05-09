@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useEffect, type ReactNode, useState, useCallback } from 'react';
@@ -25,7 +26,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button';
 import BottomNavigationBar, { type BottomNavItem } from '@/components/dashboard/bottom-navigation-bar';
 import { useIsMobile as useIsMobileDirect } from '@/hooks/use-mobile';
-import { LayoutDashboard, Users, Utensils, ChefHat, SquareMenu, Settings, ShieldCheck, Store, PlusCircle } from 'lucide-react';
+import { LayoutDashboard, Users, Utensils, ChefHat, SquareMenu, Settings, ShieldCheck, Store, PlusCircle, BookCopy } from 'lucide-react'; // Added BookCopy for Menu Management
 import type { RestaurantProfile } from '@/types';
 import { getRestaurantsByOwner } from '@/lib/firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
@@ -101,13 +102,18 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
 
   const handleRestaurantChange = (restaurantId: string) => {
+    if (restaurantId === "create_new_restaurant_redirect_target") {
+        router.push('/dashboard/create-restaurant');
+        return;
+    }
     setSelectedRestaurantId(restaurantId);
     // Potentially redirect to the main dashboard for that restaurant or a specific page
     // For now, just updating the ID will make links dynamic.
     // router.push(`/dashboard/restaurant/${restaurantId}`); // Example: redirect to new restaurant's main page
   };
   
-  if (initialLoading || authContextLoading || (authContextRole === 'owner' && restaurantsLoading && ownedRestaurants.length === 0)) {
+  if (initialLoading || authContextLoading || (authContextRole === 'owner' && restaurantsLoading && ownedRestaurants.length === 0 && !pathname.endsWith('/create-restaurant'))) {
+    // Allow /create-restaurant to load even if no restaurants yet
     return <FullScreenLoader />;
   }
 
@@ -130,7 +136,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     }
     return [
       { href: `/dashboard/restaurant/${currentRestaurantId}`, label: 'My Restaurant', icon: Store, roles: ['owner'], hint: "restaurant details" },
-      { href: `/dashboard/recipes/${currentRestaurantId}`, label: 'Recipes', icon: Utensils, roles: ['owner', 'staff'], hint: "food recipes" },
+      { href: `/dashboard/menu-management/${currentRestaurantId}`, label: 'Menu Management', icon: BookCopy, roles: ['owner'], hint: "manage menu" },
+      { href: `/dashboard/recipes/${currentRestaurantId}`, label: 'Recipes (Old)', icon: Utensils, roles: ['owner', 'staff'], hint: "food recipes" },
       { href: `/dashboard/meal-planner/${currentRestaurantId}`, label: 'Meal Planner', icon: SquareMenu, roles: ['owner', 'staff'], hint: "meal plan" },
       { href: `/dashboard/staff/${currentRestaurantId}`, label: 'Staff Management', icon: Users, roles: ['owner'], hint: "manage staff" },
       { href: `/dashboard/restaurant/${currentRestaurantId}/settings`, label: 'Restaurant Settings', icon: Settings, roles: ['owner'], hint: "specific settings" },
@@ -139,7 +146,9 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   
   const superAdminNavItems = [
      { href: '/dashboard/admin/users', label: 'All Users', icon: Users, roles: ['admin'], hint: "users list" },
-     { href: '/dashboard/admin/restaurants', label: 'All Restaurants', icon: ShieldCheck, roles: ['admin'], hint: "platform restaurants" }, // Placeholder, page not created
+     { href: '/dashboard/admin/restaurants', label: 'All Restaurants', icon: ShieldCheck, roles: ['admin'], hint: "platform restaurants" }, 
+     { href: '/dashboard/admin/analytics', label: 'Platform Analytics', icon: LayoutDashboard, roles: ['admin'], hint: "admin analytics"},
+     { href: '/dashboard/admin/content', label: 'Content Moderation', icon: SquareMenu, roles: ['admin'], hint: "admin content"},
      { href: '/dashboard/admin/settings', label: 'Platform Settings', icon: Settings, roles: ['admin'], hint: "admin settings" },
   ];
 
@@ -148,11 +157,11 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     desktopNavItems = [...desktopNavItems, ...getOwnerNavItems(selectedRestaurantId)];
   } else if (authContextRole === 'staff') {
     // Staff's restaurantId would come from their profile, not a selector
-    const staffRestaurantId = user?.restaurantId; // Assuming staff are tied to one restaurant
+    const staffRestaurantId = user?.restaurantId; 
      if (staffRestaurantId) {
         desktopNavItems = [
         ...desktopNavItems,
-        ...getOwnerNavItems(staffRestaurantId).filter(item => ['Recipes', 'Meal Planner'].includes(item.label)), // Example filter for staff
+        ...getOwnerNavItems(staffRestaurantId).filter(item => ['Recipes (Old)', 'Meal Planner'].includes(item.label)), 
         ];
      }
   }
@@ -167,10 +176,16 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     dynamicBottomNavItem = { href: `/dashboard/restaurant/${selectedRestaurantId}`, label: 'Restaurant', icon: Store, hint: "my restaurant" };
   } else if (authContextRole === 'admin') {
     dynamicBottomNavItem = { href: '/dashboard/admin/users', label: 'Users', icon: Users, hint: "all users" };
-  } else { // staff or user
+  } else { 
      const relevantRestaurantId = authContextRole === 'staff' ? user?.restaurantId : selectedRestaurantId;
-     dynamicBottomNavItem = { href: `/dashboard/recipes${relevantRestaurantId ? '/' + relevantRestaurantId : ''}`, label: 'Recipes', icon: Utensils, hint: "food recipes" };
+     // Point general users/staff to Menu Management if a restaurant ID is available, otherwise a generic recipes link.
+     if (relevantRestaurantId) {
+        dynamicBottomNavItem = { href: `/dashboard/menu-management/${relevantRestaurantId}`, label: 'Menu', icon: BookCopy, hint: "view menu" };
+     } else {
+        dynamicBottomNavItem = { href: `/dashboard/recipes`, label: 'Recipes', icon: Utensils, hint: "food recipes" }; // Fallback or generic recipes
+     }
   }
+
 
   const bottomNavLinks: BottomNavItem[] = [
     { href: '/dashboard', label: 'Home', icon: LayoutDashboard, hint: "dashboard home" },
@@ -223,7 +238,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                   <SidebarMenuItem key={item.href + (item.label === 'My Restaurant' && selectedRestaurantId ? selectedRestaurantId : '')}>
                     <SidebarMenuButton
                       asChild
-                      isActive={pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href.split('[')[0]))} // Adjusted for dynamic routes
+                      isActive={pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href.split('[')[0].replace(/\/(undefined|null)$/, '')))} // Adjusted for dynamic routes
                       tooltip={{ children: item.label, "data-ai-hint": item.hint }}
                     >
                       <Link href={item.href} className="flex items-center">
@@ -295,8 +310,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                           {restaurant.name}
                         </SelectItem>
                       ))}
-                       <SelectItem value="create_new_restaurant_redirect_target">
-                          <Link href="/dashboard/create-restaurant" className="text-xs text-primary w-full block">Create New</Link>
+                       <SelectItem value="create_new_restaurant_redirect_target" className="text-xs text-primary">
+                           Create New
                        </SelectItem>
                     </SelectContent>
                   </Select>
