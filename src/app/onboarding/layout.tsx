@@ -12,86 +12,82 @@ const FullScreenLoader = () => (
 );
 
 export default function OnboardingLayout({ children }: { children: ReactNode }) {
-  const { user, initialLoading, loading: authContextLoading, role: authContextRole } = useAuth();
+  const { user, initialLoading, loading: authContextLoading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    // Wait for initial auth data and any subsequent profile loading to complete
-    if (!initialLoading && !authContextLoading) {
-      if (!user) {
-        router.replace('/login'); // Must be logged in
-      } else if (authContextRole && authContextRole !== 'owner') {
-        // Non-owners (staff, admin, general user) should not be in onboarding
-        console.log(`OnboardingLayout: User with role '${authContextRole}' redirected from onboarding to dashboard.`);
-        router.replace('/dashboard');
-      } else if (authContextRole === 'owner' && user.onboardingComplete === true) {
-        // Owner is already onboarded
-        console.log("OnboardingLayout: Onboarded owner redirected from onboarding to dashboard.");
-        router.replace('/dashboard');
-      } else if (!authContextRole && user) {
-         // User exists, loading finished, but role is null. This is an error state for onboarding.
-         console.error("OnboardingLayout: User has a null role after all loading. Redirecting to dashboard. This indicates a profile issue.");
-         router.replace('/dashboard'); // Or perhaps '/login' or an error page
-      }
-      // If user.role is 'owner' and user.onboardingComplete is false, they are in the right place.
-      // If user.role is null (profile still loading, covered by authContextLoading), effect defers.
+    if (initialLoading || authContextLoading) {
+      return; // Still loading, wait for auth context to stabilize
     }
-  }, [user, initialLoading, authContextLoading, authContextRole, router]);
+
+    // At this point, initialLoading and authContextLoading are false. Auth context should be stable.
+    if (!user) {
+      router.replace('/login'); // Not authenticated, go to login
+      return;
+    }
+
+    // User is authenticated. Now check role and onboarding status from the user object.
+    if (user.role === 'owner') {
+      if (user.onboardingComplete === false) {
+        // Owner, onboarding not complete: This is the correct place. Do nothing.
+        console.log("OnboardingLayout: Owner proceeding with onboarding.");
+      } else {
+        // Owner, onboarding complete: Redirect to dashboard.
+        console.log("OnboardingLayout: Onboarded owner redirected to dashboard.");
+        router.replace('/dashboard');
+      }
+    } else if (user.role && user.role !== 'owner') {
+      // User has a defined role, and it's not 'owner' (e.g., staff, admin, general user): Redirect to dashboard.
+      console.log(`OnboardingLayout: User with role '${user.role}' redirected to dashboard from onboarding.`);
+      router.replace('/dashboard');
+    } else if (!user.role) {
+      // User is authenticated, but user.role is null. This is an unexpected state after all loading.
+      // Profile might not have loaded correctly, or role is missing in profile.
+      console.error("OnboardingLayout: Authenticated user has a null role after all loading. This may indicate a profile data issue. Redirecting to login as a fallback.");
+      router.replace('/login'); // Fallback to login, as dashboard/onboarding pages require a role.
+    }
+  }, [user, initialLoading, authContextLoading, router]);
 
 
   // Determine if we should show loader or content
   if (initialLoading || authContextLoading) {
-    return <FullScreenLoader />;
+    return <FullScreenLoader />; // Still loading initial auth state or profile
   }
 
-  // All auth context loading is complete at this point.
-  // Now, check conditions for showing content vs. loader (while redirecting).
   if (!user) {
-    // Should have been caught by useEffect and redirected. Showing loader in interim.
+    // User is not authenticated, useEffect will redirect to login. Show loader.
     return <FullScreenLoader />;
   }
 
-  if (authContextRole === null) {
-    // This is a problematic state: auth fully loaded, user exists, but role is null.
-    // useEffect should redirect. Show loader while that happens.
-    console.warn("OnboardingLayout: Rendering loader because user role is null post-loading. Expecting redirect.");
-    return <FullScreenLoader />;
-  }
-
-  if (authContextRole !== 'owner' || (authContextRole === 'owner' && user.onboardingComplete)) {
-    // These users should be redirected by useEffect. Show loader in the meantime.
-    return <FullScreenLoader />;
+  // User is authenticated. Check if they are an owner needing onboarding.
+  if (user.role === 'owner' && user.onboardingComplete === false) {
+    // Correct state for showing onboarding content.
+    return (
+      <div className="flex min-h-screen flex-col items-center bg-gradient-to-br from-background to-muted/50 pt-8 sm:pt-16 px-4">
+        <div className="mb-8 text-center">
+          <Image 
+              src="https://picsum.photos/seed/onboardlogo/80/80"
+              alt="Resto SaaS Logo" 
+              width={80} 
+              height={80} 
+              className="mx-auto rounded-lg shadow-md"
+              data-ai-hint="modern app logo" 
+          />
+          <h1 className="mt-4 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+            Welcome to Resto SaaS!
+          </h1>
+          <p className="mt-2 text-lg text-muted-foreground">
+            Let&apos;s get your restaurant set up.
+          </p>
+        </div>
+        <div className="w-full max-w-lg">
+          {children}
+        </div>
+      </div>
+    );
   }
   
-  // If we reach here:
-  // - initialLoading is false
-  // - authContextLoading is false
-  // - user exists
-  // - authContextRole is 'owner'
-  // - user.onboardingComplete is false
-  // This user should see the onboarding content.
-
-  return (
-    <div className="flex min-h-screen flex-col items-center bg-gradient-to-br from-background to-muted/50 pt-8 sm:pt-16 px-4">
-      <div className="mb-8 text-center">
-        <Image 
-            src="https://picsum.photos/seed/onboardlogo/80/80"
-            alt="Resto SaaS Logo" 
-            width={80} 
-            height={80} 
-            className="mx-auto rounded-lg shadow-md"
-            data-ai-hint="modern app logo" 
-        />
-        <h1 className="mt-4 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-          Welcome to Resto SaaS!
-        </h1>
-        <p className="mt-2 text-lg text-muted-foreground">
-          Let&apos;s get your restaurant set up.
-        </p>
-      </div>
-      <div className="w-full max-w-lg">
-        {children}
-      </div>
-    </div>
-  );
+  // If user.role is null, or user is not an owner needing onboarding (e.g., owner already onboarded, or not an owner),
+  // useEffect should handle redirection. Show loader in the interim.
+  return <FullScreenLoader />;
 }
