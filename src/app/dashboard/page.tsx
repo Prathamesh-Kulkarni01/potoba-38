@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useAuth } from '@/lib/auth/context';
@@ -5,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { ChefHat, BarChart3, Utensils, Settings, UserCog, Users, SquareMenu, Store } from 'lucide-react';
 import Image from 'next/image';
+import Link from 'next/link'; // Import Link
 
 function AdminDashboard() {
   return (
@@ -15,13 +17,13 @@ function AdminDashboard() {
             <UserCog className="mr-3 h-7 w-7" />
             Platform Admin Panel
           </CardTitle>
-          <CardDescription>Manage users, system settings, and view overall application analytics.</CardDescription>
+          <CardDescription>Manage users, system settings, and view overall application analytics for AuthZen.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-6 md:grid-cols-2">
           <DashboardCard
             title="User Management"
             description="View, edit, and manage user accounts and roles."
-            icon={<UsersIcon className="h-8 w-8 text-accent" />}
+            icon={<Users className="h-8 w-8 text-accent" />}
             actionText="Go to Users"
             actionHref="/dashboard/admin/users"
             imageUrl="https://picsum.photos/seed/usermanagement/400/200"
@@ -32,16 +34,16 @@ function AdminDashboard() {
             description="Monitor application performance and user activity."
             icon={<BarChart3 className="h-8 w-8 text-accent" />}
             actionText="View Analytics"
-            actionHref="/dashboard/admin/analytics" // This page doesn't exist yet, consider for future
+            actionHref="/dashboard/admin/analytics" 
             imageUrl="https://picsum.photos/seed/analytics/400/200"
             dataAiHint="dashboard charts"
           />
            <DashboardCard
             title="Content Moderation"
             description="Review and manage user-generated content."
-            icon={<Utensils className="h-8 w-8 text-accent" />} // Placeholder icon, consider ShieldCheck or similar
+            icon={<Utensils className="h-8 w-8 text-accent" />} 
             actionText="Moderate Content"
-            actionHref="/dashboard/admin/content" // This page doesn't exist yet
+            actionHref="/dashboard/admin/content" 
             imageUrl="https://picsum.photos/seed/contentmoderation/400/200"
             dataAiHint="content review"
           />
@@ -69,7 +71,7 @@ function OwnerDashboard() {
             <Store className="mr-3 h-7 w-7" />
             Restaurant Management
           </CardTitle>
-          <CardDescription>Oversee your restaurant's operations, staff, recipes, and more.</CardDescription>
+          <CardDescription>Oversee your restaurant's operations, staff, recipes, and more within AuthZen.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           <DashboardCard
@@ -77,16 +79,16 @@ function OwnerDashboard() {
             description="View and edit your restaurant's information."
             icon={<Store className="h-8 w-8 text-accent" />}
             actionText="Go to Restaurant"
-            actionHref="/dashboard/restaurant" // This page needs to be created for owners
+            actionHref="/dashboard/restaurant"
             imageUrl="https://picsum.photos/seed/myrestaurant/400/200"
             dataAiHint="restaurant storefront"
           />
           <DashboardCard
             title="Staff Management"
             description="Manage your team members and their roles."
-            icon={<UsersIcon className="h-8 w-8 text-accent" />}
+            icon={<Users className="h-8 w-8 text-accent" />}
             actionText="Manage Staff"
-            actionHref="/dashboard/staff" // This page needs to be created for owners
+            actionHref="/dashboard/staff" 
             imageUrl="https://picsum.photos/seed/staffmanagement/400/200"
             dataAiHint="team collaboration"
           />
@@ -102,7 +104,7 @@ function OwnerDashboard() {
           <DashboardCard
             title="Meal Planner"
             description="Plan weekly meals and menus for your restaurant."
-            icon={<SquareMenuIcon className="h-8 w-8 text-accent" />}
+            icon={<SquareMenu className="h-8 w-8 text-accent" />}
             actionText="Go to Meal Planner"
             actionHref="/dashboard/meal-planner"
             imageUrl="https://picsum.photos/seed/ownermealplanner/400/200"
@@ -113,7 +115,7 @@ function OwnerDashboard() {
             description="Configure settings specific to your restaurant."
             icon={<Settings className="h-8 w-8 text-accent" />}
             actionText="Restaurant Settings"
-            actionHref="/dashboard/restaurant/settings" // This page needs to be created for owners
+            actionHref="/dashboard/restaurant/settings"
             imageUrl="https://picsum.photos/seed/restaurantsettings/400/200"
             dataAiHint="cogwheel options"
           />
@@ -124,7 +126,7 @@ function OwnerDashboard() {
 }
 
 
-function UserDashboard() { // For 'staff' and 'user' roles
+function UserDashboard() { 
   return (
     <div className="space-y-6">
       <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
@@ -133,7 +135,7 @@ function UserDashboard() { // For 'staff' and 'user' roles
             <ChefHat className="mr-3 h-7 w-7" />
             Your Culinary Hub
           </CardTitle>
-          <CardDescription>Explore recipes, plan your meals, and manage your culinary profile.</CardDescription>
+          <CardDescription>Explore recipes, plan your meals, and manage your culinary profile in AuthZen.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           <DashboardCard
@@ -148,7 +150,7 @@ function UserDashboard() { // For 'staff' and 'user' roles
           <DashboardCard
             title="Meal Planner"
             description="Organize your weekly meals and generate shopping lists effortlessly."
-            icon={<SquareMenuIcon className="h-8 w-8 text-accent" />}
+            icon={<SquareMenu className="h-8 w-8 text-accent" />}
             actionText="Plan Meals"
             actionHref="/dashboard/meal-planner"
             imageUrl="https://picsum.photos/seed/mealplanner/400/200"
@@ -192,36 +194,31 @@ function DashboardCard({ title, description, icon, actionText, actionHref, image
       </CardHeader>
       <CardContent>
         <Button asChild className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
-          <a href={actionHref}>{actionText}</a>
+          <Link href={actionHref}>{actionText}</Link>
         </Button>
       </CardContent>
     </Card>
   );
 }
 
-// Placeholder icons (lucide-react might not have all of these directly)
-const UsersIcon = (props: any) => <Users {...props} />;
-const SquareMenuIcon = (props: any) => <SquareMenu {...props} />;
-
-
 export default function DashboardPage() {
   const { user, role } = useAuth();
 
-  if (!user) return null; // Or a loading state
+  if (!user) return null; 
 
   let dashboardComponent;
   if (role === 'admin') {
     dashboardComponent = <AdminDashboard />;
   } else if (role === 'owner') {
     dashboardComponent = <OwnerDashboard />;
-  } else { // For 'staff' and 'user'
+  } else { 
     dashboardComponent = <UserDashboard />;
   }
 
   return (
     <div className="container mx-auto py-8">
       <h1 className="text-4xl font-bold mb-2">
-        Welcome, <span className="text-primary">{user.displayName || user.email?.split('@')[0] || 'User'}</span>!
+        Welcome to AuthZen, <span className="text-primary">{user.displayName || user.email?.split('@')[0] || 'User'}</span>!
       </h1>
       <p className="text-lg text-muted-foreground mb-8">
         You are logged in as a{role === 'admin' || role === 'owner' ? 'n' : ''} <span className="font-semibold text-accent">{role}</span>.
