@@ -49,23 +49,44 @@ export interface MenuSubcategory {
   updatedAt: Timestamp;
 }
 
+export interface MenuItemVariantOption {
+  name: string;
+  price: number; // Absolute price for this option
+  // id?: string; // Optional: for easier management in UI state if needed
+}
+
+export interface MenuItemVariant {
+  // id?: string; // Optional: for easier management in UI state if needed
+  name: string; // e.g., "Size", "Spice Level"
+  options: MenuItemVariantOption[];
+}
+
+export interface AvailabilityRule {
+  // id?: string; // Optional: for easier management in UI state if needed
+  dayOfWeek: 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri' | 'Sat' | 'Sun' | 'Everyday';
+  startTime: string; // Format HH:mm
+  endTime: string;   // Format HH:mm
+}
+
 export interface MenuItem {
   id: string;
   restaurantId: string;
   categoryId: string;
   subcategoryId?: string | null; // Optional, if item is directly under a category
-  name: string;
+  name:string;
   description: string;
-  price: number;
+  price: number; // Base price, or price if no variants
   imageUrl?: string | null;
-  availability: boolean; // true if available, false if not
+  videoUrl?: string | null; // For short videos
+  availability: boolean; // Master switch: true if available, false if not (temporarily disable)
   dietaryTags?: string[]; // e.g., ['vegan', 'gluten-free']
   allergenInfo?: string[];
   order: number; // For sorting items within a category/subcategory
-  calories?: number; // New field
-  crossSellItems?: string[]; // IDs or names of items for cross-selling
-  upsellItems?: string[]; // IDs or names of items for up-selling
+  calories?: number; 
+  crossSellItems?: string[]; 
+  upsellItems?: string[]; 
+  variants?: MenuItemVariant[]; // Item variants like size or spice level
+  availabilitySchedule?: AvailabilityRule[]; // Specific time/day availability
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
-

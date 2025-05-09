@@ -17,7 +17,7 @@ import {
   collectionGroup,
 } from 'firebase/firestore';
 import { db } from './config';
-import type { MenuCategory, MenuSubcategory, MenuItem } from '@/types';
+import type { MenuCategory, MenuSubcategory, MenuItem, MenuItemVariant, AvailabilityRule } from '@/types';
 
 // --- MenuCategory Functions ---
 
@@ -59,31 +59,23 @@ export async function deleteMenuCategory(restaurantId: string, categoryId: strin
   if (!db) throw new Error("Firestore is not initialized.");
   const batch = writeBatch(db);
 
-  // Path to category
   const categoryRef = doc(db, 'restaurants', restaurantId, 'menuCategories', categoryId);
 
-  // Get all items directly under this category (if any)
   const directItemsQuery = query(collection(db, 'restaurants', restaurantId, 'menuCategories', categoryId, 'menuItems'));
   const directItemsSnapshot = await getDocs(directItemsQuery);
   directItemsSnapshot.forEach(itemDoc => batch.delete(itemDoc.ref));
   
-  // Get all subcategories under this category
   const subcategoriesQuery = query(collection(db, 'restaurants', restaurantId, 'menuCategories', categoryId, 'menuSubcategories'));
   const subcategoriesSnapshot = await getDocs(subcategoriesQuery);
 
   for (const subcategoryDoc of subcategoriesSnapshot.docs) {
-    // Get all items under this subcategory
     const itemsQuery = query(collection(db, 'restaurants', restaurantId, 'menuCategories', categoryId, 'menuSubcategories', subcategoryDoc.id, 'menuItems'));
     const itemsSnapshot = await getDocs(itemsQuery);
     itemsSnapshot.forEach(itemDoc => batch.delete(itemDoc.ref));
-    
-    // Delete the subcategory itself
     batch.delete(subcategoryDoc.ref);
   }
   
-  // Delete the category
   batch.delete(categoryRef);
-  
   await batch.commit();
 }
 
@@ -98,10 +90,8 @@ export async function getMenuSubcategories(restaurantId: string, categoryId?: st
      const subcategoriesCol = collection(db, 'restaurants', restaurantId, 'menuCategories', categoryId, 'menuSubcategories');
      q = query(subcategoriesCol, orderBy('order', 'asc'), orderBy('name', 'asc'));
   } else {
-    // Fetch all subcategories for the restaurant if categoryId is not provided
-    // This requires querying a collection group
     const allSubcategoriesCol = collectionGroup(db, 'menuSubcategories');
-    q = query(allSubcategoriesCol, where('restaurantId', '==', restaurantId), orderBy('order', 'asc'), orderBy('name', 'asc'));
+    q = query(allSubcategoriesCol, where('restaurantId', '==', restaurantId), orderBy('categoryId'), orderBy('order', 'asc'), orderBy('name', 'asc'));
   }
   
   const snapshot = await getDocs(q);
@@ -125,8 +115,8 @@ export async function addMenuSubcategory(restaurantId: string, categoryId: strin
     restaurantId, 
     categoryId, 
     ...subcategoryData, 
-    createdAt: Timestamp.now(), // Optimistic
-    updatedAt: Timestamp.now() // Optimistic
+    createdAt: Timestamp.now(), 
+    updatedAt: Timestamp.now()
   } as MenuSubcategory;
 }
 
@@ -140,17 +130,13 @@ export async function deleteMenuSubcategory(restaurantId: string, categoryId: st
   if (!db) throw new Error("Firestore is not initialized.");
   const batch = writeBatch(db);
   
-  // Path to subcategory
   const subcategoryRef = doc(db, 'restaurants', restaurantId, 'menuCategories', categoryId, 'menuSubcategories', subcategoryId);
   
-  // Get all items under this subcategory
   const itemsQuery = query(collection(db, 'restaurants', restaurantId, 'menuCategories', categoryId, 'menuSubcategories', subcategoryId, 'menuItems'));
   const itemsSnapshot = await getDocs(itemsQuery);
   itemsSnapshot.forEach(itemDoc => batch.delete(itemDoc.ref));
   
-  // Delete the subcategory itself
   batch.delete(subcategoryRef);
-  
   await batch.commit();
 }
 
@@ -160,7 +146,10 @@ export async function getMenuItems(restaurantId: string): Promise<MenuItem[]> {
   if (!db) throw new Error("Firestore is not initialized.");
   
   const itemsColGroup = collectionGroup(db, 'menuItems');
-  const q = query(itemsColGroup, where('restaurantId', '==', restaurantId), orderBy('order', 'asc'), orderBy('name', 'asc'));
+  // Note: collectionGroup queries require specific indexes on fields like restaurantId.
+  // For ordering, ensure composite indexes exist if combining where with multiple orderBy.
+  // Example: (restaurantId asc, order asc, name asc)
+  const q = query(itemsColGroup, where('restaurantId', '==', restaurantId), orderBy('categoryId'), orderBy('subcategoryId'), orderBy('order', 'asc'), orderBy('name', 'asc'));
   
   const snapshot = await getDocs(q);
   return snapshot.docs.map(doc => ({ 
@@ -173,7 +162,12 @@ export async function getMenuItems(restaurantId: string): Promise<MenuItem[]> {
 }
 
 
-export async function addMenuItem(restaurantId: string, categoryId: string, subcategoryId: string | null | undefined, itemData: Omit<MenuItem, 'id' | 'restaurantId' | 'categoryId' | 'subcategoryId' | 'createdAt' | 'updatedAt'>): Promise<MenuItem> {
+export async function addMenuItem(
+  restaurantId: string, 
+  categoryId: string, 
+  subcategoryId: string | null | undefined, 
+  itemData: Omit<MenuItem, 'id' | 'restaurantId' | 'categoryId' | 'subcategoryId' | 'createdAt' | 'updatedAt'>
+): Promise<MenuItem> {
   if (!db) throw new Error("Firestore is not initialized.");
   
   let itemsColPath;
@@ -194,19 +188,18 @@ export async function addMenuItem(restaurantId: string, categoryId: string, subc
     updatedAt,
   };
 
-  // Ensure optional fields are not set if they are undefined
-  if (itemData.calories === undefined) delete dataToSave.calories;
-  if (itemData.crossSellItems === undefined) delete dataToSave.crossSellItems;
-  if (itemData.upsellItems === undefined) delete dataToSave.upsellItems;
-  if (itemData.dietaryTags === undefined) delete dataToSave.dietaryTags;
-  if (itemData.allergenInfo === undefined) delete dataToSave.allergenInfo;
+  // Handle optional fields to avoid storing empty values if not intended
+  if (itemData.calories === undefined || itemData.calories === null) delete dataToSave.calories; else dataToSave.calories = Number(itemData.calories);
+  if (!itemData.crossSellItems || itemData.crossSellItems.length === 0) delete dataToSave.crossSellItems;
+  if (!itemData.upsellItems || itemData.upsellItems.length === 0) delete dataToSave.upsellItems;
+  if (!itemData.dietaryTags || itemData.dietaryTags.length === 0) delete dataToSave.dietaryTags;
+  if (!itemData.allergenInfo || itemData.allergenInfo.length === 0) delete dataToSave.allergenInfo;
   
-  if (itemData.imageUrl === '') {
-    dataToSave.imageUrl = null;
-  } else if (itemData.imageUrl === undefined) {
-    delete dataToSave.imageUrl;
-  }
+  if (itemData.imageUrl === '' || itemData.imageUrl === undefined) dataToSave.imageUrl = null;
+  if (itemData.videoUrl === '' || itemData.videoUrl === undefined) dataToSave.videoUrl = null;
 
+  if (!itemData.variants || itemData.variants.length === 0) delete dataToSave.variants;
+  if (!itemData.availabilitySchedule || itemData.availabilitySchedule.length === 0) delete dataToSave.availabilitySchedule;
 
   const docRef = await addDoc(itemsColPath, dataToSave);
   return { 
@@ -215,12 +208,18 @@ export async function addMenuItem(restaurantId: string, categoryId: string, subc
     categoryId, 
     subcategoryId: subcategoryId || null, 
     ...itemData, 
-    createdAt: Timestamp.now(), // Optimistic
-    updatedAt: Timestamp.now() // Optimistic
+    createdAt: Timestamp.now(), 
+    updatedAt: Timestamp.now()
   } as MenuItem;
 }
 
-export async function updateMenuItem(restaurantId: string, categoryId: string, subcategoryId: string | null | undefined, itemId: string, data: Partial<Omit<MenuItem, 'id' | 'restaurantId' | 'categoryId' | 'subcategoryId' | 'createdAt'>>): Promise<void> {
+export async function updateMenuItem(
+  restaurantId: string, 
+  categoryId: string, 
+  subcategoryId: string | null | undefined, 
+  itemId: string, 
+  data: Partial<Omit<MenuItem, 'id' | 'restaurantId' | 'categoryId' | 'subcategoryId' | 'createdAt'>>
+): Promise<void> {
   if (!db) throw new Error("Firestore is not initialized.");
   
   let itemRefPath;
@@ -230,17 +229,25 @@ export async function updateMenuItem(restaurantId: string, categoryId: string, s
     itemRefPath = doc(db, 'restaurants', restaurantId, 'menuCategories', categoryId, 'menuItems', itemId);
   }
   
-  // Create a mutable copy of data to clean it
   const cleanedData: { [key: string]: any } = { ...data };
 
-  // Remove any fields that are undefined, as Firestore updateDoc doesn't support them
   Object.keys(cleanedData).forEach(key => {
     if (cleanedData[key] === undefined) {
       delete cleanedData[key];
     }
-    // Convert empty string imageUrl to null
-    if (key === 'imageUrl' && cleanedData[key] === '') {
+    if (key === 'imageUrl' && (cleanedData[key] === '' || cleanedData[key] === undefined)) {
       cleanedData[key] = null;
+    }
+    if (key === 'videoUrl' && (cleanedData[key] === '' || cleanedData[key] === undefined)) {
+      cleanedData[key] = null;
+    }
+    if (key === 'calories' && (cleanedData[key] === null || cleanedData[key] === undefined || isNaN(cleanedData[key]))) {
+       delete cleanedData[key]; // Remove if null, undefined, or NaN
+    } else if (key === 'calories') {
+       cleanedData[key] = Number(cleanedData[key]);
+    }
+    if ((key === 'variants' || key === 'availabilitySchedule' || key === 'dietaryTags' || key === 'allergenInfo' || key === 'crossSellItems' || key === 'upsellItems') && (!cleanedData[key] || (Array.isArray(cleanedData[key]) && cleanedData[key].length === 0))) {
+      delete cleanedData[key]; // Remove if empty array or falsy
     }
   });
   
@@ -259,4 +266,3 @@ export async function deleteMenuItem(restaurantId: string, categoryId: string, s
   }
   await deleteDoc(itemRefPath);
 }
-
