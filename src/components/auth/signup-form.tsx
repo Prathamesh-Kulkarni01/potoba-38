@@ -10,7 +10,7 @@ import { auth } from '@/lib/firebase/config';
 import { createUserProfile } from '@/lib/firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+// import { Label } from '@/components/ui/label'; // No longer directly used, FormLabel is used
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
@@ -19,6 +19,7 @@ import { UserPlus } from 'lucide-react';
 import LoadingSpinner from '@/components/shared/loading-spinner';
 
 const formSchema = z.object({
+  restaurantName: z.string().min(2, { message: 'Restaurant name must be at least 2 characters.' }),
   email: z.string().email({ message: 'Invalid email address.' }),
   password: z.string().min(6, { message: 'Password must be at least 6 characters.' }),
   confirmPassword: z.string(),
@@ -34,6 +35,7 @@ export default function SignupForm() {
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
+      restaurantName: '',
       email: '',
       password: '',
       confirmPassword: '',
@@ -44,9 +46,15 @@ export default function SignupForm() {
     setLoading(true);
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
-      await createUserProfile(userCredential.user.uid, userCredential.user.email, 'user'); // Default role 'user'
-      toast({ title: 'Signup Successful', description: 'Your account has been created.' });
-      router.push('/dashboard');
+      // Create user profile with role 'owner' and initial restaurant data
+      await createUserProfile(
+        userCredential.user.uid,
+        userCredential.user.email,
+        'owner', // Explicitly set role to owner
+        { name: values.restaurantName }
+      );
+      toast({ title: 'Signup Successful', description: 'Your account and restaurant have been created. Proceed to setup.' });
+      router.push('/onboarding/restaurant-setup'); // Redirect to onboarding
     } catch (error: any) {
       console.error('Signup error:', error);
       toast({
@@ -65,18 +73,31 @@ export default function SignupForm() {
         <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary">
           <UserPlus className="h-8 w-8" />
         </div>
-        <CardTitle className="text-3xl font-bold">Create Account</CardTitle>
-        <CardDescription>Join AuthZen today. It&apos;s quick and easy!</CardDescription>
+        <CardTitle className="text-3xl font-bold">Create Your Restaurant Account</CardTitle>
+        <CardDescription>Join Resto SaaS to manage your restaurant efficiently.</CardDescription>
       </CardHeader>
       <CardContent>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <FormField
               control={form.control}
+              name="restaurantName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Restaurant Name</FormLabel>
+                  <FormControl>
+                    <Input placeholder="My Awesome Eatery" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
               name="email"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Email</FormLabel>
+                  <FormLabel>Your Email (Owner)</FormLabel>
                   <FormControl>
                     <Input type="email" placeholder="you@example.com" {...field} />
                   </FormControl>
@@ -112,7 +133,7 @@ export default function SignupForm() {
             />
             <Button type="submit" className="w-full bg-accent hover:bg-accent/90 text-accent-foreground" disabled={loading}>
               {loading ? <LoadingSpinner className="mr-2 h-4 w-4" /> : <UserPlus className="mr-2 h-4 w-4" />}
-              Sign Up
+              Create Account & Restaurant
             </Button>
           </form>
         </Form>

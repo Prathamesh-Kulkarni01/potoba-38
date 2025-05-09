@@ -3,15 +3,15 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { auth } from '@/lib/firebase/config';
-import { getUserRole } from '@/lib/firebase/firestore';
-import type { AuthUser, UserRole } from '@/types';
+import { getUserProfile } from '@/lib/firebase/firestore'; // Renamed from getUserRole
+import type { AuthUser, UserRole, UserProfile as UserProfileType } from '@/types';
 import LoadingSpinner from '@/components/shared/loading-spinner';
 
 interface AuthContextType {
   user: AuthUser | null;
-  role: UserRole | null;
+  role: UserRole | null; // Kept for convenience, though also on user object
   loading: boolean;
-  initialLoading: boolean; // For initial auth check
+  initialLoading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -26,9 +26,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
       setLoading(true);
       if (firebaseUser) {
-        const userRole = await getUserRole(firebaseUser.uid);
-        setUser({ ...firebaseUser, role: userRole || undefined });
-        setRole(userRole);
+        const userProfileData = await getUserProfile(firebaseUser.uid);
+        if (userProfileData) {
+          const authUser: AuthUser = {
+            ...firebaseUser,
+            role: userProfileData.role,
+            restaurantId: userProfileData.restaurantId || null,
+            onboardingComplete: typeof userProfileData.onboardingComplete === 'boolean' ? userProfileData.onboardingComplete : false,
+          };
+          setUser(authUser);
+          setRole(userProfileData.role);
+        } else {
+          // This case might occur if profile creation is delayed or for users without a profile yet.
+          // Default values are critical here for redirect logic.
+          const authUser: AuthUser = {
+            ...firebaseUser,
+            role: null, // Role is unknown
+            restaurantId: null,
+            onboardingComplete: false, // Assume not onboarded if profile is missing/incomplete
+          };
+          setUser(authUser);
+          setRole(null);
+        }
       } else {
         setUser(null);
         setRole(null);
