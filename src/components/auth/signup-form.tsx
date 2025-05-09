@@ -71,16 +71,24 @@ export default function SignupForm() {
       if (values.role === 'owner') {
         router.push('/onboarding/restaurant-setup'); 
       } else { // staff or user
-        router.push('/dashboard'); // Corrected: staff/user go to dashboard
+        router.push('/dashboard');
       }
 
     } catch (error: any) {
       console.error('Signup error:', error);
-      toast({
-        variant: 'destructive',
-        title: 'Signup Failed',
-        description: error.message || 'An unexpected error occurred.',
-      });
+      if (error.code === 'auth/email-already-in-use') {
+        toast({
+          variant: 'destructive',
+          title: 'Signup Failed',
+          description: 'This email address is already in use. Please use a different email or log in.',
+        });
+      } else {
+        toast({
+          variant: 'destructive',
+          title: 'Signup Failed',
+          description: error.message || 'An unexpected error occurred.',
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -93,7 +101,7 @@ export default function SignupForm() {
           <UserPlus className="h-8 w-8" />
         </div>
         <CardTitle className="text-3xl font-bold">Create an Account</CardTitle>
-        <CardDescription>Join Resto SaaS to manage your restaurant or culinary journey.</CardDescription>
+        <CardDescription>Join AuthZen to manage your restaurant or culinary journey.</CardDescription>
       </CardHeader>
       <CardContent>
         <Form {...form}>
