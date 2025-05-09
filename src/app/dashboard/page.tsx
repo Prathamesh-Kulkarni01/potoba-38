@@ -1,12 +1,17 @@
 
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/auth/context';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ChefHat, BarChart3, Utensils, Settings, UserCog, Users, SquareMenu, Store } from 'lucide-react';
 import Image from 'next/image';
-import Link from 'next/link'; // Import Link
+import Link from 'next/link';
+import { getRestaurantsByOwner, getRestaurant } from '@/lib/firebase/firestore'; // For fetching restaurant name
+import type { RestaurantProfile } from '@/types';
+import { useParams, useSearchParams } from 'next/navigation'; // For potential query param based selection
+
 
 function AdminDashboard() {
   return (
@@ -63,59 +68,121 @@ function AdminDashboard() {
 }
 
 function OwnerDashboard() {
+  const { user } = useAuth();
+  const searchParams = useSearchParams();
+  // Note: For the main dashboard, selectedRestaurantId might not be in URL params.
+  // It's managed in DashboardLayout state. For this page to reflect it,
+  // it would need to be passed down or read from a shared context.
+  // For simplicity, we'll try to get it from localStorage if not passed, or use user's primary.
+  const [currentRestaurantName, setCurrentRestaurantName] = useState<string | null>(null);
+  const [selectedRestaurantId, setSelectedRestaurantId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user?.uid && user.role === 'owner') {
+      const storedRestaurantId = localStorage.getItem(`selectedRestaurant_${user.uid}`) || user.restaurantId;
+      setSelectedRestaurantId(storedRestaurantId);
+
+      if (storedRestaurantId) {
+        getRestaurant(storedRestaurantId).then(restaurant => {
+          if (restaurant) {
+            setCurrentRestaurantName(restaurant.name);
+          }
+        });
+      } else {
+        // Attempt to load all restaurants if no specific one is selected or primary is null
+        getRestaurantsByOwner(user.uid).then(restaurants => {
+          if (restaurants.length > 0) {
+            const firstRestaurantId = restaurants[0].id;
+            setSelectedRestaurantId(firstRestaurantId);
+            setCurrentRestaurantName(restaurants[0].name);
+            localStorage.setItem(`selectedRestaurant_${user.uid}`, firstRestaurantId);
+          }
+        });
+      }
+    }
+  }, [user]);
+
+
+  if (!selectedRestaurantId && user?.role === 'owner') {
+    return (
+      <div className="space-y-6">
+        <Card className="shadow-lg">
+          <CardHeader>
+            <CardTitle className="text-2xl font-semibold text-primary">Welcome, Restaurant Owner!</CardTitle>
+            <CardDescription>
+              You don't have a restaurant selected or haven't created one yet.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="mb-4">Please select a restaurant from the sidebar, or create a new one to get started.</p>
+            <Button asChild className="bg-accent hover:bg-accent/90 text-accent-foreground">
+              <Link href="/dashboard/create-restaurant">Create New Restaurant</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+  
+  if (!selectedRestaurantId && user?.role !== 'owner') {
+    // This shouldn't happen if routing is correct, but as a fallback:
+    return <p>Loading restaurant data...</p>;
+  }
+
+
   return (
     <div className="space-y-6">
       <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
         <CardHeader>
           <CardTitle className="text-2xl font-semibold text-primary flex items-center">
             <Store className="mr-3 h-7 w-7" />
-            Restaurant Management
+            {currentRestaurantName ? `${currentRestaurantName} - Management` : "Restaurant Management"}
           </CardTitle>
           <CardDescription>Oversee your restaurant's operations, staff, recipes, and more within AuthZen.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           <DashboardCard
-            title="My Restaurant Details"
-            description="View and edit your restaurant's information."
+            title="Restaurant Details"
+            description="View and edit selected restaurant's information."
             icon={<Store className="h-8 w-8 text-accent" />}
             actionText="Go to Restaurant"
-            actionHref="/dashboard/restaurant"
+            actionHref={`/dashboard/restaurant/${selectedRestaurantId}`}
             imageUrl="https://picsum.photos/seed/myrestaurant/400/200"
             dataAiHint="restaurant storefront"
           />
           <DashboardCard
             title="Staff Management"
-            description="Manage your team members and their roles."
+            description="Manage your team members for this restaurant."
             icon={<Users className="h-8 w-8 text-accent" />}
             actionText="Manage Staff"
-            actionHref="/dashboard/staff" 
+            actionHref={`/dashboard/staff/${selectedRestaurantId}`} 
             imageUrl="https://picsum.photos/seed/staffmanagement/400/200"
             dataAiHint="team collaboration"
           />
           <DashboardCard
             title="Recipe Management"
-            description="Create, edit, and organize your recipes."
+            description="Create, edit, and organize your recipes for this restaurant."
             icon={<Utensils className="h-8 w-8 text-accent" />}
             actionText="Manage Recipes"
-            actionHref="/dashboard/recipes"
+            actionHref={`/dashboard/recipes/${selectedRestaurantId}`}
             imageUrl="https://picsum.photos/seed/ownrecipes/400/200"
             dataAiHint="recipe book"
           />
           <DashboardCard
             title="Meal Planner"
-            description="Plan weekly meals and menus for your restaurant."
+            description="Plan weekly meals and menus for this restaurant."
             icon={<SquareMenu className="h-8 w-8 text-accent" />}
             actionText="Go to Meal Planner"
-            actionHref="/dashboard/meal-planner"
+            actionHref={`/dashboard/meal-planner/${selectedRestaurantId}`}
             imageUrl="https://picsum.photos/seed/ownermealplanner/400/200"
             dataAiHint="food calendar"
           />
            <DashboardCard
             title="Restaurant Settings"
-            description="Configure settings specific to your restaurant."
+            description="Configure settings specific to this restaurant."
             icon={<Settings className="h-8 w-8 text-accent" />}
             actionText="Restaurant Settings"
-            actionHref="/dashboard/restaurant/settings"
+            actionHref={`/dashboard/restaurant/${selectedRestaurantId}/settings`}
             imageUrl="https://picsum.photos/seed/restaurantsettings/400/200"
             dataAiHint="cogwheel options"
           />
@@ -127,6 +194,10 @@ function OwnerDashboard() {
 
 
 function UserDashboard() { 
+  // For staff, selectedRestaurantId would ideally come from user.restaurantId
+  const { user } = useAuth();
+  const restaurantIdForLinks = user?.role === 'staff' ? user.restaurantId : 'default'; // Or some other logic for general user
+
   return (
     <div className="space-y-6">
       <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
@@ -140,25 +211,25 @@ function UserDashboard() {
         <CardContent className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           <DashboardCard
             title="Discover Recipes"
-            description="Browse a vast collection of delicious recipes from around the world."
+            description="Browse a vast collection of delicious recipes."
             icon={<Utensils className="h-8 w-8 text-accent" />}
             actionText="Find Recipes"
-            actionHref="/dashboard/recipes"
+            actionHref={`/dashboard/recipes${user?.role === 'staff' && user.restaurantId ? `/${user.restaurantId}` : ''}`}
             imageUrl="https://picsum.photos/seed/recipes/400/200"
             dataAiHint="food variety"
           />
           <DashboardCard
             title="Meal Planner"
-            description="Organize your weekly meals and generate shopping lists effortlessly."
+            description="Organize your weekly meals effortlessly."
             icon={<SquareMenu className="h-8 w-8 text-accent" />}
             actionText="Plan Meals"
-            actionHref="/dashboard/meal-planner"
+            actionHref={`/dashboard/meal-planner${user?.role === 'staff' && user.restaurantId ? `/${user.restaurantId}` : ''}`}
             imageUrl="https://picsum.photos/seed/mealplanner/400/200"
             dataAiHint="calendar schedule"
           />
           <DashboardCard
             title="My Profile"
-            description="Update your preferences, saved recipes, and personal information."
+            description="Update your preferences and personal information."
             icon={<ChefHat className="h-8 w-8 text-accent" />}
             actionText="View Profile"
             actionHref="/dashboard/profile"

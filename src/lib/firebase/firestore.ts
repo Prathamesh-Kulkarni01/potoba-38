@@ -1,4 +1,4 @@
-import { doc, setDoc, getDoc, serverTimestamp, Timestamp, collection, addDoc, writeBatch } from 'firebase/firestore';
+import { doc, setDoc, getDoc, serverTimestamp, Timestamp, collection, addDoc, writeBatch, query, where, getDocs } from 'firebase/firestore';
 import { db } from './config';
 import type { UserRole, UserProfile as UserProfileType, RestaurantProfile } from '@/types'; // UserProfileType alias to avoid naming conflict
 
@@ -38,7 +38,7 @@ export async function createUserProfile(
     uid,
     email,
     role, // Use the passed role
-    restaurantId,
+    restaurantId, // This is the primary/first restaurantId for an owner
     onboardingComplete,
     createdAt: serverTimestamp() as Timestamp, // serverTimestamp() will be converted
   };
@@ -71,7 +71,7 @@ export async function getUserProfile(uid: string): Promise<UserProfileType | nul
       uid: data.uid,
       email: data.email,
       role: data.role,
-      restaurantId: data.restaurantId || null,
+      restaurantId: data.restaurantId || null, // Primary restaurantId
       onboardingComplete: typeof data.onboardingComplete === 'boolean' ? data.onboardingComplete : false,
       createdAt: data.createdAt as Timestamp, 
     } as UserProfileType;
@@ -86,16 +86,26 @@ export async function updateUserProfile(uid: string, data: Partial<UserProfileTy
   await setDoc(userRef, data, { merge: true });
 }
 
-export async function createRestaurant(ownerId: string, name: string, type?: string): Promise<string> {
+export async function createRestaurant(ownerId: string, name: string, type?: string): Promise<RestaurantProfile> {
   if (!db) throw new Error("Firestore is not initialized.");
   const restaurantCol = collection(db, 'restaurants');
+  const createdAt = serverTimestamp();
   const restaurantRef = await addDoc(restaurantCol, {
     ownerId,
     name,
     type: type || '',
-    createdAt: serverTimestamp(),
+    createdAt,
   });
-  return restaurantRef.id;
+  // To satisfy RestaurantProfile, return the full object including the generated ID and resolved timestamp
+  // For serverTimestamp, it resolves on the server. We can return a client-side estimate or refetch.
+  // For simplicity here, we'll construct it with a client-side timestamp for immediate use, actual value is in DB.
+  return {
+    id: restaurantRef.id,
+    ownerId,
+    name,
+    type: type || '',
+    createdAt: Timestamp.now(), // This is a client-side placeholder
+  } as RestaurantProfile;
 }
 
 export async function getRestaurant(restaurantId: string): Promise<RestaurantProfile | null> {
@@ -111,6 +121,21 @@ export async function getRestaurant(restaurantId: string): Promise<RestaurantPro
   } else {
     return null;
   }
+}
+
+export async function getRestaurantsByOwner(ownerId: string): Promise<RestaurantProfile[]> {
+  if (!db) {
+    console.error("Firestore is not initialized in getRestaurantsByOwner.");
+    return [];
+  }
+  const restaurantsCol = collection(db, 'restaurants');
+  const q = query(restaurantsCol, where('ownerId', '==', ownerId));
+  const querySnapshot = await getDocs(q);
+  const restaurants: RestaurantProfile[] = [];
+  querySnapshot.forEach((doc) => {
+    restaurants.push({ id: doc.id, ...doc.data() } as RestaurantProfile);
+  });
+  return restaurants;
 }
 
 export async function updateRestaurantProfile(restaurantId: string, data: Partial<RestaurantProfile>): Promise<void> {
