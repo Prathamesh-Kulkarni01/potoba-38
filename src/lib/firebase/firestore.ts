@@ -1,49 +1,63 @@
 import { doc, setDoc, getDoc, serverTimestamp, Timestamp, collection, addDoc, writeBatch } from 'firebase/firestore';
 import { db } from './config';
-import type { UserRole, UserProfile, RestaurantProfile } from '@/types';
-
-// UserProfile is now imported from '@/types'
+import type { UserRole, UserProfile as UserProfileType, RestaurantProfile } from '@/types'; // UserProfileType alias to avoid naming conflict
 
 export async function createUserProfile(
   uid: string,
   email: string | null,
-  role: UserRole = 'owner', // Default new sign-ups to 'owner'
-  restaurantData?: { name: string; type?: string }
+  role: UserRole, // Role is now a parameter
+  restaurantData?: { name: string; type?: string } // Optional, primarily for 'owner'
 ): Promise<{ userProfile: UserProfileType; restaurantId?: string }> {
   if (!db) throw new Error("Firestore is not initialized.");
 
   let restaurantId: string | null = null;
-  let onboardingComplete = true; // Default to true for non-owners or if no restaurant setup needed
+  let onboardingComplete = true; // Default to true for non-owners or if no specific onboarding path
 
   if (role === 'owner') {
+    if (!restaurantData?.name) {
+      // This check could be more robust or handled by form validation prior to calling this function.
+      // For now, ensure restaurantData.name exists if role is owner.
+      throw new Error("Restaurant name is required for owner sign-up.");
+    }
     onboardingComplete = false; // Owners start with onboarding incomplete
-    // Create a restaurant for the owner
     const newRestaurantRef = await addDoc(collection(db, 'restaurants'), {
       ownerId: uid,
-      name: restaurantData?.name || `${email?.split('@')[0]}'s Restaurant` || "New Restaurant",
-      type: restaurantData?.type || '',
+      name: restaurantData.name,
+      type: restaurantData.type || '',
       createdAt: serverTimestamp(),
       // other initial restaurant fields
     });
     restaurantId = newRestaurantRef.id;
   }
+  // For 'staff' and 'user' roles, restaurantId remains null and onboardingComplete remains true.
+  // Staff would typically be invited to a restaurant later.
+  // Users might have a different, simpler onboarding or none if not applicable.
 
   const userRef = doc(db, 'users', uid);
-  const profileData: UserProfile = {
+  const profileData: UserProfileType = {
     uid,
     email,
-    role,
+    role, // Use the passed role
     restaurantId,
     onboardingComplete,
     createdAt: serverTimestamp() as Timestamp, // serverTimestamp() will be converted
   };
 
   await setDoc(userRef, profileData);
-  return { userProfile: { ...profileData, createdAt: new Timestamp(0,0) /* temp value */ }, restaurantId: restaurantId ?? undefined };
+  // For the return, ensure createdAt is a Timestamp, even if temporary for client-side use before Firestore sync
+  // This satisfies the UserProfileType.
+  const now = Timestamp.now();
+  return { 
+    userProfile: { 
+      ...profileData, 
+      createdAt: profileData.createdAt instanceof Timestamp ? profileData.createdAt : now 
+    }, 
+    restaurantId: restaurantId ?? undefined 
+  };
 }
 
 
-export async function getUserProfile(uid: string): Promise<UserProfile | null> {
+export async function getUserProfile(uid: string): Promise<UserProfileType | null> {
   if (!db) {
     console.error("Firestore is not initialized in getUserProfile.");
     return null;
@@ -52,7 +66,6 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
   const docSnap = await getDoc(userRef);
 
   if (docSnap.exists()) {
-    // Explicitly cast to ensure type safety, especially for serverTimestamp fields
     const data = docSnap.data();
     return {
       uid: data.uid,
@@ -60,15 +73,14 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
       role: data.role,
       restaurantId: data.restaurantId || null,
       onboardingComplete: typeof data.onboardingComplete === 'boolean' ? data.onboardingComplete : false,
-      createdAt: data.createdAt as Timestamp, // Assuming it's stored as a Firestore Timestamp
-    } as UserProfile;
+      createdAt: data.createdAt as Timestamp, 
+    } as UserProfileType;
   } else {
-    // console.warn(`No user profile found for UID: ${uid}`);
     return null;
   }
 }
 
-export async function updateUserProfile(uid: string, data: Partial<UserProfile>): Promise<void> {
+export async function updateUserProfile(uid: string, data: Partial<UserProfileType>): Promise<void> {
   if (!db) throw new Error("Firestore is not initialized.");
   const userRef = doc(db, 'users', uid);
   await setDoc(userRef, data, { merge: true });
@@ -82,7 +94,6 @@ export async function createRestaurant(ownerId: string, name: string, type?: str
     name,
     type: type || '',
     createdAt: serverTimestamp(),
-    // other initial fields
   });
   return restaurantRef.id;
 }
@@ -98,7 +109,6 @@ export async function getRestaurant(restaurantId: string): Promise<RestaurantPro
   if (docSnap.exists()) {
     return { id: docSnap.id, ...docSnap.data() } as RestaurantProfile;
   } else {
-    // console.warn(`No restaurant found for ID: ${restaurantId}`);
     return null;
   }
 }
