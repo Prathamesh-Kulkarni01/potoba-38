@@ -159,10 +159,6 @@ export async function deleteMenuSubcategory(restaurantId: string, categoryId: st
 export async function getMenuItems(restaurantId: string): Promise<MenuItem[]> {
   if (!db) throw new Error("Firestore is not initialized.");
   
-  // Querying a collection group 'menuItems' and filtering by restaurantId.
-  // This assumes all menu items, regardless of being direct or under subcategory,
-  // belong to a collection named 'menuItems' somewhere under the restaurant document.
-  // And each item document has a 'restaurantId' field.
   const itemsColGroup = collectionGroup(db, 'menuItems');
   const q = query(itemsColGroup, where('restaurantId', '==', restaurantId), orderBy('order', 'asc'), orderBy('name', 'asc'));
   
@@ -188,14 +184,25 @@ export async function addMenuItem(restaurantId: string, categoryId: string, subc
   }
   const createdAt = serverTimestamp();
   const updatedAt = serverTimestamp();
-  const docRef = await addDoc(itemsColPath, {
+
+  const dataToSave: any = {
     ...itemData,
     restaurantId,
     categoryId,
-    subcategoryId: subcategoryId || null, // Ensure it's null if undefined
+    subcategoryId: subcategoryId || null,
     createdAt,
     updatedAt,
-  });
+  };
+
+  // Ensure optional fields are not set if they are undefined
+  if (itemData.calories === undefined) delete dataToSave.calories;
+  if (itemData.crossSellItems === undefined) delete dataToSave.crossSellItems;
+  if (itemData.upsellItems === undefined) delete dataToSave.upsellItems;
+  if (itemData.dietaryTags === undefined) delete dataToSave.dietaryTags;
+  if (itemData.allergenInfo === undefined) delete dataToSave.allergenInfo;
+
+
+  const docRef = await addDoc(itemsColPath, dataToSave);
   return { 
     id: docRef.id, 
     restaurantId, 
@@ -216,7 +223,15 @@ export async function updateMenuItem(restaurantId: string, categoryId: string, s
   } else {
     itemRefPath = doc(db, 'restaurants', restaurantId, 'menuCategories', categoryId, 'menuItems', itemId);
   }
-  await updateDoc(itemRefPath, { ...data, updatedAt: serverTimestamp() });
+  
+  const dataToUpdate: any = { ...data, updatedAt: serverTimestamp() };
+
+  // Ensure optional fields are handled correctly for updates (e.g., explicitly set to null or remove if undefined)
+  // For firestore, if a field is undefined in `data`, it won't be updated. 
+  // If you want to remove a field, you'd typically use `deleteField()` or set it to null if appropriate.
+  // The current structure assumes `Partial` means only provided fields are updated.
+
+  await updateDoc(itemRefPath, dataToUpdate);
 }
 
 export async function deleteMenuItem(restaurantId: string, categoryId: string, subcategoryId: string | null | undefined, itemId: string): Promise<void> {
@@ -229,3 +244,4 @@ export async function deleteMenuItem(restaurantId: string, categoryId: string, s
   }
   await deleteDoc(itemRefPath);
 }
+

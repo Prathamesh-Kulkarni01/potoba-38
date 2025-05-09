@@ -62,6 +62,10 @@ export interface MenuItem {
   dietaryTags?: string[]; // e.g., ['vegan', 'gluten-free']
   allergenInfo?: string[];
   order: number; // For sorting items within a category/subcategory
+  calories?: number; // New field
+  crossSellItems?: string[]; // IDs or names of items for cross-selling
+  upsellItems?: string[]; // IDs or names of items for up-selling
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
+
