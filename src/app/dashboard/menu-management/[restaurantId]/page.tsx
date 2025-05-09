@@ -1,64 +1,49 @@
+
 // src/app/dashboard/menu-management/[restaurantId]/page.tsx
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth/context';
 import { getRestaurant } from '@/lib/firebase/firestore';
+import { 
+  getMenuCategories, addMenuCategory, updateMenuCategory, deleteMenuCategory,
+  getMenuSubcategories, addMenuSubcategory, updateMenuSubcategory, deleteMenuSubcategory,
+  getMenuItems, addMenuItem, updateMenuItem, deleteMenuItem
+} from '@/lib/firebase/menu';
 import type { RestaurantProfile, MenuCategory, MenuSubcategory, MenuItem } from '@/types';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import LoadingSpinner from '@/components/shared/loading-spinner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Dialog, DialogTrigger } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle, Search, Edit3, Trash2, Utensils } from 'lucide-react';
+import { PlusCircle, Search, Edit3, Trash2, Utensils, AlertTriangle, GripVertical } from 'lucide-react';
 import Image from 'next/image';
 import { Timestamp } from 'firebase/firestore';
 import { Badge } from '@/components/ui/badge';
+import { useToast } from '@/hooks/use-toast';
+import CategoryForm from '@/components/menu/category-form';
+import SubcategoryForm from '@/components/menu/subcategory-form';
+import MenuItemForm, { type MenuItemFormValues } from '@/components/menu/menu-item-form';
+import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 
-
-// Dummy Data (using actual types from @/types)
+// Dummy Data (using actual types from @/types) - Will be replaced by Firestore data
 const createDummyCategories = (restaurantId: string): MenuCategory[] => [
-  { id: 'cat1', name: 'Appetizers', order: 1, restaurantId, createdAt: Timestamp.now(), updatedAt: Timestamp.now() },
-  { id: 'cat2', name: 'Main Courses', order: 2, restaurantId, createdAt: Timestamp.now(), updatedAt: Timestamp.now() },
-  { id: 'cat3', name: 'Desserts', order: 3, restaurantId, createdAt: Timestamp.now(), updatedAt: Timestamp.now() },
-  { id: 'cat4', name: 'Drinks', order: 4, restaurantId, createdAt: Timestamp.now(), updatedAt: Timestamp.now() },
+  // ... (keep dummy data for initial structure if needed, but will be fetched)
 ];
-
-const createDummySubcategories = (restaurantId: string): MenuSubcategory[] => [
-  { id: 'sub1', name: 'Soups', categoryId: 'cat1', order: 1, restaurantId, createdAt: Timestamp.now(), updatedAt: Timestamp.now() },
-  { id: 'sub2', name: 'Salads', categoryId: 'cat1', order: 2, restaurantId, createdAt: Timestamp.now(), updatedAt: Timestamp.now() },
-  { id: 'sub3', name: 'Vegetarian', categoryId: 'cat2', order: 1, restaurantId, createdAt: Timestamp.now(), updatedAt: Timestamp.now() },
-  { id: 'sub4', name: 'Chicken Entrees', categoryId: 'cat2', order: 2, restaurantId, createdAt: Timestamp.now(), updatedAt: Timestamp.now() },
-  { id: 'sub5', name: 'Beef Entrees', categoryId: 'cat2', order: 3, restaurantId, createdAt: Timestamp.now(), updatedAt: Timestamp.now() },
-  { id: 'sub6', name: 'Cakes', categoryId: 'cat3', order: 1, restaurantId, createdAt: Timestamp.now(), updatedAt: Timestamp.now() },
-  { id: 'sub7', name: 'Ice Cream', categoryId: 'cat3', order: 2, restaurantId, createdAt: Timestamp.now(), updatedAt: Timestamp.now() },
-  { id: 'sub8', name: 'Soft Drinks', categoryId: 'cat4', order: 1, restaurantId, createdAt: Timestamp.now(), updatedAt: Timestamp.now() },
-  { id: 'sub9', name: 'Juices', categoryId: 'cat4', order: 2, restaurantId, createdAt: Timestamp.now(), updatedAt: Timestamp.now() },
-];
-
-const createDummyMenuItems = (restaurantId: string): MenuItem[] => [
-  { id: 'item1', categoryId: 'cat1', subcategoryId: 'sub1', name: 'Tomato Soup', description: 'Classic creamy tomato soup, served hot with a swirl of cream and a side of crunchy croutons.', price: 5.99, availability: true, order: 1, restaurantId, createdAt: Timestamp.now(), updatedAt: Timestamp.now(), imageUrl: 'https://picsum.photos/seed/tomsoup/300/200', dietaryTags:['vegetarian', 'gluten-free'], allergenInfo:['dairy'] },
-  { id: 'item2', categoryId: 'cat1', subcategoryId: 'sub1', name: 'Chicken Noodle Soup', description: 'Hearty chicken noodle soup with tender chicken pieces, egg noodles, and a mix of fresh vegetables.', price: 6.50, availability: true, order: 2, restaurantId, createdAt: Timestamp.now(), updatedAt: Timestamp.now(), imageUrl: 'https://picsum.photos/seed/chicknoodlesoup/300/200', dietaryTags:[], allergenInfo:['gluten', 'egg'] },
-  { id: 'item3', categoryId: 'cat1', subcategoryId: 'sub2', name: 'Caesar Salad', description: 'Crisp romaine lettuce, Parmesan cheese, croutons, and a classic Caesar dressing. Add chicken for $3.', price: 7.25, availability: true, order: 1, restaurantId, createdAt: Timestamp.now(), updatedAt: Timestamp.now(), imageUrl: 'https://picsum.photos/seed/caesarsalad/300/200', dietaryTags:[], allergenInfo:['dairy', 'gluten', 'fish'] },
-  { id: 'item4', categoryId: 'cat1', name: 'Garlic Bread', description: 'Toasted baguette slices brushed with garlic butter and herbs, served warm.', price: 4.00, availability: true, order: 3, restaurantId, createdAt: Timestamp.now(), updatedAt: Timestamp.now(), imageUrl: 'https://picsum.photos/seed/garlicbread/300/200', dietaryTags:['vegetarian'], allergenInfo:['gluten', 'dairy'] },
-  { id: 'item5', categoryId: 'cat2', subcategoryId: 'sub3', name: 'Veggie Burger', description: 'A delicious plant-based patty on a whole wheat bun with lettuce, tomato, onion, and our special sauce.', price: 10.99, availability: true, order: 1, restaurantId, createdAt: Timestamp.now(), updatedAt: Timestamp.now(), imageUrl: 'https://picsum.photos/seed/veggieburg/300/200', dietaryTags:['vegan', 'vegetarian'], allergenInfo:['gluten', 'soy'] },
-  { id: 'item6', categoryId: 'cat2', subcategoryId: 'sub3', name: 'Paneer Tikka Masala', description: 'Grilled paneer cubes simmered in a rich, creamy tomato and cashew gravy, served with basmati rice.', price: 12.50, availability: true, order: 2, restaurantId, createdAt: Timestamp.now(), updatedAt: Timestamp.now(), imageUrl: 'https://picsum.photos/seed/paneertikka/300/200', dietaryTags:['vegetarian', 'gluten-free'], allergenInfo:['dairy', 'nuts'] },
-  { id: 'item7', categoryId: 'cat2', subcategoryId: 'sub4', name: 'Grilled Chicken Breast', description: 'Juicy herb-marinated chicken breast, grilled to perfection, served with roasted vegetables.', price: 14.00, availability: true, order: 1, restaurantId, createdAt: Timestamp.now(), updatedAt: Timestamp.now(), imageUrl: 'https://picsum.photos/seed/grillchick/300/200', dietaryTags:['gluten-free'], allergenInfo:[] },
-  { id: 'item8', categoryId: 'cat2', subcategoryId: 'sub4', name: 'Butter Chicken', description: 'Tender chicken pieces cooked in a rich and creamy tomato-based sauce with butter and spices.', price: 15.50, availability: false, order: 2, restaurantId, createdAt: Timestamp.now(), updatedAt: Timestamp.now(), imageUrl: 'https://picsum.photos/seed/butterchick/300/200', dietaryTags:[], allergenInfo:['dairy', 'nuts'] },
-  { id: 'item9', categoryId: 'cat3', subcategoryId: 'sub6', name: 'Chocolate Lava Cake', description: 'Warm chocolate cake with a molten chocolate center, served with a scoop of vanilla ice cream.', price: 8.00, availability: true, order: 1, restaurantId, createdAt: Timestamp.now(), updatedAt: Timestamp.now(), imageUrl: 'https://picsum.photos/seed/lavacake/300/200', dietaryTags:['vegetarian'], allergenInfo:['gluten', 'egg', 'dairy'] },
-  { id: 'item10', categoryId: 'cat3', name: 'Fruit Platter', description: 'A refreshing assortment of seasonal fresh fruits, perfect for a light dessert.', price: 7.00, availability: true, order: 3, restaurantId, createdAt: Timestamp.now(), updatedAt: Timestamp.now(), imageUrl: 'https://picsum.photos/seed/fruitplatter/300/200', dietaryTags:['vegan', 'vegetarian', 'gluten-free'], allergenInfo:[] },
-  { id: 'item11', categoryId: 'cat4', subcategoryId: 'sub8', name: 'Cola', description: 'Classic carbonated cola beverage.', price: 2.50, availability: true, order: 1, restaurantId, createdAt: Timestamp.now(), updatedAt: Timestamp.now(), dietaryTags:[], allergenInfo:[] },
-  { id: 'item12', categoryId: 'cat4', subcategoryId: 'sub8', name: 'Lemonade', description: 'Freshly squeezed lemonade, perfectly sweet and tangy.', price: 3.00, availability: true, order: 2, restaurantId, createdAt: Timestamp.now(), updatedAt: Timestamp.now(), dietaryTags:['vegan', 'vegetarian', 'gluten-free'], allergenInfo:[] },
-];
+// ... (dummy subcategories and menu items)
 
 
 interface MenuItemDisplayCardProps {
   item: MenuItem;
+  onEdit: (item: MenuItem) => void;
+  onDelete: (item: MenuItem) => void;
+  isOwner: boolean;
 }
 
-const MenuItemDisplayCard = ({ item }: MenuItemDisplayCardProps) => (
-  <Card className="overflow-hidden flex flex-col h-full shadow-md hover:shadow-lg transition-shadow">
+const MenuItemDisplayCard = ({ item, onEdit, onDelete, isOwner }: MenuItemDisplayCardProps) => (
+  <Card className="overflow-hidden flex flex-col h-full shadow-md hover:shadow-lg transition-shadow relative group">
     {item.imageUrl ? (
       <Image src={item.imageUrl} alt={item.name} width={300} height={180} className="w-full h-40 object-cover" data-ai-hint="food dish" />
     ) : (
@@ -74,14 +59,21 @@ const MenuItemDisplayCard = ({ item }: MenuItemDisplayCardProps) => (
       {!item.availability && <Badge variant="destructive" className="mt-1 w-fit">Unavailable</Badge>}
     </CardHeader>
     <CardContent className="p-4 pt-0 flex-grow">
-      <p className="text-xs text-muted-foreground mb-3 h-12 overflow-y-auto">{item.description}</p>
+      <p className="text-xs text-muted-foreground mb-1 h-10 overflow-y-auto">{item.description}</p>
+      {item.dietaryTags && item.dietaryTags.length > 0 && (
+        <div className="flex flex-wrap gap-1 mt-1">
+          {item.dietaryTags.map(tag => <Badge key={tag} variant="outline" className="text-xs">{tag}</Badge>)}
+        </div>
+      )}
     </CardContent>
-    <CardContent className="p-4 pt-0 mt-auto">
-       <div className="flex justify-end space-x-2">
-        <Button variant="outline" size="sm" className="h-8 w-8 p-0"><Edit3 className="h-4 w-4" /></Button>
-        <Button variant="destructive" size="sm" className="h-8 w-8 p-0"><Trash2 className="h-4 w-4" /></Button>
-      </div>
-    </CardContent>
+    <CardFooter className="p-4 pt-0 mt-auto">
+       {isOwner && (
+        <div className="flex justify-end space-x-2 w-full">
+          <Button variant="outline" size="sm" className="h-8 w-8 p-0" onClick={() => onEdit(item)}><Edit3 className="h-4 w-4" /></Button>
+          <Button variant="destructive" size="sm" className="h-8 w-8 p-0" onClick={() => onDelete(item)}><Trash2 className="h-4 w-4" /></Button>
+        </div>
+       )}
+    </CardFooter>
   </Card>
 );
 
@@ -91,63 +83,83 @@ export default function MenuManagementPage() {
   const restaurantId = params.restaurantId as string;
   const { user, role, initialLoading: authLoading } = useAuth();
   const router = useRouter();
+  const { toast } = useToast();
   
   const [restaurant, setRestaurant] = useState<RestaurantProfile | null>(null);
   const [pageLoading, setPageLoading] = useState(true);
+  const [formSubmitting, setFormSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Initialize dummy data state
   const [categories, setCategories] = useState<MenuCategory[]>([]);
   const [subcategories, setSubcategories] = useState<MenuSubcategory[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
-  
   const [filteredMenuItems, setFilteredMenuItems] = useState<MenuItem[]>([]);
+
+  // Modal states
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<MenuCategory | null>(null);
+  
+  const [isSubcategoryModalOpen, setIsSubcategoryModalOpen] = useState(false);
+  const [editingSubcategory, setEditingSubcategory] = useState<MenuSubcategory | null>(null);
+  const [parentCategoryIdForNewSub, setParentCategoryIdForNewSub] = useState<string | null>(null);
+
+  const [isMenuItemModalOpen, setIsMenuItemModalOpen] = useState(false);
+  const [editingMenuItem, setEditingMenuItem] = useState<MenuItem | null>(null);
+  const [parentCategoryForItem, setParentCategoryForItem] = useState<string | null>(null);
+  const [parentSubcategoryForItem, setParentSubcategoryForItem] = useState<string | null>(null);
+  
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{
+    isOpen: boolean;
+    type: 'category' | 'subcategory' | 'item';
+    data: any;
+    title: string;
+    description: string;
+  } | null>(null);
+
+  const fetchData = useCallback(async () => {
+    if (!restaurantId || !user) return;
+    setPageLoading(true);
+    try {
+      const [restaurantData, fetchedCategories, fetchedSubcategories, fetchedMenuItems] = await Promise.all([
+        getRestaurant(restaurantId),
+        getMenuCategories(restaurantId),
+        getMenuSubcategories(restaurantId), // Fetch all for the restaurant
+        getMenuItems(restaurantId) // Fetch all for the restaurant
+      ]);
+
+      if (restaurantData && (restaurantData.ownerId === user.uid || role === 'staff')) {
+        setRestaurant(restaurantData);
+        setCategories(fetchedCategories.sort((a, b) => a.order - b.order));
+        setSubcategories(fetchedSubcategories.sort((a, b) => a.order - b.order));
+        setMenuItems(fetchedMenuItems.sort((a, b) => a.order - b.order));
+      } else {
+        toast({ variant: "destructive", title: "Access Denied", description: "Restaurant not found or you don't have permission."});
+        router.replace('/dashboard');
+      }
+    } catch (error) {
+      console.error("Error fetching menu data:", error);
+      toast({ variant: "destructive", title: "Error", description: "Could not load menu data." });
+    } finally {
+      setPageLoading(false);
+    }
+  }, [restaurantId, user, role, router, toast]);
 
   useEffect(() => {
     if (authLoading) return;
-
-    if (!user || role !== 'owner') {
-      // Also allow 'staff' to view menu, but not edit (edit controls can be conditionally disabled later)
-      if (role !== 'staff') {
-        router.replace('/dashboard');
-        return;
-      }
-    }
-
-    if (!restaurantId) {
+    if (!user || (role !== 'owner' && role !== 'staff')) {
       router.replace('/dashboard');
       return;
     }
-    
-    // Staff access check: ensure they belong to this restaurant if restaurantId is from user context
-    if (role === 'staff' && user?.restaurantId !== restaurantId) {
-      router.replace('/dashboard'); // Or an access denied page
+    if (role === 'staff' && user.restaurantId !== restaurantId) {
+      router.replace('/dashboard');
       return;
     }
-
-
-    setPageLoading(true);
-    getRestaurant(restaurantId)
-      .then((data) => {
-        if (data && (data.ownerId === user?.uid || role === 'staff')) { // Allow staff to view
-          setRestaurant(data);
-          // Initialize dummy data here now that restaurantId is confirmed
-          setCategories(createDummyCategories(restaurantId));
-          setSubcategories(createDummySubcategories(restaurantId));
-          const allItems = createDummyMenuItems(restaurantId);
-          setMenuItems(allItems);
-          setFilteredMenuItems(allItems); 
-        } else {
-          router.replace('/dashboard');
-        }
-      })
-      .catch(() => {
-        router.replace('/dashboard');
-      })
-      .finally(() => {
-        setPageLoading(false);
-      });
-  }, [restaurantId, user, role, authLoading, router]);
+    if (restaurantId) {
+      fetchData();
+    } else {
+       router.replace('/dashboard');
+    }
+  }, [restaurantId, user, role, authLoading, router, fetchData]);
 
   useEffect(() => {
     if (!searchTerm) {
@@ -157,67 +169,180 @@ export default function MenuManagementPage() {
     setFilteredMenuItems(
       menuItems.filter(item =>
         item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.description.toLowerCase().includes(searchTerm.toLowerCase())
+        item.description?.toLowerCase().includes(searchTerm.toLowerCase())
       )
     );
   }, [searchTerm, menuItems]);
 
+  const handleCategorySubmit = async (values: z.infer<typeof import('@/components/menu/category-form').categoryFormSchema>, categoryIdToUpdate?: string) => {
+    setFormSubmitting(true);
+    try {
+      if (categoryIdToUpdate) {
+        await updateMenuCategory(restaurantId, categoryIdToUpdate, values);
+        toast({ title: "Category Updated", description: `${values.name} has been updated.` });
+      } else {
+        await addMenuCategory(restaurantId, values);
+        toast({ title: "Category Added", description: `${values.name} has been added.` });
+      }
+      fetchData(); // Refetch all data
+      setIsCategoryModalOpen(false);
+      setEditingCategory(null);
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to save category." });
+    } finally {
+      setFormSubmitting(false);
+    }
+  };
+  
+  const handleSubcategorySubmit = async (values: z.infer<typeof import('@/components/menu/subcategory-form').subcategoryFormSchema>, subcategoryIdToUpdate?: string) => {
+    if (!parentCategoryIdForNewSub && !editingSubcategory?.categoryId) {
+        toast({ variant: "destructive", title: "Error", description: "Parent category ID is missing." });
+        return;
+    }
+    const targetCategoryId = editingSubcategory?.categoryId || parentCategoryIdForNewSub!;
+    setFormSubmitting(true);
+    try {
+      if (subcategoryIdToUpdate) {
+        await updateMenuSubcategory(restaurantId, targetCategoryId, subcategoryIdToUpdate, values);
+        toast({ title: "Subcategory Updated", description: `${values.name} has been updated.` });
+      } else {
+        await addMenuSubcategory(restaurantId, targetCategoryId, values);
+        toast({ title: "Subcategory Added", description: `${values.name} has been added.` });
+      }
+      fetchData();
+      setIsSubcategoryModalOpen(false);
+      setEditingSubcategory(null);
+      setParentCategoryIdForNewSub(null);
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to save subcategory." });
+    } finally {
+      setFormSubmitting(false);
+    }
+  };
+
+  const handleMenuItemSubmit = async (values: MenuItemFormValues, itemIdToUpdate?: string) => {
+    if (!parentCategoryForItem && !editingMenuItem?.categoryId) {
+      toast({ variant: "destructive", title: "Error", description: "Parent category ID is missing for the item." });
+      return;
+    }
+    const targetCategoryId = editingMenuItem?.categoryId || parentCategoryForItem!;
+    const targetSubcategoryId = editingMenuItem?.subcategoryId || parentSubcategoryForItem;
+    
+    setFormSubmitting(true);
+    try {
+      const itemDataToSave = { ...values }; // dietaryTags and allergenInfo already transformed by Zod
+
+      if (itemIdToUpdate) {
+        await updateMenuItem(restaurantId, targetCategoryId, targetSubcategoryId, itemIdToUpdate, itemDataToSave);
+        toast({ title: "Menu Item Updated", description: `${values.name} has been updated.` });
+      } else {
+        await addMenuItem(restaurantId, targetCategoryId, targetSubcategoryId, itemDataToSave);
+        toast({ title: "Menu Item Added", description: `${values.name} has been added.` });
+      }
+      fetchData();
+      setIsMenuItemModalOpen(false);
+      setEditingMenuItem(null);
+      setParentCategoryForItem(null);
+      setParentSubcategoryForItem(null);
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to save menu item." });
+    } finally {
+      setFormSubmitting(false);
+    }
+  };
+
+  const openDeleteConfirmation = (type: 'category' | 'subcategory' | 'item', data: any) => {
+    let title = '';
+    let description = 'Are you sure you want to delete this? This action cannot be undone.';
+    if (type === 'category') {
+      title = `Delete Category: ${data.name}`;
+      description += ' All associated subcategories and items will also be deleted.';
+    } else if (type === 'subcategory') {
+      title = `Delete Subcategory: ${data.name}`;
+      description += ' All associated items will also be deleted.';
+    } else if (type === 'item') {
+      title = `Delete Item: ${data.name}`;
+    }
+    setDeleteConfirmation({ isOpen: true, type, data, title, description });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteConfirmation) return;
+    setFormSubmitting(true);
+    const { type, data } = deleteConfirmation;
+    try {
+      if (type === 'category') {
+        await deleteMenuCategory(restaurantId, data.id);
+        toast({ title: "Category Deleted", description: `${data.name} and its contents have been deleted.` });
+      } else if (type === 'subcategory') {
+        await deleteMenuSubcategory(restaurantId, data.categoryId, data.id);
+        toast({ title: "Subcategory Deleted", description: `${data.name} and its items have been deleted.` });
+      } else if (type === 'item') {
+        await deleteMenuItem(restaurantId, data.categoryId, data.subcategoryId, data.id);
+        toast({ title: "Menu Item Deleted", description: `${data.name} has been deleted.` });
+      }
+      fetchData();
+      setDeleteConfirmation(null);
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Deletion Failed", description: error.message || "Could not delete the item." });
+    } finally {
+      setFormSubmitting(false);
+    }
+  };
+
 
   if (authLoading || pageLoading) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <LoadingSpinner className="h-10 w-10 text-primary" />
-      </div>
-    );
+    return <div className="flex h-full items-center justify-center"><LoadingSpinner className="h-10 w-10 text-primary" /></div>;
   }
-
   if (!restaurant) {
-    return (
-      <Card>
-        <CardHeader><CardTitle>Error</CardTitle></CardHeader>
-        <CardContent><p>Restaurant not found or you do not have permission.</p></CardContent>
-      </Card>
-    );
+    return <Card><CardHeader><CardTitle>Error</CardTitle></CardHeader><CardContent><p>Restaurant not found or no permission.</p></CardContent></Card>;
   }
+  const isOwner = role === 'owner';
 
   return (
     <div className="space-y-6">
       <Card className="shadow-xl">
         <CardHeader>
           <CardTitle className="text-2xl md:text-3xl">Menu Management for {restaurant.name}</CardTitle>
-          <CardDescription>
-            Organize categories, subcategories, and items for your restaurant's menu.
-          </CardDescription>
+          <CardDescription>Organize categories, subcategories, and items for your restaurant's menu.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="flex flex-col md:flex-row gap-4 items-center justify-between mb-6">
             <div className="relative w-full md:w-2/5">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-              <Input 
-                placeholder="Search menu items..." 
-                className="pl-10 w-full" 
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
+              <Input placeholder="Search menu items..." className="pl-10 w-full" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
             </div>
-            {role === 'owner' && (
-              <Button className="w-full md:w-auto bg-accent hover:bg-accent/90 text-accent-foreground">
-                <PlusCircle className="mr-2 h-4 w-4" /> Add New Category
-              </Button>
+            {isOwner && (
+              <Dialog open={isCategoryModalOpen} onOpenChange={setIsCategoryModalOpen}>
+                <DialogTrigger asChild>
+                  <Button className="w-full md:w-auto bg-accent hover:bg-accent/90 text-accent-foreground" onClick={() => { setEditingCategory(null); setIsCategoryModalOpen(true); }}>
+                    <PlusCircle className="mr-2 h-4 w-4" /> Add New Category
+                  </Button>
+                </DialogTrigger>
+                {isCategoryModalOpen && (
+                  <CategoryForm
+                    restaurantId={restaurantId}
+                    category={editingCategory}
+                    onSubmit={handleCategorySubmit}
+                    onClose={() => { setIsCategoryModalOpen(false); setEditingCategory(null); }}
+                    isLoading={formSubmitting}
+                  />
+                )}
+              </Dialog>
             )}
           </div>
           
           {categories.length > 0 ? (
-            <Tabs defaultValue={categories[0].id} className="w-full">
-              <TabsList className="mb-4 grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:flex lg:w-auto">
-                {categories.sort((a,b) => a.order - b.order).map(category => (
+            <Tabs defaultValue={categories[0]?.id || ""} className="w-full">
+              <TabsList className="mb-4 grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:flex lg:flex-wrap lg:w-auto">
+                {categories.map(category => (
                   <TabsTrigger key={category.id} value={category.id} className="flex-1 lg:flex-initial">
                     {category.name}
                   </TabsTrigger>
                 ))}
               </TabsList>
 
-              {categories.sort((a,b) => a.order - b.order).map(category => (
+              {categories.map(category => (
                 <TabsContent key={category.id} value={category.id}>
                   <Card className="mb-6 border-primary/50 shadow-md">
                     <CardHeader className="flex flex-col md:flex-row justify-between items-start md:items-center bg-muted/30 p-4 rounded-t-lg">
@@ -225,16 +350,46 @@ export default function MenuManagementPage() {
                         <CardTitle className="text-xl">{category.name}</CardTitle>
                         <CardDescription>Manage items and subcategories within {category.name}.</CardDescription>
                       </div>
-                       {role === 'owner' && (
+                       {isOwner && (
                         <div className="flex space-x-2 flex-wrap gap-2">
-                          <Button variant="outline" size="sm"><Edit3 className="mr-2 h-3 w-3" /> Edit Category</Button>
-                          <Button variant="outline" size="sm" className="bg-accent hover:bg-accent/80 text-accent-foreground"><PlusCircle className="mr-2 h-3 w-3" /> Add Subcategory</Button>
-                          <Button variant="outline" size="sm" className="bg-primary hover:bg-primary/80 text-primary-foreground"><PlusCircle className="mr-2 h-3 w-3" /> Add Item to {category.name}</Button>
+                          <Button variant="outline" size="sm" onClick={() => { setEditingCategory(category); setIsCategoryModalOpen(true);}}><Edit3 className="mr-2 h-3 w-3" /> Edit Category</Button>
+                          <Button variant="outline" size="sm" onClick={() => openDeleteConfirmation('category', category)} className="text-destructive border-destructive hover:bg-destructive/10"><Trash2 className="mr-2 h-3 w-3" />Delete Category</Button>
+                          <Dialog open={isSubcategoryModalOpen && parentCategoryIdForNewSub === category.id && !editingSubcategory} onOpenChange={(isOpen) => { if(!isOpen) {setIsSubcategoryModalOpen(false); setParentCategoryIdForNewSub(null); setEditingSubcategory(null); }}}>
+                            <DialogTrigger asChild>
+                                <Button variant="outline" size="sm" className="bg-accent hover:bg-accent/80 text-accent-foreground" onClick={() => {setEditingSubcategory(null); setParentCategoryIdForNewSub(category.id); setIsSubcategoryModalOpen(true);}}>
+                                    <PlusCircle className="mr-2 h-3 w-3" /> Add Subcategory
+                                </Button>
+                            </DialogTrigger>
+                            {isSubcategoryModalOpen && parentCategoryIdForNewSub === category.id && !editingSubcategory && (
+                                <SubcategoryForm
+                                    restaurantId={restaurantId}
+                                    categoryId={category.id}
+                                    onSubmit={handleSubcategorySubmit}
+                                    onClose={() => { setIsSubcategoryModalOpen(false); setParentCategoryIdForNewSub(null);}}
+                                    isLoading={formSubmitting}
+                                />
+                            )}
+                           </Dialog>
+                           <Dialog open={isMenuItemModalOpen && parentCategoryForItem === category.id && parentSubcategoryForItem === null && !editingMenuItem} onOpenChange={(isOpen) => {if(!isOpen){setIsMenuItemModalOpen(false); setParentCategoryForItem(null); setParentSubcategoryForItem(null); setEditingMenuItem(null);}}}>
+                                <DialogTrigger asChild>
+                                    <Button variant="outline" size="sm" className="bg-primary hover:bg-primary/80 text-primary-foreground" onClick={() => {setEditingMenuItem(null); setParentCategoryForItem(category.id); setParentSubcategoryForItem(null); setIsMenuItemModalOpen(true);}}>
+                                        <PlusCircle className="mr-2 h-3 w-3" /> Add Item to {category.name}
+                                    </Button>
+                                </DialogTrigger>
+                                {isMenuItemModalOpen && parentCategoryForItem === category.id && parentSubcategoryForItem === null && !editingMenuItem && (
+                                    <MenuItemForm 
+                                        restaurantId={restaurantId} 
+                                        categoryId={category.id}
+                                        onSubmit={handleMenuItemSubmit}
+                                        onClose={() => {setIsMenuItemModalOpen(false); setParentCategoryForItem(null); setParentSubcategoryForItem(null);}}
+                                        isLoading={formSubmitting}
+                                    />
+                                )}
+                            </Dialog>
                         </div>
                        )}
                     </CardHeader>
                     <CardContent className="p-4">
-                      {/* Items directly under category */}
                       {filteredMenuItems.filter(item => item.categoryId === category.id && !item.subcategoryId).length > 0 && (
                         <>
                           <h4 className="text-md font-semibold mt-0 mb-3 text-muted-foreground pl-1">Items in {category.name} (Direct)</h4>
@@ -243,21 +398,40 @@ export default function MenuManagementPage() {
                               .filter(item => item.categoryId === category.id && !item.subcategoryId)
                               .sort((a,b) => a.order - b.order)
                               .map(item => (
-                                <MenuItemDisplayCard key={item.id} item={item} />
+                                <MenuItemDisplayCard key={item.id} item={item} isOwner={isOwner}
+                                  onEdit={(itemToEdit) => { setEditingMenuItem(itemToEdit); setIsMenuItemModalOpen(true); }}
+                                  onDelete={(itemToDelete) => openDeleteConfirmation('item', itemToDelete)}
+                                />
                             ))}
                           </div>
                         </>
                       )}
 
-                      {/* Subcategories and their items */}
                       {subcategories.filter(sub => sub.categoryId === category.id).sort((a,b) => a.order - b.order).map(subcategory => (
                         <div key={subcategory.id} className="mt-4">
                           <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-3 p-3 bg-muted/50 rounded-md border">
                             <h4 className="text-lg font-semibold mb-2 md:mb-0">{subcategory.name}</h4>
-                            {role === 'owner' && (
+                            {isOwner && (
                                 <div className="flex space-x-2">
-                                    <Button variant="outline" size="xs"><Edit3 className="mr-1 h-3 w-3" /> Edit Sub</Button>
-                                    <Button variant="default" size="xs" className="bg-primary hover:bg-primary/80 text-primary-foreground"><PlusCircle className="mr-1 h-3 w-3" /> Add Item</Button>
+                                    <Button variant="outline" size="xs" onClick={() => { setEditingSubcategory(subcategory); setParentCategoryIdForNewSub(category.id); setIsSubcategoryModalOpen(true);}}><Edit3 className="mr-1 h-3 w-3" /> Edit Sub</Button>
+                                    <Button variant="outline" size="xs" className="text-destructive border-destructive hover:bg-destructive/10" onClick={() => openDeleteConfirmation('subcategory', subcategory)}><Trash2 className="mr-1 h-3 w-3"/> Del Sub</Button>
+                                    <Dialog open={isMenuItemModalOpen && parentSubcategoryForItem === subcategory.id && !editingMenuItem} onOpenChange={(isOpen) => { if(!isOpen){setIsMenuItemModalOpen(false); setParentCategoryForItem(null); setParentSubcategoryForItem(null); setEditingMenuItem(null); }}}>
+                                        <DialogTrigger asChild>
+                                            <Button variant="default" size="xs" className="bg-primary hover:bg-primary/80 text-primary-foreground" onClick={() => {setEditingMenuItem(null); setParentCategoryForItem(category.id); setParentSubcategoryForItem(subcategory.id); setIsMenuItemModalOpen(true); }}>
+                                                <PlusCircle className="mr-1 h-3 w-3" /> Add Item
+                                            </Button>
+                                        </DialogTrigger>
+                                         {isMenuItemModalOpen && parentSubcategoryForItem === subcategory.id && !editingMenuItem && (
+                                            <MenuItemForm 
+                                                restaurantId={restaurantId} 
+                                                categoryId={category.id}
+                                                subcategoryId={subcategory.id}
+                                                onSubmit={handleMenuItemSubmit}
+                                                onClose={() => { setIsMenuItemModalOpen(false); setParentCategoryForItem(null); setParentSubcategoryForItem(null); }}
+                                                isLoading={formSubmitting}
+                                            />
+                                        )}
+                                    </Dialog>
                                 </div>
                             )}
                           </div>
@@ -267,11 +441,14 @@ export default function MenuManagementPage() {
                                 .filter(item => item.subcategoryId === subcategory.id)
                                 .sort((a,b) => a.order - b.order)
                                 .map(item => (
-                                  <MenuItemDisplayCard key={item.id} item={item} />
+                                  <MenuItemDisplayCard key={item.id} item={item} isOwner={isOwner}
+                                    onEdit={(itemToEdit) => { setEditingMenuItem(itemToEdit); setIsMenuItemModalOpen(true); }}
+                                    onDelete={(itemToDelete) => openDeleteConfirmation('item', itemToDelete)}
+                                  />
                               ))}
                             </div>
                           ) : (
-                            <p className="text-sm text-muted-foreground pl-1">No items in this subcategory match your search or exist yet.</p>
+                            <p className="text-sm text-muted-foreground pl-1">No items in this subcategory {searchTerm && 'matching your search, or no items exist yet'}.</p>
                           )}
                         </div>
                       ))}
@@ -288,8 +465,8 @@ export default function MenuManagementPage() {
               <Utensils className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
               <h3 className="text-xl font-semibold mb-2">No Categories Yet</h3>
               <p className="text-muted-foreground mb-4">Start building your menu by adding a category.</p>
-              {role === 'owner' && (
-                <Button className="bg-accent hover:bg-accent/90 text-accent-foreground">
+              {isOwner && (
+                <Button className="bg-accent hover:bg-accent/90 text-accent-foreground" onClick={() => {setEditingCategory(null); setIsCategoryModalOpen(true);}}>
                   <PlusCircle className="mr-2 h-4 w-4" /> Add New Category
                </Button>
               )}
@@ -297,6 +474,59 @@ export default function MenuManagementPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Edit Category Modal (shared for edit) */}
+      {isCategoryModalOpen && editingCategory && (
+        <Dialog open={isCategoryModalOpen} onOpenChange={setIsCategoryModalOpen}>
+             <CategoryForm
+                restaurantId={restaurantId}
+                category={editingCategory}
+                onSubmit={handleCategorySubmit}
+                onClose={() => { setIsCategoryModalOpen(false); setEditingCategory(null); }}
+                isLoading={formSubmitting}
+            />
+        </Dialog>
+      )}
+
+      {/* Edit Subcategory Modal (shared for edit) */}
+      {isSubcategoryModalOpen && editingSubcategory && (
+         <Dialog open={isSubcategoryModalOpen} onOpenChange={(isOpen) => {if(!isOpen){ setIsSubcategoryModalOpen(false); setEditingSubcategory(null); setParentCategoryIdForNewSub(null);}}}>
+            <SubcategoryForm
+                restaurantId={restaurantId}
+                categoryId={editingSubcategory.categoryId}
+                subcategory={editingSubcategory}
+                onSubmit={handleSubcategorySubmit}
+                onClose={() => { setIsSubcategoryModalOpen(false); setEditingSubcategory(null); setParentCategoryIdForNewSub(null); }}
+                isLoading={formSubmitting}
+            />
+        </Dialog>
+      )}
+
+      {/* Edit Menu Item Modal (shared for edit) */}
+      {isMenuItemModalOpen && editingMenuItem && (
+         <Dialog open={isMenuItemModalOpen} onOpenChange={(isOpen) => {if(!isOpen){ setIsMenuItemModalOpen(false); setEditingMenuItem(null); setParentCategoryForItem(null); setParentSubcategoryForItem(null);}}}>
+            <MenuItemForm
+                restaurantId={restaurantId}
+                categoryId={editingMenuItem.categoryId}
+                subcategoryId={editingMenuItem.subcategoryId}
+                menuItem={editingMenuItem}
+                onSubmit={handleMenuItemSubmit}
+                onClose={() => { setIsMenuItemModalOpen(false); setEditingMenuItem(null); setParentCategoryForItem(null); setParentSubcategoryForItem(null);}}
+                isLoading={formSubmitting}
+            />
+        </Dialog>
+      )}
+      
+      {deleteConfirmation?.isOpen && (
+        <ConfirmationDialog
+          isOpen={deleteConfirmation.isOpen}
+          onClose={() => setDeleteConfirmation(null)}
+          onConfirm={confirmDelete}
+          title={deleteConfirmation.title}
+          description={deleteConfirmation.description}
+          isLoading={formSubmitting}
+        />
+      )}
     </div>
   );
 }
