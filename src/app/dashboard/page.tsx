@@ -1,6 +1,8 @@
 
+
 'use client';
 
+import * as React from 'react'; // Added React import
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/auth/context';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -421,3 +423,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+
