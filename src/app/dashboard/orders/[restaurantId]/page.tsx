@@ -82,10 +82,12 @@ const DETAILED_STATUS_OPTIONS = (Object.keys(orderStatusConfig) as OrderStatusTy
     label: orderStatusConfig[status].label,
 }));
 
+const ALL_STATUSES_VALUE = "_all_"; // Special value for "All Specific Statuses"
+
 export default function OrderManagementPage() {
   const params = useParams();
   const restaurantId = params.restaurantId as string;
-  const searchParamsHook = useSearchParams(); // Renamed to avoid conflict with internal searchParams variable
+  const searchParamsHook = useSearchParams(); 
 
   const { user, role, initialLoading: authLoading } = useAuth();
   const router = useRouter();
@@ -115,18 +117,22 @@ export default function OrderManagementPage() {
       if (restaurantData && (restaurantData.ownerId === user.uid || (role === 'staff' && user.restaurantId === restaurantId))) {
         setRestaurant(restaurantData);
         
-        // Firestore query optimization: only filter by detailedStatusFilter or main tab if not "all"
-        let queryStatuses: OrderStatus[] | undefined = undefined;
+        let queryStatuses: OrderStatusType[] | undefined = undefined;
         if (detailedStatusFilter) {
           queryStatuses = [detailedStatusFilter];
         } else if (activeMainTab !== 'all') {
           queryStatuses = MAIN_TABS.find(tab => tab.value === activeMainTab)?.statuses;
         }
-        // Date range filtering in Firestore query
+        
         let startDate: Timestamp | undefined = undefined;
         let endDate: Timestamp | undefined = undefined;
         if (dateRange?.from) startDate = Timestamp.fromDate(dateRange.from);
-        if (dateRange?.to) endDate = Timestamp.fromDate(dateRange.to);
+        if (dateRange?.to) {
+            const toDate = new Date(dateRange.to);
+            toDate.setHours(23, 59, 59, 999); // Set to end of day
+            endDate = Timestamp.fromDate(toDate);
+        }
+
 
         const fetchedOrdersRaw = await getOrdersByRestaurant(restaurantId, queryStatuses, startDate, endDate, tableIdFilter || undefined);
         
@@ -185,17 +191,14 @@ export default function OrderManagementPage() {
         const valB = b[sortConfig.key!];
         let comparison = 0;
         if (typeof valA === 'string' && typeof valB === 'string') {
-          comparison = valA.localeCompare(valB);
+           if ((sortConfig.key === 'createdAt' || sortConfig.key === 'updatedAt')) {
+            comparison = new Date(valA).getTime() - new Date(valB).getTime();
+           } else {
+            comparison = valA.localeCompare(valB);
+           }
         } else if (typeof valA === 'number' && typeof valB === 'number') {
           comparison = valA - valB;
-        } else if (valA instanceof Date && valB instanceof Date) {
-            comparison = valA.getTime() - valB.getTime();
-        } else if (typeof valA === 'string' && typeof valB === 'string' && (sortConfig.key === 'createdAt' || sortConfig.key === 'updatedAt')) {
-            // Dates are strings, convert for comparison
-            comparison = new Date(valA).getTime() - new Date(valB).getTime();
         }
-
-
         return sortConfig.direction === 'ascending' ? comparison : -comparison;
       });
     }
@@ -267,10 +270,19 @@ export default function OrderManagementPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
               <div className="space-y-1">
                 <label htmlFor="detailed-status-filter" className="text-sm font-medium text-muted-foreground">Filter by Specific Status</label>
-                <Select value={detailedStatusFilter || ''} onValueChange={(value) => setDetailedStatusFilter(value as OrderStatusType || null)}>
+                <Select 
+                  value={detailedStatusFilter || ALL_STATUSES_VALUE} 
+                  onValueChange={(value) => {
+                    if (value === ALL_STATUSES_VALUE) {
+                      setDetailedStatusFilter(null);
+                    } else {
+                      setDetailedStatusFilter(value as OrderStatusType);
+                    }
+                  }}
+                >
                   <SelectTrigger id="detailed-status-filter" className="h-10"><SelectValue placeholder="Select status..." /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All Specific Statuses</SelectItem>
+                    <SelectItem value={ALL_STATUSES_VALUE}>All Specific Statuses</SelectItem>
                     {DETAILED_STATUS_OPTIONS.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
@@ -296,7 +308,7 @@ export default function OrderManagementPage() {
                     <Input type="number" placeholder="Max $" value={priceRange.max} onChange={e => setPriceRange(p => ({...p, max: e.target.value}))} className="h-10" />
                  </div>
               </div>
-              <Button onClick={() => {setDetailedStatusFilter(null); setDateRange(undefined); setPriceRange({min:'', max:''}); setActiveMainTab('active');}} variant="outline" className="h-10 self-end">
+              <Button onClick={() => {setDetailedStatusFilter(null); setDateRange(undefined); setPriceRange({min:'', max:''}); setActiveMainTab('active'); fetchRestaurantAndOrders();}} variant="outline" className="h-10 self-end">
                 <Filter className="mr-2 h-4 w-4"/> Clear Filters
               </Button>
             </div>
