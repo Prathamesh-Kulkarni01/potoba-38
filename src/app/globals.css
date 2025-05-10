@@ -1,92 +1,274 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
+ 
 @layer base {
   :root {
-    --background: 30 60% 97%; /* Very light peachy white */
-    --foreground: 25 30% 25%; /* Dark warm brown */
-    --card: 30 50% 99%; /* Almost white, slightly warmer */
-    --card-foreground: 25 30% 25%; /* Dark warm brown */
-    --popover: 30 50% 99%; /* Almost white, slightly warmer */
-    --popover-foreground: 25 30% 25%; /* Dark warm brown */
-    --primary: 25 95% 60%; /* Vibrant coral/orange */
-    --primary-foreground: 25 100% 98%; /* Very light, almost white */
-    --secondary: 30 40% 92%; /* Light warm gray/beige */
-    --secondary-foreground: 25 30% 30%; /* Slightly lighter than main foreground */
-    --muted: 30 30% 90%; /* Muted beige */
-    --muted-foreground: 25 20% 50%; /* Softer gray-brown */
-    --accent: 140 55% 55%; /* Fresh, slightly desaturated green */
-    --accent-foreground: 140 100% 98%; /* Very light green/white */
-    --destructive: 0 75% 55%; /* Standard vibrant red */
-    --destructive-foreground: 0 0% 98%; /* Almost white */
-    --border: 30 20% 85%; /* Light warm gray border */
-    --input: 30 20% 88%; /* Slightly lighter border for inputs */
-    --ring: 25 95% 60%; /* Vibrant coral/orange for rings */
+    --background: 0 0% 99%;
+    --foreground: 222 47% 11%;
     
-    --chart-1: 25 80% 55%;   /* Vibrant orange, primary-like */
-    --chart-2: 140 50% 50%;  /* Deep Green, accent-like */
-    --chart-3: 45 90% 60%;   /* Sunny Yellow/Gold */
-    --chart-4: 200 70% 58%;  /* Sky Blue, complementary */
-    --chart-5: 0 60% 65%;    /* Softer Red/Terracotta */
-    
-    --radius: 0.5rem;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+ 
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+ 
+    --primary: 14 100% 60%; /* Main Orange */
+    --primary-foreground: 210 40% 98%; /* White-ish for text on primary */
+ 
+    --secondary: 172 63% 48%; /* Teal */
+    --secondary-foreground: 222 47% 11%; /* Dark blue for text on secondary */
+ 
+    --muted: 210 40% 96.1%; /* Light Gray */
+    --muted-foreground: 215.4 16.3% 46.9%; /* Darker Gray */
+ 
+    --accent: 35 100% 55%; /* Accent Orange/Yellow */
+    --accent-foreground: 222 47% 11%; /* Dark blue for text on accent */
+ 
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
 
-    /* Sidebar specific colors */
-    --sidebar-background: 30 55% 97.5%; /* Even lighter peachy white */
-    --sidebar-foreground: 25 30% 28%;    /* Dark warm brown (sidebar text) */
-    --sidebar-primary: 25 95% 60%;       /* Vibrant coral/orange (same as main) */
-    --sidebar-primary-foreground: 25 100% 98%; /* Very light (same as main) */
-    --sidebar-accent: 140 55% 55%;        /* Fresh green (same as main) */
-    --sidebar-accent-foreground: 140 100% 98%; /* Very light green/white (same as main) */
-    --sidebar-border: 30 20% 88%;        /* Light warm gray border (sidebar) */
-    --sidebar-ring: 25 95% 60%;          /* Vibrant coral/orange for rings (sidebar) */
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 14 100% 60%; /* Main Orange for focus rings */
+ 
+    --radius: 0.75rem;
+
+    /* Chart colors based on new theme */
+    --chart-1: 14 100% 60%;   /* Primary Orange */
+    --chart-2: 172 63% 48%;  /* Secondary Teal */
+    --chart-3: 35 100% 55%;   /* Accent Orange/Yellow */
+    --chart-4: 200 70% 58%;  /* A complementary Blue */
+    --chart-5: 0 70% 65%;    /* A softer Red/Coral */
+
+    /* Sidebar specific colors using the new palette */
+    --sidebar-background: 0 0% 98%; /* Slightly off-white */
+    --sidebar-foreground: 222 47% 15%;    /* Dark blue for sidebar text */
+    --sidebar-primary: 14 100% 60%;       /* Main Orange (same as main) */
+    --sidebar-primary-foreground: 210 40% 98%; /* White-ish (same as main) */
+    --sidebar-accent: 35 100% 55%;        /* Accent Orange/Yellow (same as main) */
+    --sidebar-accent-foreground: 222 47% 11%; /* Dark blue (same as main) */
+    --sidebar-border: 214.3 31.8% 90%;        /* Light gray border (sidebar) */
+    --sidebar-ring: 14 100% 60%;          /* Main Orange for rings (sidebar) */
   }
-
+ 
   .dark {
-    --background: 25 20% 12%; /* Very dark warm brown */
-    --foreground: 30 40% 90%; /* Light beige/off-white */
-    --card: 25 20% 15%; /* Slightly lighter than background */
-    --card-foreground: 30 40% 90%; /* Light beige/off-white */
-    --popover: 25 20% 15%; /* Slightly lighter than background */
-    --popover-foreground: 30 40% 90%; /* Light beige/off-white */
-    --primary: 25 90% 65%; /* Slightly lighter/brighter coral/orange for dark mode */
-    --primary-foreground: 25 30% 15%; /* Dark for contrast on primary */
-    --secondary: 25 20% 20%; /* Darker warm gray */
-    --secondary-foreground: 30 40% 85%; /* Lighter than main fg */
-    --muted: 25 20% 22%; /* Muted dark warm gray */
-    --muted-foreground: 30 30% 65%; /* Medium-light warm gray */
-    --accent: 140 50% 60%; /* Slightly lighter fresh green for dark mode */
-    --accent-foreground: 140 30% 15%; /* Dark for contrast on accent */
-    --destructive: 0 70% 60%; /* Slightly lighter red for dark mode */
-    --destructive-foreground: 0 0% 98%; /* Almost white */
-    --border: 25 15% 30%; /* Subtle dark border */
-    --input: 25 15% 35%; /* Slightly lighter input border */
-    --ring: 25 90% 65%; /* Slightly lighter/brighter coral/orange for rings */
+    --background: 222 47% 11%;
+    --foreground: 210 40% 98%;
+ 
+    --card: 222 47% 11%;
+    --card-foreground: 210 40% 98%;
+ 
+    --popover: 222 47% 11%;
+    --popover-foreground: 210 40% 98%;
+ 
+    --primary: 14 100% 60%;
+    --primary-foreground: 222 47% 1%;
+ 
+    --secondary: 172 63% 48%;
+    --secondary-foreground: 210 40% 98%;
+ 
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+ 
+    --accent: 35 100% 55%;
+    --accent-foreground: 210 40% 98%;
+ 
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+ 
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 14 100% 60%;
 
-    --chart-1: 25 85% 68%;   /* Brighter Orange for dark */
-    --chart-2: 140 55% 62%;  /* Brighter Green for dark */
-    --chart-3: 45 95% 65%;   /* Brighter Yellow/Gold for dark */
-    --chart-4: 200 75% 62%;  /* Brighter Sky Blue for dark */
-    --chart-5: 0 65% 70%;    /* Brighter Soft Red/Terracotta for dark */
+    /* Chart colors for dark mode */
+    --chart-1: 14 90% 65%;   /* Brighter Primary Orange */
+    --chart-2: 172 70% 55%;  /* Brighter Secondary Teal */
+    --chart-3: 35 90% 60%;   /* Brighter Accent Orange/Yellow */
+    --chart-4: 200 75% 62%;  /* Brighter Complementary Blue */
+    --chart-5: 0 75% 70%;    /* Brighter Softer Red/Coral */
 
     /* Sidebar specific colors for dark mode */
-    --sidebar-background: 25 20% 10%; /* Even darker warm brown */
-    --sidebar-foreground: 30 40% 88%;    /* Light beige/off-white (sidebar text) */
-    --sidebar-primary: 25 90% 65%;       /* Slightly lighter/brighter coral/orange (same as dark main) */
-    --sidebar-primary-foreground: 25 30% 15%; /* Dark for contrast (same as dark main) */
-    --sidebar-accent: 140 50% 60%;        /* Slightly lighter green (same as dark main) */
-    --sidebar-accent-foreground: 140 30% 15%; /* Dark for contrast (same as dark main) */
-    --sidebar-border: 25 15% 25%;        /* Subtle dark border (sidebar) */
-    --sidebar-ring: 25 90% 65%;          /* Slightly lighter/brighter coral/orange for rings (sidebar) */
+    --sidebar-background: 222 47% 9%; /* Even darker blue */
+    --sidebar-foreground: 210 40% 95%;    /* Light text for sidebar */
+    --sidebar-primary: 14 100% 60%;       /* Main Orange (same as dark main) */
+    --sidebar-primary-foreground: 222 47% 1%; /* Dark text on primary (same as dark main) */
+    --sidebar-accent: 35 100% 55%;        /* Accent Orange/Yellow (same as dark main) */
+    --sidebar-accent-foreground: 210 40% 98%; /* Light text on accent (same as dark main) */
+    --sidebar-border: 217.2 32.6% 15%;        /* Darker border (sidebar) */
+    --sidebar-ring: 14 100% 60%;          /* Main Orange for rings (sidebar) */
   }
 }
-
+ 
 @layer base {
   * {
     @apply border-border;
   }
   body {
     @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
   }
 }
+
+/* Custom styles */
+.bg-food-pattern {
+  /* Ensure you have an image at public/images/food-pattern.svg or update path */
+  /* background-image: url('/images/food-pattern.svg'); */
+  background-repeat: repeat;
+  background-size: 200px;
+}
+
+.mask-gradient-right {
+  mask-image: linear-gradient(to right, rgba(0, 0, 0, 1.0) 70%, rgba(0, 0, 0, 0));
+}
+
+.mask-gradient-bottom {
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 1.0) 85%, rgba(0, 0, 0, 0));
+}
+
+.gradient-text {
+  @apply bg-clip-text text-transparent bg-gradient-to-r from-primary via-accent to-secondary;
+}
+
+.card-highlight {
+  box-shadow: 0 0 0 2px hsl(var(--primary) / 0.1);
+  transition: box-shadow 0.3s ease, transform 0.3s ease;
+}
+
+.card-highlight:hover {
+  box-shadow: 0 0 0 3px hsl(var(--primary) / 0.2);
+  transform: translateY(-3px);
+}
+
+.btn-glow {
+  animation: glow 2s infinite alternate;
+}
+
+@keyframes glow {
+  from {
+    box-shadow: 0 0 5px -5px hsl(var(--primary) / 0.8);
+  }
+  to {
+    box-shadow: 0 0 15px 5px hsl(var(--primary) / 0.4);
+  }
+}
+
+.wavy-bg {
+  background-image: url("data:image/svg+xml,%3Csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3E%3Cdefs%3E%3Cpattern id='pattern' width='100' height='30' patternUnits='userSpaceOnUse' patternTransform='scale(0.5) rotate(0)'%3E%3Cpath d='M0 5C20 5 20 25 40 25C60 25 60 5 80 5C100 5 100 25 120 25C140 25 140 5 160 5C180 5 180 25 200 25C220 25 220 5 240 5C260 5 260 25 280 25C300 25 300 5 320 5C340 5 340 25 360 25C380 25 380 5 400 5C420 5 420 25 440 25C460 25 460 5 480 5C500 5 500 25 520 25C540 25 540 5 560 5' stroke-width='1' stroke='hsl(var(--primary) / 0.1)' fill='none'/%3E%3C/pattern%3E%3C/defs%3E%3Crect width='100%25' height='100%25' fill='url(%23pattern)'/%3E%3C/svg%3E");
+}
+
+/* New animations for the improved header */
+.animate-float-slow {
+  animation: float 5s ease-in-out infinite;
+}
+
+.animate-pulse-subtle {
+  animation: pulse-subtle 3s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  25% {
+    transform: translateY(-5px) rotate(1deg);
+  }
+  75% {
+    transform: translateY(5px) rotate(-1deg);
+  }
+}
+
+@keyframes pulse-subtle {
+  0%, 100% {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.05);
+  }
+}
+
+/* Glassmorphism effect */
+.glass-effect {
+  backdrop-filter: blur(10px);
+  background: hsl(var(--card) / 0.1);
+  border: 1px solid hsl(var(--border) / 0.2);
+}
+
+/* Dark mode additional styles */
+.dark .bg-food-pattern {
+  opacity: 0.05;
+}
+
+.dark .glass-effect {
+  background: hsl(var(--card) / 0.2);
+  border: 1px solid hsl(var(--border) / 0.1);
+}
+
+.dark .card-highlight {
+  box-shadow: 0 0 0 2px hsl(var(--primary) / 0.2);
+}
+
+.dark .wavy-bg {
+  background-image: url("data:image/svg+xml,%3Csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3E%3Cdefs%3E%3Cpattern id='pattern' width='100' height='30' patternUnits='userSpaceOnUse' patternTransform='scale(0.5) rotate(0)'%3E%3Cpath d='M0 5C20 5 20 25 40 25C60 25 60 5 80 5C100 5 100 25 120 25C140 25 140 5 160 5C180 5 180 25 200 25C220 25 220 5 240 5C260 5 260 25 280 25C300 25 300 5 320 5C340 5 340 25 360 25C380 25 380 5 400 5C420 5 420 25 440 25C460 25 460 5 480 5C500 5 500 25 520 25C540 25 540 5 560 5' stroke-width='1' stroke='hsl(var(--primary) / 0.2)' fill='none'/%3E%3C/pattern%3E%3C/defs%3E%3Crect width='100%25' height='100%25' fill='url(%23pattern)'/%3E%3C/svg%3E");
+}
+
+.dark .bg-food-neutral {
+  background-color: hsl(var(--muted) / 0.8); /* Example, adjust as needed */
+}
+
+
+.dark .bg-gradient-to-br.from-food-neutral.to-food-neutral\/80 {
+  background: linear-gradient(to bottom right, hsl(var(--muted)) , hsl(var(--muted) / 0.7)); /* Example */
+}
+
+/* Improved theme transitions */
+.theme-transition {
+  transition: background-color 0.5s ease, color 0.5s ease, border-color 0.3s ease, opacity 0.3s ease;
+}
+
+/* Ensure text classes use HSL variables for consistency if needed for overrides, though Tailwind generally handles this */
+.dark .text-food-dark\/70 {
+  color: hsl(var(--foreground) / 0.7);
+}
+
+.dark .text-food-dark\/80 {
+   color: hsl(var(--foreground) / 0.8);
+}
+
+.dark .text-food-dark {
+  color: hsl(var(--foreground));
+}
+
+.dark .bg-food-primary\/10 {
+  background-color: hsl(var(--primary) / 0.2);
+}
+
+.dark .bg-food-primary\/20 {
+  background-color: hsl(var(--primary) / 0.3);
+}
+
+.dark .bg-food-secondary\/20 {
+  background-color: hsl(var(--secondary) / 0.3);
+}
+
+.dark .bg-food-accent\/20 {
+  background-color: hsl(var(--accent) / 0.3);
+}
+
+/* New animations for theme transitions */
+/* .theme-transition class is already defined above, ensuring smooth transitions. */
+
+/* Add any additional specific styles for .dark mode if Tailwind's default variables aren't sufficient */
+/* For example, .dark .bg-white would use --background from .dark scope */
+/* If you need a "pure white" in dark mode, you'd use a specific class or inline style */
+
+/* General application of theme transition to common elements for smoother feel */
+body, header, main, footer, nav, aside, section, article, div, button, input, select, textarea, a, p, h1, h2, h3, h4, h5, h6, span, li, ul, ol, table, th, td {
+  @apply theme-transition;
+}
+
+/* Removing redundant .dark .bg-white as Tailwind will handle it via --background variable */
+/* Removing redundant .dark .text-food-dark, .dark .text-food-dark/70, .dark .text-food-dark/80 as these should ideally use --foreground and its opacities */
+/* The .theme-transition on body and other elements should cover general transitions well. */
