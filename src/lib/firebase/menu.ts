@@ -15,8 +15,8 @@ import {
   WriteBatch,
   writeBatch,
   collectionGroup,
-  limit, 
-  FieldPath, // Import FieldPath
+  limit,
+  documentId, // Changed from FieldPath
 } from 'firebase/firestore';
 import { db } from './config';
 import type { MenuCategory, MenuSubcategory, MenuItem, MenuItemVariant, AvailabilityRule } from '@/types';
@@ -173,9 +173,7 @@ export async function getMenuItemByIdFromGroup(itemId: string): Promise<{ menuIt
 
   const itemsGroupRef = collectionGroup(db, 'menuItems');
   
-  // Use FieldPath.documentId() for querying by document ID.
-  // Ensure itemId is just the ID string.
-  const q = query(itemsGroupRef, where(FieldPath.documentId(), "==", itemId), limit(1));
+  const q = query(itemsGroupRef, where(documentId(), "==", itemId), limit(1));
   
   const snapshot = await getDocs(q);
 
@@ -186,8 +184,6 @@ export async function getMenuItemByIdFromGroup(itemId: string): Promise<{ menuIt
   const docSnap = snapshot.docs[0];
   const data = docSnap.data();
 
-  // The parent path extraction logic remains, but ensure the data itself contains necessary IDs.
-  // It's more reliable if restaurantId, categoryId, and subcategoryId are fields within the MenuItem document.
   if (!data.restaurantId || !data.categoryId) {
      console.error("MenuItem document is missing restaurantId or categoryId fields:", docSnap.id, data);
      return null;
@@ -306,3 +302,4 @@ export async function deleteMenuItem(restaurantId: string, categoryId: string, s
   }
   await deleteDoc(itemRefPath);
 }
+
