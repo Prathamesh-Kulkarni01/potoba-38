@@ -1,15 +1,16 @@
+
 // src/app/dashboard/table-management/[restaurantId]/page.tsx
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { useAuth } from '@/lib/auth/context';
 import { getRestaurant } from '@/lib/firebase/firestore';
-import { addTable, getTables, updateTable, deleteTable } from '@/lib/firebase/tables';
-import { getOrdersByTable, updateOrder, createOrder } from '@/lib/firebase/orders';
+import { addTable, updateTable, deleteTable, getTablesCollectionPath } from '@/lib/firebase/tables'; // Changed import
+import { getOrdersCollectionPath, updateOrder, createOrder } from '@/lib/firebase/orders'; // Changed import
 import { getMenuItems as fetchMenuItemsFirebase, getMenuCategories, getMenuSubcategories } from '@/lib/firebase/menu';
-import type { RestaurantProfile, Table as FirebaseTableType, TableStatus, Order, OrderItem, MenuItem as MenuItemType, MenuCategory, MenuSubcategory } from '@/types';
+import type { RestaurantProfile, Table as FirebaseTableType, TableStatus, Order as OrderType, OrderItem, MenuItem as MenuItemType, MenuCategory, MenuSubcategory, ClientOrder } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import LoadingSpinner from '@/components/shared/loading-spinner';
 import { Button } from '@/components/ui/button';
@@ -27,6 +28,10 @@ import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import MenuSelectionForBill from '@/components/table-management/menu-selection-for-bill';
 import { cn } from '@/lib/utils';
+import { collection, query, where, orderBy, onSnapshot, Timestamp, Unsubscribe } from 'firebase/firestore'; // Added onSnapshot, Timestamp, Unsubscribe
+import { db } from '@/lib/firebase/config'; // Added db
+import { convertFirebaseTimestampToString } from '@/lib/firebase/utils'; // Utility for timestamp conversion
+
 
 const tableFormSchema = z.object({
   tableNumber: z.string().min(1, "Table number is required."),
@@ -40,6 +45,41 @@ const statusColors: Record<TableStatus, string> = {
   reserved: 'bg-yellow-500',
   needs_cleaning: 'bg-blue-500',
 };
+
+const toClientOrder = (docId: string, data: any): ClientOrder => {
+    const orderBase: Omit<ClientOrder, 'id' | 'createdAt' | 'updatedAt'> = {
+        restaurantId: data.restaurantId,
+        tableId: data.tableId || null,
+        tableNumber: data.tableNumber || null,
+        items: data.items as OrderItem[],
+        subtotal: data.subtotal,
+        totalAmount: data.totalAmount,
+        status: data.status as OrderStatus,
+        taxAmount: typeof data.taxAmount === 'number' ? data.taxAmount : undefined,
+        serviceCharge: typeof data.serviceCharge === 'number' ? data.serviceCharge : undefined,
+        discountAmount: typeof data.discountAmount === 'number' ? data.discountAmount : undefined,
+        customerNotes: typeof data.customerNotes === 'string' ? data.customerNotes : undefined,
+        kitchenNotes: typeof data.kitchenNotes === 'string' ? data.kitchenNotes : undefined,
+        paymentMethod: typeof data.paymentMethod === 'string' ? data.paymentMethod : undefined,
+        transactionId: typeof data.transactionId === 'string' ? data.transactionId : undefined,
+    };
+    return {
+        id: docId,
+        ...orderBase,
+        createdAt: convertFirebaseTimestampToString(data.createdAt),
+        updatedAt: convertFirebaseTimestampToString(data.updatedAt),
+    };
+};
+
+const toFirebaseTableType = (docId: string, data: any): FirebaseTableType => {
+  return {
+    id: docId,
+    ...data,
+    createdAt: convertFirebaseTimestampToString(data.createdAt),
+    updatedAt: convertFirebaseTimestampToString(data.updatedAt),
+  } as FirebaseTableType;
+}
+
 
 export default function TableManagementPage() {
   const params = useParams();
@@ -59,9 +99,8 @@ export default function TableManagementPage() {
   const [deleteConfirmation, setDeleteConfirmation] = useState<{ isOpen: boolean; data: FirebaseTableType; } | null>(null);
   const [qrModalTable, setQrModalTable] = useState<FirebaseTableType | null>(null);
 
-  // POS State
   const [selectedTable, setSelectedTable] = useState<FirebaseTableType | null>(null);
-  const [selectedTableOrders, setSelectedTableOrders] = useState<Order[]>([]);
+  const [selectedTableOrders, setSelectedTableOrders] = useState<ClientOrder[]>([]);
   const [menuItems, setMenuItemsState] = useState<MenuItemType[]>([]);
   const [categories, setCategoriesState] = useState<MenuCategory[]>([]);
   const [subcategories, setSubcategoriesState] = useState<MenuSubcategory[]>([]);
@@ -69,62 +108,87 @@ export default function TableManagementPage() {
   const [isBillPanelVisible, setIsBillPanelVisible] = useState(false);
   const [isMenuSelectionPanelOpen, setIsMenuSelectionPanelOpen] = useState(false);
 
+  const ordersListenerUnsubscribeRef = useRef<Unsubscribe | null>(null);
+
   const form = useForm<TableFormValues>({
     resolver: zodResolver(tableFormSchema),
     defaultValues: { tableNumber: '', capacity: 1 },
   });
 
-  const fetchRestaurantAndTableData = useCallback(async () => {
-    if (!restaurantId || !user) return;
+  // Fetch initial static data (restaurant, menu)
+  useEffect(() => {
+    if (!restaurantId || !user || role !== 'owner') {
+      if(!authLoading && user) router.replace('/dashboard'); // redirect if not owner and done loading auth
+      return;
+    }
     setPageLoading(true);
-    try {
-      const restaurantData = await getRestaurant(restaurantId);
+    Promise.all([
+      getRestaurant(restaurantId),
+      fetchMenuItemsFirebase(restaurantId),
+      getMenuCategories(restaurantId),
+      getMenuSubcategories(restaurantId)
+    ]).then(([restaurantData, fetchedMenuItems, fetchedCategories, fetchedSubcategories]) => {
       if (restaurantData && restaurantData.ownerId === user.uid) {
         setRestaurant(restaurantData);
-        const [fetchedTables, fetchedMenuItems, fetchedCategories, fetchedSubcategories] = await Promise.all([
-          getTables(restaurantId),
-          fetchMenuItemsFirebase(restaurantId),
-          getMenuCategories(restaurantId),
-          getMenuSubcategories(restaurantId) 
-        ]);
-        setTables(fetchedTables.sort((a, b) => a.tableNumber.localeCompare(b.tableNumber, undefined, { numeric: true })));
         setMenuItemsState(fetchedMenuItems);
         setCategoriesState(fetchedCategories.sort((a,b) => a.order - b.order));
         setSubcategoriesState(fetchedSubcategories.sort((a,b) => a.order - b.order));
-
       } else {
         toast({ variant: "destructive", title: "Access Denied", description: "Restaurant not found or you don't have permission." });
         router.replace('/dashboard');
       }
-    } catch (error) {
-      console.error("Error fetching restaurant data:", error);
-      toast({ variant: "destructive", title: "Error", description: "Could not load restaurant data." });
-    } finally {
-      setPageLoading(false);
-    }
-  }, [restaurantId, user, router, toast]);
+    }).catch(error => {
+      console.error("Error fetching initial restaurant/menu data:", error);
+      toast({ variant: "destructive", title: "Error", description: "Could not load initial restaurant data." });
+    }).finally(() => {
+      // Page loading will be set to false by tables listener
+    });
+  }, [restaurantId, user, role, authLoading, router, toast]);
 
+  // Real-time tables listener
   useEffect(() => {
-    if (authLoading) return;
-    if (!user || role !== 'owner') {
-      router.replace('/dashboard');
+    if (!restaurantId || !db || !user || role !== 'owner') return;
+    setPageLoading(true); // For initial table load
+    const tablesColRef = collection(db, getTablesCollectionPath(restaurantId));
+    const q = query(tablesColRef, orderBy('tableNumber', 'asc'));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const fetchedTables = snapshot.docs.map(docSnap => toFirebaseTableType(docSnap.id, docSnap.data()));
+      setTables(fetchedTables);
+      setPageLoading(false);
+    }, (error) => {
+      console.error("Error listening to tables:", error);
+      toast({ variant: "destructive", title: "Error", description: "Could not load live table data." });
+      setPageLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [restaurantId, user, role, toast]);
+
+
+  // Real-time orders for selected table
+  useEffect(() => {
+    // Clean up previous listener if selectedTable changes
+    if (ordersListenerUnsubscribeRef.current) {
+      ordersListenerUnsubscribeRef.current();
+      ordersListenerUnsubscribeRef.current = null;
+    }
+
+    if (!selectedTable || !restaurantId || !db) {
+      setSelectedTableOrders([]); // Clear orders if no table selected
+      setCurrentBillItems([]);
       return;
     }
-    if (restaurantId) {
-      fetchRestaurantAndTableData();
-    } else {
-      router.replace('/dashboard');
-    }
-  }, [restaurantId, user, role, authLoading, router, fetchRestaurantAndTableData]);
 
-  const handleSelectTable = async (table: FirebaseTableType) => {
-    setSelectedTable(table);
-    setIsBillPanelVisible(true);
-    setIsMenuSelectionPanelOpen(false); 
-    setFormSubmitting(true); 
-    try {
-      const orders = await getOrdersByTable(restaurantId, table.id, ['pending_kitchen', 'confirmed_by_kitchen', 'preparing', 'ready_for_pickup', 'served', 'payment_pending']);
+    setFormSubmitting(true); // Indicate loading orders for the bill
+    const ordersColRef = collection(db, getOrdersCollectionPath(restaurantId));
+    const activeStatuses: OrderStatus[] = ['pending_kitchen', 'confirmed_by_kitchen', 'preparing', 'ready_for_pickup', 'served', 'payment_pending'];
+    const q = query(ordersColRef, where('tableId', '==', selectedTable.id), where('status', 'in', activeStatuses), orderBy('createdAt', 'asc'));
+
+    ordersListenerUnsubscribeRef.current = onSnapshot(q, (snapshot) => {
+      const orders = snapshot.docs.map(docSnap => toClientOrder(docSnap.id, docSnap.data()));
       setSelectedTableOrders(orders);
+
       const aggregatedBillItems: OrderItem[] = orders.reduce((acc, order) => {
         order.items.forEach(item => {
           const existingItem = acc.find(bi => bi.menuItemId === item.menuItemId);
@@ -138,12 +202,27 @@ export default function TableManagementPage() {
         return acc;
       }, [] as OrderItem[]);
       setCurrentBillItems(aggregatedBillItems);
-    } catch (error: any) {
+      setFormSubmitting(false);
+    }, (error) => {
+      console.error(`Error listening to orders for table ${selectedTable.id}:`, error);
       toast({ variant: "destructive", title: "Error Loading Orders", description: error.message || "Could not load orders for this table." });
       setCurrentBillItems([]);
-    } finally {
       setFormSubmitting(false);
-    }
+    });
+
+    return () => { // Cleanup on component unmount or if selectedTable changes again
+      if (ordersListenerUnsubscribeRef.current) {
+        ordersListenerUnsubscribeRef.current();
+      }
+    };
+  }, [selectedTable, restaurantId, toast]);
+
+
+  const handleSelectTable = (table: FirebaseTableType) => {
+    setSelectedTable(table);
+    setIsBillPanelVisible(true);
+    setIsMenuSelectionPanelOpen(false); 
+    // Order fetching is now handled by the useEffect hook watching `selectedTable`
   };
 
   const handleAddItemToBill = (menuItem: MenuItemType, quantity: number = 1) => {
@@ -191,7 +270,10 @@ export default function TableManagementPage() {
     }
     setFormSubmitting(true);
     try {
+      // Find an existing "served" or "payment_pending" order to update, or create a new one.
+      // This logic might need refinement based on how you want to handle multiple "sessions" vs one continuous bill for a table.
       const activeOrder = selectedTableOrders.find(o => o.status === 'served' || o.status === 'payment_pending');
+      
       const subtotal = currentBillItems.reduce((sum, item) => sum + item.totalPrice, 0);
       const taxRate = restaurant?.taxRate ?? 0.10; 
       const taxAmount = subtotal * taxRate;
@@ -213,11 +295,13 @@ export default function TableManagementPage() {
         await createOrder(restaurantId, newOrderData);
         toast({ title: "Bill Finalized", description: `Bill for table ${selectedTable.tableNumber} created and pending payment.` });
       }
+      
+      // Update table status if needed (e.g., to 'occupied' if it wasn't already)
       if (selectedTable.status !== 'occupied' && selectedTable.status !== 'needs_cleaning') { 
          await updateTable(restaurantId, selectedTable.id, { status: 'occupied' }); 
+         // Real-time listener for tables will update the UI
       }
-      
-      handleSelectTable(selectedTable); 
+      // Real-time listener for orders will update the bill panel
     } catch (error: any) {
       toast({ variant: "destructive", title: "Finalization Failed", description: error.message || "Could not finalize bill." });
     } finally {
@@ -230,13 +314,13 @@ export default function TableManagementPage() {
     setFormSubmitting(true);
     try {
       if (editingTable) {
-        await updateTable(restaurantId, editingTable.id, { ...values, status: editingTable.status });
+        await updateTable(restaurantId, editingTable.id, { ...values, status: editingTable.status }); // Pass current status
         toast({ title: "Table Updated", description: `Table ${values.tableNumber} has been updated.` });
       } else {
         await addTable(restaurantId, values);
         toast({ title: "Table Added", description: `Table ${values.tableNumber} has been added.` });
       }
-      fetchRestaurantAndTableData(); 
+      // No need to manually refetch, onSnapshot will handle it
       setIsTableModalOpen(false);
       setEditingTable(null);
       form.reset({ tableNumber: '', capacity: 1 });
@@ -248,12 +332,13 @@ export default function TableManagementPage() {
   };
 
   const handleStatusChange = async (tableId: string, newStatus: TableStatus) => {
+    setFormSubmitting(true); // Use general form submitting for this action
     try {
       const tableToUpdate = tables.find(t => t.id === tableId);
       if (!tableToUpdate) return;
-      await updateTable(restaurantId, tableId, { status: newStatus, tableNumber: tableToUpdate.tableNumber, capacity: tableToUpdate.capacity });
+      await updateTable(restaurantId, tableId, { status: newStatus });
       toast({ title: "Status Updated", description: `Table ${tableToUpdate.tableNumber} is now ${newStatus}.` });
-      fetchRestaurantAndTableData(); 
+      // No need to manually refetch, onSnapshot will handle it
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message || "Failed to update status." });
     } finally {
@@ -271,7 +356,7 @@ export default function TableManagementPage() {
     try {
       await deleteTable(restaurantId, deleteConfirmation.data.id);
       toast({ title: "Table Deleted", description: `Table ${deleteConfirmation.data.tableNumber} has been deleted.` });
-      fetchRestaurantAndTableData(); 
+      // No need to manually refetch, onSnapshot will handle it
       setDeleteConfirmation(null);
        if (selectedTable?.id === deleteConfirmation.data.id) {
         setSelectedTable(null);
@@ -297,52 +382,47 @@ export default function TableManagementPage() {
     setIsTableModalOpen(true);
   };
 
-  if (authLoading || pageLoading) {
+  if (authLoading || pageLoading) { // pageLoading covers initial table and menu/restaurant data
     return <div className="flex h-screen items-center justify-center"><LoadingSpinner className="h-10 w-10 text-primary" /></div>;
   }
-  if (!restaurant) {
-    return <div className="flex h-screen items-center justify-center"><Card><CardHeader><CardTitle>Error</CardTitle></CardHeader><CardContent><p>Restaurant not found or no permission.</p></CardContent></Card></div>;
+  if (!restaurant && !pageLoading) { // Restaurant fetch failed
+    return <div className="flex h-screen items-center justify-center"><Card><CardHeader><CardTitle>Error</CardTitle></CardHeader><CardContent><p>Restaurant data could not be loaded.</p></CardContent></Card></div>;
   }
   
   const getDisplayTestLink = (storedQrValue: string) => {
     const configuredBaseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://6000-firebase-studio-1746809721561.cluster-ancjwrkgr5dvux4qug5rbzyc2y.cloudworkstations.dev';
     try {
-      const storedUrlObject = new URL(storedQrValue);
-      const pathAndQuery = storedUrlObject.pathname + storedUrlObject.search + storedUrlObject.hash;
-      const displayUrl = (configuredBaseUrl.endsWith('/') ? configuredBaseUrl.slice(0, -1) : configuredBaseUrl) + 
-                         (pathAndQuery.startsWith('/') ? pathAndQuery : '/' + pathAndQuery);
-      return displayUrl;
+      // Assuming storedQrValue is already a full URL
+      if (new URL(storedQrValue)) return storedQrValue;
     } catch (e) {
+      // Fallback if storedQrValue is not a full URL (e.g. just a path)
       if (storedQrValue.startsWith('/')) {
-         const displayUrl = (configuredBaseUrl.endsWith('/') ? configuredBaseUrl.slice(0, -1) : configuredBaseUrl) + storedQrValue;
-         return displayUrl;
+         return (configuredBaseUrl.endsWith('/') ? configuredBaseUrl.slice(0, -1) : configuredBaseUrl) + storedQrValue;
       }
-      console.warn("Could not reliably reconstruct test link from stored qrCodeValue:", storedQrValue);
-      return storedQrValue;
     }
+    console.warn("Could not reliably reconstruct test link from stored qrCodeValue:", storedQrValue);
+    return storedQrValue; // Return as is if no clear way to form URL
   };
   
-  // Dynamic classes for panel widths
   const tableGridPanelClasses = cn(
     "p-4 overflow-y-auto transition-all duration-300 ease-in-out flex-grow",
-     "w-full" // Table grid panel always takes full width now as menu is floating
+     "w-full" 
   );
 
   const billPanelClasses = cn(
     "p-4 border-l bg-card text-card-foreground overflow-y-auto flex flex-col transition-all duration-300 ease-in-out",
-    "w-full md:w-2/5" // Bill panel width (right side)
+    "w-full md:w-2/5" 
   );
   
   const menuSelectionPanelClasses = cn(
     "absolute top-0 left-0 h-full bg-card shadow-xl z-20 transition-transform duration-300 ease-in-out overflow-y-auto border-r",
-    "w-full sm:w-[350px] md:w-[320px] lg:w-[380px]", // Adjusted width for floating panel
+    "w-full sm:w-[350px] md:w-[320px] lg:w-[380px]", 
     isMenuSelectionPanelOpen ? "transform translate-x-0" : "transform -translate-x-full"
   );
 
 
   return (
-    <div className="flex h-[calc(100vh-theme(spacing.16)-1px)] overflow-hidden relative"> {/* Adjusted height for header */}
-      {/* Floating Menu Item Selection Panel - rendered before table grid to manage z-index if needed */}
+    <div className="flex h-[calc(100vh-theme(spacing.16)-1px)] overflow-hidden relative">
        {selectedTable && isBillPanelVisible && (
         <div className={menuSelectionPanelClasses}>
           {isMenuSelectionPanelOpen && ( 
@@ -357,9 +437,7 @@ export default function TableManagementPage() {
         </div>
       )}
       
-      {/* Main content area (Table Grid and Bill Panel) */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Table Grid Panel */}
         <div className={tableGridPanelClasses}>
           <Card className="shadow-xl h-full flex flex-col">
             <CardHeader>
@@ -368,7 +446,7 @@ export default function TableManagementPage() {
                     <CardTitle className="text-2xl md:text-3xl flex items-center">
                         <Users className="mr-3 h-7 w-7 text-primary" /> Table Management
                     </CardTitle>
-                    <CardDescription>Oversee tables for {restaurant.name}.</CardDescription>
+                    <CardDescription>Oversee tables for {restaurant?.name || 'your restaurant'}.</CardDescription>
                 </div>
                 <Button onClick={openAddModal} className="bg-accent hover:bg-accent/90 text-accent-foreground">
                   <PlusCircle className="mr-2 h-4 w-4" /> Add New Table
@@ -380,7 +458,7 @@ export default function TableManagementPage() {
                  <div className={`grid grid-cols-1 ${
                     (selectedTable && isBillPanelVisible) 
                       ? 'sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-2' 
-                      : 'sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4' // More columns if bill panel closed
+                      : 'sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4' 
                   } gap-4`}>
                   {tables.map(table => (
                     <Card 
@@ -427,7 +505,6 @@ export default function TableManagementPage() {
           </Card>
         </div>
 
-        {/* Right Panel: Bill Management (POS-like) */}
         {selectedTable && isBillPanelVisible && (
           <div className={billPanelClasses}>
             <BillPanel
@@ -536,7 +613,7 @@ const BillPanel = ({ selectedTable, billItems, isLoading, onUpdateItemQuantity, 
               {isMenuSelectionOpen ? <X className="h-4 w-4 mr-1" /> : <Utensils className="h-4 w-4 mr-1" />}
               {isMenuSelectionOpen ? 'Close Menu' : 'Add Items'}
             </Button>
-            <Button variant="ghost" size="icon" onClick={onClose} className="md:hidden"> {/* Only show close on mobile if Bill Panel itself is primary view */}
+            <Button variant="ghost" size="icon" onClick={onClose} className="md:hidden">
                 <X className="h-5 w-5" />
             </Button>
         </div>

@@ -7,8 +7,8 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { useAuth } from '@/lib/auth/context';
 import { getRestaurant } from '@/lib/firebase/firestore';
-import { getOrdersByRestaurant, updateOrderStatus } from '@/lib/firebase/orders';
-import type { RestaurantProfile, OrderStatus as OrderStatusType, OrderItem, ClientOrder } from '@/types'; // Import ClientOrder
+import { updateOrderStatus, getOrdersCollectionPath } from '@/lib/firebase/orders'; // Removed getOrdersByRestaurant
+import type { RestaurantProfile, OrderStatus as OrderStatusType, OrderItem, ClientOrder } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import LoadingSpinner from '@/components/shared/loading-spinner';
 import { Button } from '@/components/ui/button';
@@ -20,7 +20,6 @@ import { ShoppingCart, Eye, MoreHorizontal, Clock, Utensils, CheckCircle, XCircl
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from '@/hooks/use-toast';
 import { format, parseISO } from 'date-fns';
-// Timestamp import removed as we'll use ISO strings client-side
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,6 +30,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import type { DateRange } from "react-day-picker";
 import { cn } from '@/lib/utils';
+import { collection, query, where, orderBy, onSnapshot, Timestamp, QueryConstraint } from 'firebase/firestore'; // Added onSnapshot, Timestamp, QueryConstraint
+import { db } from '@/lib/firebase/config'; // Added db
+import { convertFirebaseTimestampToString } from '@/lib/firebase/utils'; // Utility for timestamp conversion
 
 const orderStatusConfig: Record<OrderStatusType, { label: string; color: string; icon?: React.ElementType, shortLabel?: string }> = {
   pending_customer_confirmation: { label: 'Pending Customer Confirmation', shortLabel: 'Pending Cust.', color: 'bg-gray-500 text-gray-50', icon: Clock },
@@ -58,8 +60,6 @@ const possibleNextStatuses: Record<OrderStatusType, OrderStatusType[]> = {
   cancelled_by_restaurant: [],
 };
 
-// ClientOrder interface definition removed, will be imported from @/types
-
 function DollarSignIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" > <line x1="12" x2="12" y1="2" y2="22" /> <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /> </svg>
@@ -81,6 +81,33 @@ const DETAILED_STATUS_OPTIONS = (Object.keys(orderStatusConfig) as OrderStatusTy
 }));
 
 const ALL_STATUSES_VALUE = "_all_"; 
+
+const toClientOrder = (docId: string, data: any): ClientOrder => {
+    const orderBase: Omit<ClientOrder, 'id' | 'createdAt' | 'updatedAt'> = {
+        restaurantId: data.restaurantId,
+        tableId: data.tableId || null,
+        tableNumber: data.tableNumber || null,
+        items: data.items as OrderItem[],
+        subtotal: data.subtotal,
+        totalAmount: data.totalAmount,
+        status: data.status as OrderStatusType,
+        taxAmount: typeof data.taxAmount === 'number' ? data.taxAmount : undefined,
+        serviceCharge: typeof data.serviceCharge === 'number' ? data.serviceCharge : undefined,
+        discountAmount: typeof data.discountAmount === 'number' ? data.discountAmount : undefined,
+        customerNotes: typeof data.customerNotes === 'string' ? data.customerNotes : undefined,
+        kitchenNotes: typeof data.kitchenNotes === 'string' ? data.kitchenNotes : undefined,
+        paymentMethod: typeof data.paymentMethod === 'string' ? data.paymentMethod : undefined,
+        transactionId: typeof data.transactionId === 'string' ? data.transactionId : undefined,
+    };
+
+    return {
+        id: docId,
+        ...orderBase,
+        createdAt: convertFirebaseTimestampToString(data.createdAt),
+        updatedAt: convertFirebaseTimestampToString(data.updatedAt),
+    };
+};
+
 
 export default function OrderManagementPage() {
   const params = useParams();
@@ -106,54 +133,74 @@ export default function OrderManagementPage() {
   const tableIdFilter = useMemo(() => searchParamsHook.get('tableId'), [searchParamsHook]);
 
 
-  const fetchRestaurantAndOrders = useCallback(async () => {
+  // Fetch restaurant data once
+  useEffect(() => {
     if (!restaurantId || !user) return;
     setPageLoading(true);
-    try {
-      const restaurantData = await getRestaurant(restaurantId);
-      if (restaurantData && (restaurantData.ownerId === user.uid || (role === 'staff' && user.restaurantId === restaurantId))) {
-        setRestaurant(restaurantData);
-        
-        let queryStatuses: OrderStatusType[] | undefined = undefined;
-        if (detailedStatusFilter) {
-          queryStatuses = [detailedStatusFilter];
-        } else if (activeMainTab !== 'all') {
-          queryStatuses = MAIN_TABS.find(tab => tab.value === activeMainTab)?.statuses;
+    getRestaurant(restaurantId)
+      .then(restaurantData => {
+        if (restaurantData && (restaurantData.ownerId === user.uid || (role === 'staff' && user.restaurantId === restaurantId))) {
+          setRestaurant(restaurantData);
+        } else {
+          toast({ variant: "destructive", title: "Access Denied", description: "Restaurant not found or you don't have permission." });
+          router.replace('/dashboard');
         }
-        
-        let startDateISOString: string | undefined = undefined;
-        let endDateISOString: string | undefined = undefined;
+      })
+      .catch(error => {
+        console.error("Error fetching restaurant data:", error);
+        toast({ variant: "destructive", title: "Error", description: "Could not load restaurant data." });
+      })
+      .finally(() => setPageLoading(false)); // Initial restaurant load done
+  }, [restaurantId, user, role, router, toast]);
 
-        if (dateRange?.from) {
-          startDateISOString = dateRange.from.toISOString();
-        }
-        if (dateRange?.to) {
-            const toDate = new Date(dateRange.to);
-            toDate.setHours(23, 59, 59, 999); 
-            endDateISOString = toDate.toISOString();
-        }
+  // Real-time orders listener
+  useEffect(() => {
+    if (!restaurantId || !user || !db) return; // Ensure db is initialized
 
-        const fetchedOrdersRaw = await getOrdersByRestaurant(
-          restaurantId, 
-          queryStatuses, 
-          startDateISOString, 
-          endDateISOString, 
-          tableIdFilter || undefined
-        );
-        
-        // fetchedOrdersRaw is now ClientOrder[], so direct assignment is fine
-        setAllFetchedOrders(fetchedOrdersRaw);
-      } else {
-        toast({ variant: "destructive", title: "Access Denied", description: "Restaurant not found or you don't have permission." });
-        router.replace('/dashboard');
-      }
-    } catch (error) {
-      console.error("Error fetching data:", error);
-      toast({ variant: "destructive", title: "Error", description: "Could not load order data." });
-    } finally {
-      setPageLoading(false);
+    setPageLoading(true); // Loading while initial snapshot is fetched
+    const ordersColRef = collection(db, getOrdersCollectionPath(restaurantId));
+    
+    const queryConstraints: QueryConstraint[] = [];
+
+    let statusFilterToUse: OrderStatusType[] | undefined = undefined;
+    if (detailedStatusFilter) {
+      statusFilterToUse = [detailedStatusFilter];
+    } else if (activeMainTab !== 'all') {
+      statusFilterToUse = MAIN_TABS.find(tab => tab.value === activeMainTab)?.statuses;
     }
-  }, [restaurantId, user, role, router, toast, activeMainTab, detailedStatusFilter, dateRange, tableIdFilter]);
+
+    if (statusFilterToUse && statusFilterToUse.length > 0) {
+      queryConstraints.push(where('status', 'in', statusFilterToUse));
+    }
+    if (dateRange?.from) {
+      queryConstraints.push(where('createdAt', '>=', Timestamp.fromDate(dateRange.from)));
+    }
+    if (dateRange?.to) {
+      const toDate = new Date(dateRange.to);
+      toDate.setHours(23, 59, 59, 999);
+      queryConstraints.push(where('createdAt', '<=', Timestamp.fromDate(toDate)));
+    }
+    if (tableIdFilter) {
+      queryConstraints.push(where('tableId', '==', tableIdFilter));
+    }
+    queryConstraints.push(orderBy('createdAt', 'desc'));
+
+    const q = query(ordersColRef, ...queryConstraints);
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const fetchedOrders = snapshot.docs.map(docSnap => toClientOrder(docSnap.id, docSnap.data()));
+      setAllFetchedOrders(fetchedOrders);
+      setPageLoading(false); // Data received
+    }, (error) => {
+      console.error("Error listening to orders:", error);
+      toast({ variant: "destructive", title: "Error", description: "Could not load live order data." });
+      setPageLoading(false);
+    });
+
+    return () => unsubscribe(); // Cleanup listener on unmount or when dependencies change
+
+  }, [restaurantId, user, activeMainTab, detailedStatusFilter, dateRange, tableIdFilter, toast]);
+
 
   useEffect(() => {
     if (authLoading) return;
@@ -163,10 +210,11 @@ export default function OrderManagementPage() {
     if (role === 'staff' && user.restaurantId !== restaurantId) {
       router.replace('/dashboard'); return;
     }
-    if (restaurantId) fetchRestaurantAndOrders();
-    else router.replace('/dashboard');
-  }, [restaurantId, user, role, authLoading, router, fetchRestaurantAndOrders]);
+    // Initial restaurant fetch is handled by its own useEffect
+    // Order fetching is now real-time and handled by its own useEffect
+  }, [restaurantId, user, role, authLoading, router]);
 
+  // Client-side filtering for price and sorting
   useEffect(() => {
     let filtered = [...allFetchedOrders];
 
@@ -189,7 +237,6 @@ export default function OrderManagementPage() {
         } else if (typeof valA === 'number' && typeof valB === 'number') {
           comparison = valA - valB;
         }
-        // Add more type checks if other sortable fields exist
         return sortConfig.direction === 'ascending' ? comparison : -comparison;
       });
     }
@@ -201,7 +248,7 @@ export default function OrderManagementPage() {
     try {
       await updateOrderStatus(restaurantId, orderId, newStatus);
       toast({ title: "Order Status Updated", description: `Order marked as ${orderStatusConfig[newStatus].label}.` });
-      fetchRestaurantAndOrders(); 
+      // No need to manually refetch, onSnapshot will handle it
     } catch (error: any) {
       toast({ variant: "destructive", title: "Update Failed", description: error.message || "Could not update order status." });
     } finally {
@@ -222,10 +269,20 @@ export default function OrderManagementPage() {
     return `${totalQuantity} item${totalQuantity > 1 ? 's' : ''}`;
   };
 
-  if (authLoading || (pageLoading && !restaurant)) {
+  const handleClearFilters = () => {
+    setActiveMainTab('active'); // Reset main tab
+    setDetailedStatusFilter(null);
+    setDateRange(undefined);
+    setPriceRange({ min: '', max: '' });
+    // tableIdFilter is from URL, not reset here
+    // sortConfig can be reset if desired, e.g., setSortConfig({ key: 'createdAt', direction: 'descending' });
+  };
+
+
+  if (authLoading || (pageLoading && !restaurant && allFetchedOrders.length === 0)) {
     return <div className="flex h-full items-center justify-center"><LoadingSpinner className="h-10 w-10 text-primary" /></div>;
   }
-  if (!restaurant) {
+  if (!restaurant && !pageLoading) { // Check if restaurant fetch failed but pageLoading is false
     return <Card><CardHeader><CardTitle>Error</CardTitle></CardHeader><CardContent><p>Restaurant data could not be loaded.</p></CardContent></Card>;
   }
   
@@ -246,13 +303,13 @@ export default function OrderManagementPage() {
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
             <div className="mb-4 md:mb-0">
               <CardTitle className="text-2xl md:text-3xl flex items-center"> <ShoppingCart className="mr-3 h-7 w-7 text-primary" /> Order Management </CardTitle>
-              <CardDescription> View and manage orders for {restaurant.name}. {tableIdFilter ? `(Filtered for Table ${allFetchedOrders.find(o => o.tableId === tableIdFilter)?.tableNumber || tableIdFilter})` : ''} </CardDescription>
+              <CardDescription> View and manage orders for {restaurant?.name || 'your restaurant'}. {tableIdFilter ? `(Filtered for Table ${allFetchedOrders.find(o => o.tableId === tableIdFilter)?.tableNumber || tableIdFilter})` : ''} </CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent>
           <div className="mb-6 space-y-4">
-            <Tabs value={activeMainTab} onValueChange={(value) => { setActiveMainTab(value as MainTabValue); setDetailedStatusFilter(null); fetchRestaurantAndOrders(); }} className="w-full">
+            <Tabs value={activeMainTab} onValueChange={(value) => setActiveMainTab(value as MainTabValue)} className="w-full">
               <TabsList className="grid w-full grid-cols-2 sm:flex sm:flex-wrap">
                 {MAIN_TABS.map(tab => ( <TabsTrigger key={tab.value} value={tab.value} className="text-xs px-2 py-1.5 h-auto sm:flex-initial"> {tab.label} </TabsTrigger> ))}
               </TabsList>
@@ -264,15 +321,7 @@ export default function OrderManagementPage() {
                 <Select 
                   value={detailedStatusFilter || ALL_STATUSES_VALUE} 
                   onValueChange={(value) => {
-                    if (value === ALL_STATUSES_VALUE) {
-                      setDetailedStatusFilter(null);
-                    } else {
-                      setDetailedStatusFilter(value as OrderStatusType);
-                    }
-                    // Trigger fetch on change
-                    // Consider debouncing or a separate apply button if performance is an issue
-                    // For now, direct fetch:
-                    // fetchRestaurantAndOrders(); // This might be too frequent, handled by main useEffect on detailedStatusFilter change
+                    setDetailedStatusFilter(value === ALL_STATUSES_VALUE ? null : value as OrderStatusType);
                   }}
                 >
                   <SelectTrigger id="detailed-status-filter" className="h-10"><SelectValue placeholder="Select status..." /></SelectTrigger>
@@ -303,8 +352,8 @@ export default function OrderManagementPage() {
                     <Input type="number" placeholder="Max $" value={priceRange.max} onChange={e => setPriceRange(p => ({...p, max: e.target.value}))} className="h-10" />
                  </div>
               </div>
-              <Button onClick={() => {setDetailedStatusFilter(null); setDateRange(undefined); setPriceRange({min:'', max:''}); setActiveMainTab('active'); fetchRestaurantAndOrders();}} variant="outline" className="h-10 self-end">
-                <Filter className="mr-2 h-4 w-4"/> Clear Filters &amp; Reload
+              <Button onClick={handleClearFilters} variant="outline" className="h-10 self-end">
+                <Filter className="mr-2 h-4 w-4"/> Clear Filters
               </Button>
             </div>
           </div>
@@ -374,3 +423,4 @@ export default function OrderManagementPage() {
     </div>
   );
 }
+
