@@ -1,4 +1,3 @@
-
 // src/lib/firebase/tables.ts
 'use server';
 import {
@@ -16,6 +15,7 @@ import {
   Timestamp,
   collectionGroup,
   limit,
+  setDoc, // Added setDoc
 } from 'firebase/firestore';
 import { db } from './config';
 import type { Table, TableStatus } from '@/types';
@@ -27,49 +27,37 @@ const getTablesCollection = (restaurantId: string) => {
 
 export async function addTable(restaurantId: string, tableData: Omit<Table, 'id' | 'restaurantId' | 'tableDocId' | 'qrCodeValue' | 'createdAt' | 'updatedAt' | 'status'>): Promise<Table> {
   const tablesCol = getTablesCollection(restaurantId);
-  const now = Timestamp.now();
+  const nowTimestamp = Timestamp.now();
   
-  // Temporary docRef to get an ID
-  const tempDocRef = doc(tablesCol); // Create a reference to get an ID
-  const tableId = tempDocRef.id;
+  // Generate a reference with a new unique ID for the table document
+  const newTableRef = doc(tablesCol);
+  const tableId = newTableRef.id;
 
-  const fullTableData = {
-    ...tableData,
+  const finalQrCodeValue = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://6000-firebase-studio-1746809721561.cluster-ancjwrkgr5dvux4qug5rbzyc2y.cloudworkstations.dev'}/menu/table/${tableId}`;
+
+  const fullTableData: Omit<Table, 'id' | 'createdAt' | 'updatedAt'> & { createdAt: Timestamp; updatedAt: Timestamp } = {
+    ...tableData, // Includes tableNumber, capacity, and optionally currentOrderIds
     restaurantId,
-    tableDocId: tableId, // Store the document ID as a field
+    tableDocId: tableId, // Set tableDocId to the document's own ID
     status: 'available' as TableStatus,
-    createdAt: now, 
-    updatedAt: now, 
-    qrCodeValue: `${process.env.NEXT_PUBLIC_BASE_URL || 'https://6000-firebase-studio-1746809721561.cluster-ancjwrkgr5dvux4qug5rbzyc2y.cloudworkstations.dev'}/menu/table/${tableId}`,
+    qrCodeValue: finalQrCodeValue,
+    createdAt: nowTimestamp, 
+    updatedAt: nowTimestamp, 
   };
 
-  // Use setDoc with the pre-generated ID
-  await addDoc(tablesCol, fullTableData); // addDoc will generate a new ID, we actually want to set the ID we generated.
-                                       // Let's correct this to use setDoc if we want to control the ID, or let addDoc generate it and then update.
-                                       // For simplicity, let addDoc generate, then update with tableDocId.
+  // Use setDoc to create the document with the pre-generated ID and all fields atomically
+  await setDoc(newTableRef, fullTableData);
 
-  const docRef = await addDoc(tablesCol, {
-    ...tableData,
-    restaurantId,
-    status: 'available'as TableStatus,
-    createdAt: now,
-    updatedAt: now,
-    // qrCodeValue will be updated shortly
-  });
-  
-  const finalQrCodeValue = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://6000-firebase-studio-1746809721561.cluster-ancjwrkgr5dvux4qug5rbzyc2y.cloudworkstations.dev'}/menu/table/${docRef.id}`;
-  await updateDoc(docRef, { qrCodeValue: finalQrCodeValue, tableDocId: docRef.id });
-
-
+  // Return the Table object with stringified timestamps as per the Table type
   return {
-    id: docRef.id,
+    id: tableId,
     ...tableData,
     restaurantId,
-    tableDocId: docRef.id,
+    tableDocId: tableId,
     qrCodeValue: finalQrCodeValue,
     status: 'available' as TableStatus,
-    createdAt: now.toDate().toISOString(),
-    updatedAt: now.toDate().toISOString(),
+    createdAt: nowTimestamp.toDate().toISOString(),
+    updatedAt: nowTimestamp.toDate().toISOString(),
   };
 }
 
@@ -108,7 +96,7 @@ export async function getTableByDocIdFromGroup(tableDocIdToFind: string): Promis
   if (!db) throw new Error("Firestore is not initialized.");
   const tablesGroupRef = collectionGroup(db, 'tables');
   // Note: This query requires a composite index on `tableDocId` for the `tables` collection group.
-  // Firestore will likely provide a link to create this index in the console error if it's missing.
+  // Firestore will likely provide a link to create this index in your Firebase console if it's missing.
   const q = query(tablesGroupRef, where('tableDocId', '==', tableDocIdToFind), limit(1));
   
   const snapshot = await getDocs(q);
@@ -140,11 +128,8 @@ export async function updateTable(restaurantId: string, tableId: string, data: P
   
   const updateData: any = { ...data, updatedAt: serverTimestamp() };
   
-  if (typeof data.createdAt === 'string') delete updateData.createdAt;
-  if (data.qrCodeValue === undefined && data.tableDocId === undefined) { // ensure we don't accidentally overwrite tableDocId if not intended by partial update
-      // If tableDocId is not part of `data`, it means it's not being changed.
-  }
-
+  if (typeof data.createdAt === 'string') delete updateData.createdAt; // Prevent client-side string timestamp from overwriting server timestamp
+  // qrCodeValue and tableDocId should generally not be part of partial updates unless specifically intended.
 
   await updateDoc(tableRef, updateData);
 }
@@ -154,3 +139,4 @@ export async function deleteTable(restaurantId: string, tableId: string): Promis
   const tableRef = doc(db, 'restaurants', restaurantId, 'tables', tableId);
   await deleteDoc(tableRef);
 }
+
