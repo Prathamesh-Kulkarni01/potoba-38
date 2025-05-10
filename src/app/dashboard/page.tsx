@@ -5,12 +5,11 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/auth/context';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ChefHat, BarChart3, Utensils, Settings, UserCog, Users, SquareMenu, Store, DollarSign, ShoppingCart, Star, LineChart, BookCopy, ShieldCheck, ScanText } from 'lucide-react'; // Added BookCopy, ShieldCheck, ScanText
+import { ChefHat, BarChart3, Utensils, Settings, UserCog, Users, SquareMenu, Store, DollarSign, ShoppingCart, Star, LineChart, BookCopy, ShieldCheck, ScanText, ListOrdered, Briefcase } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { getRestaurantsByOwner, getRestaurant } from '@/lib/firebase/firestore'; // For fetching restaurant name
+import { getRestaurantsByOwner, getRestaurant } from '@/lib/firebase/firestore'; 
 import type { RestaurantProfile } from '@/types';
-import { useParams, useSearchParams } from 'next/navigation'; // For potential query param based selection
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, LineChart as RechartsLineChart, Line } from 'recharts';
 
 
@@ -234,37 +233,51 @@ function OwnerDashboard() {
                 </Card>
             </div>
 
-            {/* Quick Actions Row */}
              <Card className="shadow-md">
                 <CardHeader>
-                    <CardTitle className="text-lg">Quick Actions</CardTitle>
+                    <CardTitle className="text-lg">Quick Management Actions</CardTitle>
                 </CardHeader>
-                <CardContent className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                    <Button variant="outline" asChild className="flex-1">
-                        <Link href={`/dashboard/restaurant/${selectedRestaurantId}`}>
-                            <Store className="mr-2 h-4 w-4"/> Details
-                        </Link>
-                    </Button>
-                     <Button variant="outline" asChild className="flex-1">
-                        <Link href={`/dashboard/menu-management/${selectedRestaurantId}`}>
-                            <BookCopy className="mr-2 h-4 w-4"/> Menu
-                        </Link>
-                    </Button>
-                    <Button variant="outline" asChild className="flex-1">
-                        <Link href={`/dashboard/staff/${selectedRestaurantId}`}>
-                            <Users className="mr-2 h-4 w-4"/> Staff
-                        </Link>
-                    </Button>
-                    <Button variant="outline" asChild className="flex-1">
-                         <Link href={`/dashboard/meal-planner/${selectedRestaurantId}`}>
-                            <SquareMenu className="mr-2 h-4 w-4"/> Planner
-                        </Link>
-                    </Button>
-                    <Button variant="outline" asChild className="flex-1">
-                        <Link href={`/dashboard/restaurant/${selectedRestaurantId}/settings`}>
-                            <Settings className="mr-2 h-4 w-4"/> Settings
-                        </Link>
-                    </Button>
+                <CardContent className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 gap-4">
+                    <DashboardNavigationCard
+                        title="Menu Management"
+                        description="Add, edit, and organize your menu items and categories."
+                        icon={<BookCopy className="h-8 w-8 text-accent" />}
+                        actionText="Manage Menu"
+                        actionHref={`/dashboard/menu-management/${selectedRestaurantId}`}
+                        imageUrl="https://picsum.photos/seed/menumgmt/400/200"
+                        dataAiHint="food menu list"
+                        small
+                    />
+                    <DashboardNavigationCard
+                        title="Table Management"
+                        description="Oversee table statuses, assignments, and QR codes."
+                        icon={<Briefcase className="h-8 w-8 text-accent" />}
+                        actionText="Manage Tables"
+                        actionHref={`/dashboard/table-management/${selectedRestaurantId}`}
+                        imageUrl="https://picsum.photos/seed/tablemgmt/400/200"
+                        dataAiHint="restaurant tables layout"
+                        small
+                    />
+                    <DashboardNavigationCard
+                        title="Order Management"
+                        description="View and process incoming customer orders in real-time."
+                        icon={<ListOrdered className="h-8 w-8 text-accent" />}
+                        actionText="View Orders"
+                        actionHref={`/dashboard/orders/${selectedRestaurantId}`}
+                        imageUrl="https://picsum.photos/seed/ordermgmt/400/200"
+                        dataAiHint="order tickets list"
+                        small
+                    />
+                     <DashboardNavigationCard
+                        title="Restaurant Settings"
+                        description="Configure details for this specific restaurant."
+                        icon={<Settings className="h-8 w-8 text-accent" />}
+                        actionText="Settings"
+                        actionHref={`/dashboard/restaurant/${selectedRestaurantId}/settings`}
+                        imageUrl="https://picsum.photos/seed/restosettings/400/200"
+                        dataAiHint="settings gear"
+                        small
+                    />
                 </CardContent>
             </Card>
         </CardContent>
@@ -276,7 +289,7 @@ function OwnerDashboard() {
 
 function UserDashboard() {
   const { user } = useAuth();
-  const restaurantContextId = user?.restaurantId || 'default'; // Fallback for general users if needed
+  const restaurantContextId = user?.restaurantId || 'default'; 
 
   return (
     <div className="space-y-6">
@@ -292,9 +305,12 @@ function UserDashboard() {
           <DashboardNavigationCard
             title="Browse Menus"
             description="Discover delicious dishes from various restaurants."
-            icon={<BookCopy className="h-8 w-8 text-accent" />} // Changed from Utensils to BookCopy
+            icon={<BookCopy className="h-8 w-8 text-accent" />} 
             actionText="Find Menus"
-            actionHref={`/dashboard/menu-management/${restaurantContextId}`} // Generic or context-based link
+            // For a general user, this might link to a directory or a default/featured restaurant's menu
+            // If staff, it uses user.restaurantId. For a general user, this needs a target.
+            // The scan-to-order feature will likely use a different entry point (e.g. /menu/[qrCodeId])
+            actionHref={user?.restaurantId ? `/dashboard/menu-management/${user.restaurantId}` : `/menu/table/demoTableIdForUser`} 
             imageUrl="https://picsum.photos/seed/menus/400/200"
             dataAiHint="food variety"
           />
@@ -303,7 +319,7 @@ function UserDashboard() {
             description="Organize your weekly meals effortlessly."
             icon={<SquareMenu className="h-8 w-8 text-accent" />}
             actionText="Plan Meals"
-            actionHref={`/dashboard/meal-planner/${restaurantContextId}`}
+            actionHref={user?.restaurantId ? `/dashboard/meal-planner/${user.restaurantId}` : '/dashboard/meal-planner/default'}
             imageUrl="https://picsum.photos/seed/mealplanner/400/200"
             dataAiHint="calendar schedule"
           />
@@ -330,21 +346,22 @@ interface DashboardNavigationCardProps {
   actionHref: string;
   imageUrl: string;
   dataAiHint: string;
+  small?: boolean; 
 }
 
-function DashboardNavigationCard({ title, description, icon, actionText, actionHref, imageUrl, dataAiHint }: DashboardNavigationCardProps) {
+function DashboardNavigationCard({ title, description, icon, actionText, actionHref, imageUrl, dataAiHint, small = false }: DashboardNavigationCardProps) {
   return (
-    <Card className="overflow-hidden transition-all hover:scale-[1.02] hover:shadow-lg">
-      <Image src={imageUrl} alt={title} width={400} height={200} className="w-full h-40 object-cover" data-ai-hint={dataAiHint}/>
-      <CardHeader>
-        <div className="flex items-center gap-3 mb-2">
-          {icon}
-          <CardTitle className="text-xl">{title}</CardTitle>
+    <Card className={`overflow-hidden transition-all hover:scale-[1.02] hover:shadow-lg ${small ? 'flex flex-col' : ''}`}>
+      <Image src={imageUrl} alt={title} width={small ? 300 : 400} height={small ? 150 : 200} className={`w-full ${small ? 'h-32' : 'h-40'} object-cover`} data-ai-hint={dataAiHint}/>
+      <CardHeader className={small ? 'p-3' : 'p-6'}>
+        <div className={`flex items-center gap-3 ${small ? 'mb-1' : 'mb-2'}`}>
+          {React.cloneElement(icon as React.ReactElement, small ? {className: "h-6 w-6 text-accent"} : {})}
+          <CardTitle className={small ? 'text-md' : 'text-xl'}>{title}</CardTitle>
         </div>
-        <CardDescription>{description}</CardDescription>
+        <CardDescription className={small ? 'text-xs leading-snug' : ''}>{description}</CardDescription>
       </CardHeader>
-      <CardContent>
-        <Button asChild className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
+      <CardContent className={`${small ? 'p-3 pt-0 mt-auto' : 'p-6 pt-0'}`}>
+        <Button asChild className={`w-full bg-primary hover:bg-primary/90 text-primary-foreground ${small ? 'h-8 text-xs' : ''}`}>
           <Link href={actionHref}>{actionText}</Link>
         </Button>
       </CardContent>
@@ -387,7 +404,7 @@ export default function DashboardPage() {
     dashboardComponent = <AdminDashboard />;
   } else if (role === 'owner') {
     dashboardComponent = <OwnerDashboard />;
-  } else { // Covers 'staff' and 'user'
+  } else { 
     dashboardComponent = <UserDashboard />;
   }
 

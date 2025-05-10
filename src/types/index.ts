@@ -90,3 +90,62 @@ export interface MenuItem {
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
+
+// Table Management System Types
+export type TableStatus = 'available' | 'occupied' | 'reserved' | 'needs_cleaning';
+
+export interface Table {
+  id: string; // Firestore document ID
+  restaurantId: string;
+  tableNumber: string; // User-defined table identifier (e.g., "T1", "A5", "Patio 2")
+  capacity: number;
+  status: TableStatus;
+  qrCodeValue: string; // String value to be encoded in QR (e.g., URL to /menu/table/{id})
+  currentOrderIds?: string[]; // IDs of active orders associated with this table for a session
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+// Ordering System Types
+export type OrderStatus = 
+  | 'pending_customer_confirmation' // Cart submitted by customer, awaiting their final OK
+  | 'pending_kitchen'               // Customer confirmed, awaiting kitchen acknowledgement
+  | 'confirmed_by_kitchen'          // Kitchen acknowledged, will prepare
+  | 'preparing'                     // Order is being prepared
+  | 'ready_for_pickup'            // Food is ready at the counter/pass (for self-pickup or staff)
+  | 'served'                        // Order served to the table
+  | 'payment_pending'               // Bill presented, awaiting payment
+  | 'completed'                     // Paid and finished
+  | 'cancelled_by_customer'
+  | 'cancelled_by_restaurant';
+
+export interface OrderItem {
+  menuItemId: string;
+  menuItemName: string;
+  quantity: number;
+  unitPrice: number; // Price at the time of order for this item
+  totalPrice: number; // quantity * unitPrice
+  variantChoices?: { variantName: string; optionName: string; optionPrice: number }[]; // Record chosen variants
+  notes?: string; // Customer notes for this specific item
+}
+
+export interface Order {
+  id: string; // Firestore document ID
+  restaurantId: string;
+  tableId: string; // Reference to the Table.id
+  tableNumber: string; // Denormalized for easier display
+  items: OrderItem[];
+  subtotal: number; // Sum of all OrderItem.totalPrice
+  taxAmount?: number;
+  serviceCharge?: number;
+  discountAmount?: number;
+  totalAmount: number; // subtotal + tax + serviceCharge - discount
+  status: OrderStatus;
+  customerNotes?: string; // General notes for the entire order
+  kitchenNotes?: string; // Notes from staff to kitchen or vice-versa
+  paymentMethod?: string;
+  transactionId?: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  // Potentially: customerId (if users can log in to order)
+}
