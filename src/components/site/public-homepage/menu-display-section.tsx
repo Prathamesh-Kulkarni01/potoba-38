@@ -9,6 +9,7 @@ import { Utensils } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface MenuDisplaySectionProps {
+  restaurantId: string; // Added for DishCard links
   popularDishes: (MenuItem & { createdAt: string; updatedAt: string })[];
   menuItems: (MenuItem & { createdAt: string; updatedAt: string })[]; // These are already filtered by activeCategory
   allMenuItems: (MenuItem & { createdAt: string; updatedAt: string })[]; // All available items
@@ -20,6 +21,7 @@ interface MenuDisplaySectionProps {
 }
 
 export default function MenuDisplaySection({
+  restaurantId,
   popularDishes,
   menuItems,
   allMenuItems,
@@ -85,7 +87,7 @@ export default function MenuDisplaySection({
             </h3>
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
               {itemsToDisplay.map((dish) => (
-                <DishCard key={dish.id} dish={dish} onAddToCart={onAddToCart} />
+                <DishCard key={dish.id} dish={dish} restaurantId={restaurantId} onAddToCart={onAddToCart} />
               ))}
             </div>
           </>
@@ -111,3 +113,4 @@ export default function MenuDisplaySection({
     </section>
   );
 }
+

@@ -5,17 +5,21 @@ import Image from 'next/image';
 import type { MenuItem } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { PlusCircle, Utensils } from 'lucide-react';
+import { PlusCircle, Utensils, Eye } from 'lucide-react';
+import Link from 'next/link';
 
 interface DishCardProps {
   dish: MenuItem & { createdAt: string; updatedAt: string };
+  restaurantId: string; // Added to form the link
   onAddToCart: (dish: MenuItem) => void;
 }
 
-export default function DishCard({ dish, onAddToCart }: DishCardProps) {
+export default function DishCard({ dish, restaurantId, onAddToCart }: DishCardProps) {
+  const itemDetailUrl = `/site/${restaurantId}/item/${dish.id}`;
+
   return (
-    <Card className="flex h-full transform flex-col overflow-hidden rounded-lg border border-border bg-card shadow-md transition-all duration-300 hover:shadow-xl hover:-translate-y-1">
-      <div className="relative h-48 w-full">
+    <Card className="flex h-full transform flex-col overflow-hidden rounded-lg border border-border bg-card shadow-md transition-all duration-300 hover:shadow-xl hover:-translate-y-1 group">
+      <Link href={itemDetailUrl} className="block relative h-48 w-full">
         {dish.imageUrl ? (
           <Image
             src={dish.imageUrl}
@@ -30,11 +34,13 @@ export default function DishCard({ dish, onAddToCart }: DishCardProps) {
             <Utensils className="h-16 w-16" />
           </div>
         )}
-      </div>
+      </Link>
       <CardHeader className="p-4">
-        <CardTitle className="truncate text-lg font-semibold text-foreground group-hover:text-primary">
-          {dish.name}
-        </CardTitle>
+        <Link href={itemDetailUrl}>
+          <CardTitle className="truncate text-lg font-semibold text-foreground group-hover:text-primary">
+            {dish.name}
+          </CardTitle>
+        </Link>
         <p className="text-md font-bold text-primary">${dish.price.toFixed(2)}</p>
       </CardHeader>
       <CardContent className="flex-grow p-4 pt-0">
@@ -42,16 +48,24 @@ export default function DishCard({ dish, onAddToCart }: DishCardProps) {
           {dish.description || 'No description available.'}
         </CardDescription>
       </CardContent>
-      <CardFooter className="mt-auto p-4">
+      <CardFooter className="mt-auto p-4 flex gap-2">
         <Button
           onClick={() => onAddToCart(dish)}
-          className="w-full bg-accent font-semibold text-accent-foreground shadow-sm transition-shadow hover:bg-accent/90 hover:shadow-md"
+          className="flex-1 bg-accent font-semibold text-accent-foreground shadow-sm transition-shadow hover:bg-accent/90 hover:shadow-md"
           disabled={!dish.availability}
+          size="sm"
         >
           <PlusCircle className="mr-2 h-5 w-5" />
-          {dish.availability ? 'Add to Cart' : 'Unavailable'}
+          {dish.availability ? 'Add' : 'Unavailable'}
+        </Button>
+        <Button variant="outline" size="sm" asChild className="flex-1">
+          <Link href={itemDetailUrl}>
+            <Eye className="mr-2 h-4 w-4" />
+            Details
+          </Link>
         </Button>
       </CardFooter>
     </Card>
   );
 }
+

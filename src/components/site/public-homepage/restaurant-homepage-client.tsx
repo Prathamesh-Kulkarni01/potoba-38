@@ -86,6 +86,7 @@ export default function RestaurantHomepageClient({
         />
         
         <MenuDisplaySection
+          restaurantId={restaurant.id}
           popularDishes={popularDishes}
           menuItems={filteredMenuItems}
           allMenuItems={allMenuItems} // Pass all for potential full menu view within section
@@ -110,3 +111,4 @@ export default function RestaurantHomepageClient({
     </div>
   );
 }
+
