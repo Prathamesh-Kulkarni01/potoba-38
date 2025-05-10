@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import type { RestaurantProfile, MenuCategory, MenuSubcategory, MenuItem } from '@/types';
@@ -9,8 +10,8 @@ import MenuDisplaySection from './menu-display-section';
 import SpecialOffersSection from './special-offers-section';
 import AboutRestaurantSection from './about-restaurant-section';
 import SiteFooter from './site-footer';
-import type { CartItem } from './cart-store'; // Assuming cart-store.ts will be created
-import { useCart } from './cart-store'; // Assuming cart-store.ts will be created
+import type { CartItem } from './cart-store'; 
+import { useCart } from './cart-store'; 
 
 interface RestaurantHomepageClientProps {
   restaurant: RestaurantProfile & { createdAt: string; updatedAt: string };
@@ -39,7 +40,6 @@ export default function RestaurantHomepageClient({
     return allMenuItems.filter(item => item.categoryId === activeCategoryId && item.availability);
   }, [allMenuItems, activeCategoryId]);
 
-  // Effect to handle scroll-based shadow on navbar (can be moved into TopNavigationBar if preferred)
   const [showNavShadow, setShowNavShadow] = useState(false);
   useEffect(() => {
     const handleScroll = () => {
@@ -56,7 +56,7 @@ export default function RestaurantHomepageClient({
       quantity: quantity,
       unitPrice: item.price,
       totalPrice: item.price * quantity,
-      imageUrl: item.imageUrl || undefined, // Add imageUrl to CartItem if needed for cart display
+      imageUrl: item.imageUrl || undefined, 
     };
     addToCart(cartItem);
   };
@@ -76,7 +76,6 @@ export default function RestaurantHomepageClient({
           cuisineType={restaurant.type || 'Delicious'}
           heroImageUrl={`https://picsum.photos/seed/${restaurant.id}hero/1920/1080`}
           onOrderNowClick={() => {
-            // Potentially scroll to menu section or set a default category
             const menuSection = document.getElementById('menu-section');
             if (menuSection) {
               menuSection.scrollIntoView({ behavior: 'smooth' });
@@ -89,9 +88,9 @@ export default function RestaurantHomepageClient({
           restaurantId={restaurant.id}
           popularDishes={popularDishes}
           menuItems={filteredMenuItems}
-          allMenuItems={allMenuItems} // Pass all for potential full menu view within section
+          allMenuItems={allMenuItems} 
           categories={categories}
-          subcategories={subcategories} // Pass subcategories if needed for grouping within MenuDisplaySection
+          subcategories={subcategories} 
           activeCategoryId={activeCategoryId}
           onCategorySelect={setActiveCategoryId}
           onAddToCart={handleAddToCart}
@@ -111,4 +110,3 @@ export default function RestaurantHomepageClient({
     </div>
   );
 }
-
