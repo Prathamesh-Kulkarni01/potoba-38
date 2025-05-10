@@ -325,109 +325,25 @@ export default function TableManagementPage() {
   // Dynamic classes for panel widths
   const tableGridPanelClasses = cn(
     "p-4 overflow-y-auto transition-all duration-300 ease-in-out flex-grow",
-    selectedTable && isBillPanelVisible ? "md:w-3/5" : "w-full"
+     "w-full" // Table grid panel always takes full width now as menu is floating
   );
 
   const billPanelClasses = cn(
     "p-4 border-l bg-card text-card-foreground overflow-y-auto flex flex-col transition-all duration-300 ease-in-out",
-    "w-full md:w-2/5"
+    "w-full md:w-2/5" // Bill panel width (right side)
   );
-
+  
   const menuSelectionPanelClasses = cn(
     "absolute top-0 left-0 h-full bg-card shadow-xl z-20 transition-transform duration-300 ease-in-out overflow-y-auto border-r",
-    "w-full md:w-[320px] lg:w-[380px]", // Adjusted width
+    "w-full sm:w-[350px] md:w-[320px] lg:w-[380px]", // Adjusted width for floating panel
     isMenuSelectionPanelOpen ? "transform translate-x-0" : "transform -translate-x-full"
   );
 
+
   return (
     <div className="flex h-[calc(100vh-theme(spacing.16)-1px)] overflow-hidden relative"> {/* Adjusted height for header */}
-      {/* Table Grid Panel */}
-      <div className={tableGridPanelClasses}>
-        <Card className="shadow-xl h-full flex flex-col">
-          <CardHeader>
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
-              <div className="mb-4 md:mb-0">
-                  <CardTitle className="text-2xl md:text-3xl flex items-center">
-                      <Users className="mr-3 h-7 w-7 text-primary" /> Table Management
-                  </CardTitle>
-                  <CardDescription>Oversee tables for {restaurant.name}.</CardDescription>
-              </div>
-              <Button onClick={openAddModal} className="bg-accent hover:bg-accent/90 text-accent-foreground">
-                <PlusCircle className="mr-2 h-4 w-4" /> Add New Table
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent className="flex-grow">
-            {tables.length > 0 ? (
-               <div className={`grid grid-cols-1 ${
-                  (selectedTable && isBillPanelVisible) 
-                    ? 'sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-2' // Fewer columns when bill panel is open
-                    : 'sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4' // More columns when table grid is wider
-                } gap-4`}>
-                {tables.map(table => (
-                  <Card 
-                    key={table.id} 
-                    className={`flex flex-col shadow-md hover:shadow-lg transition-all group cursor-pointer ${selectedTable?.id === table.id ? 'ring-2 ring-primary shadow-xl scale-105' : 'hover:scale-[1.02]'}`}
-                    onClick={() => handleSelectTable(table)}
-                  >
-                    <CardHeader className="pb-2">
-                      <div className="flex justify-between items-center">
-                          <CardTitle className="text-lg">{Table} {table.tableNumber}</CardTitle>
-                          <div className={`h-3 w-3 rounded-full ${statusColors[table.status]}`} title={table.status}></div>
-                      </div>
-                      <CardDescription>Capacity: {table.capacity} guests</CardDescription>
-                    </CardHeader>
-                    <CardContent className="flex-grow space-y-2 text-xs">
-                      <Select value={table.status} onValueChange={(newStatus) => handleStatusChange(table.id, newStatus as TableStatus)} onClick={(e) => e.stopPropagation()}>
-                        <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {(Object.keys(statusColors) as TableStatus[]).map(s => <SelectItem key={s} value={s} className="capitalize text-xs">{s.replace('_', ' ')}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    </CardContent>
-                    <CardFooter className="flex justify-between items-center pt-2 mt-auto opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => {e.stopPropagation(); setQrModalTable(table)}} title="Show QR Code"><QrCode className="h-4 w-4 text-muted-foreground hover:text-primary"/></Button>
-                      <div className="space-x-1">
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => {e.stopPropagation(); openEditModal(table)}} title="Edit Table"><Edit3 className="h-3.5 w-3.5 text-muted-foreground hover:text-accent"/></Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => {e.stopPropagation(); openDeleteDialog(table)}} title="Delete Table"><Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive"/></Button>
-                      </div>
-                    </CardFooter>
-                  </Card>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-10 border-2 border-dashed rounded-lg bg-muted/30">
-                <Users className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                <h3 className="text-xl font-semibold mb-2">No Tables Yet</h3>
-                <p className="text-muted-foreground mb-4">Add tables to start managing your restaurant floor.</p>
-                <Button onClick={openAddModal} className="bg-accent hover:bg-accent/90 text-accent-foreground">
-                  <PlusCircle className="mr-2 h-4 w-4" /> Add First Table
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Right Panel: Bill Management (POS-like) */}
-      {selectedTable && isBillPanelVisible && (
-        <div className={billPanelClasses}>
-          <BillPanel
-            selectedTable={selectedTable}
-            billItems={currentBillItems}
-            isLoading={formSubmitting}
-            onUpdateItemQuantity={handleUpdateItemQuantityInBill}
-            onRemoveItem={handleRemoveItemFromBill}
-            onFinalizeBill={handleFinalizeBill}
-            onClose={() => { setSelectedTable(null); setIsBillPanelVisible(false); setIsMenuSelectionPanelOpen(false); setCurrentBillItems([]); }}
-            onToggleMenuSelection={() => setIsMenuSelectionPanelOpen(!isMenuSelectionPanelOpen)}
-            isMenuSelectionOpen={isMenuSelectionPanelOpen}
-          />
-        </div>
-      )}
-      
-      {/* Floating Menu Item Selection Panel */}
-      {selectedTable && isBillPanelVisible && (
+      {/* Floating Menu Item Selection Panel - rendered before table grid to manage z-index if needed */}
+       {selectedTable && isBillPanelVisible && (
         <div className={menuSelectionPanelClasses}>
           {isMenuSelectionPanelOpen && ( 
             <MenuSelectionForBill
@@ -440,6 +356,94 @@ export default function TableManagementPage() {
           )}
         </div>
       )}
+      
+      {/* Main content area (Table Grid and Bill Panel) */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Table Grid Panel */}
+        <div className={tableGridPanelClasses}>
+          <Card className="shadow-xl h-full flex flex-col">
+            <CardHeader>
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
+                <div className="mb-4 md:mb-0">
+                    <CardTitle className="text-2xl md:text-3xl flex items-center">
+                        <Users className="mr-3 h-7 w-7 text-primary" /> Table Management
+                    </CardTitle>
+                    <CardDescription>Oversee tables for {restaurant.name}.</CardDescription>
+                </div>
+                <Button onClick={openAddModal} className="bg-accent hover:bg-accent/90 text-accent-foreground">
+                  <PlusCircle className="mr-2 h-4 w-4" /> Add New Table
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="flex-grow">
+              {tables.length > 0 ? (
+                 <div className={`grid grid-cols-1 ${
+                    (selectedTable && isBillPanelVisible) 
+                      ? 'sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-2' 
+                      : 'sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4' // More columns if bill panel closed
+                  } gap-4`}>
+                  {tables.map(table => (
+                    <Card 
+                      key={table.id} 
+                      className={`flex flex-col shadow-md hover:shadow-lg transition-all group cursor-pointer ${selectedTable?.id === table.id ? 'ring-2 ring-primary shadow-xl scale-105' : 'hover:scale-[1.02]'}`}
+                      onClick={() => handleSelectTable(table)}
+                    >
+                      <CardHeader className="pb-2">
+                        <div className="flex justify-between items-center">
+                            <CardTitle className="text-lg">Table {table.tableNumber}</CardTitle>
+                            <div className={`h-3 w-3 rounded-full ${statusColors[table.status]}`} title={table.status}></div>
+                        </div>
+                        <CardDescription>Capacity: {table.capacity} guests</CardDescription>
+                      </CardHeader>
+                      <CardContent className="flex-grow space-y-2 text-xs">
+                        <Select value={table.status} onValueChange={(newStatus) => handleStatusChange(table.id, newStatus as TableStatus)} onClick={(e) => e.stopPropagation()}>
+                          <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {(Object.keys(statusColors) as TableStatus[]).map(s => <SelectItem key={s} value={s} className="capitalize text-xs">{s.replace('_', ' ')}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </CardContent>
+                      <CardFooter className="flex justify-between items-center pt-2 mt-auto opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => {e.stopPropagation(); setQrModalTable(table)}} title="Show QR Code"><QrCode className="h-4 w-4 text-muted-foreground hover:text-primary"/></Button>
+                        <div className="space-x-1">
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => {e.stopPropagation(); openEditModal(table)}} title="Edit Table"><Edit3 className="h-3.5 w-3.5 text-muted-foreground hover:text-accent"/></Button>
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => {e.stopPropagation(); openDeleteDialog(table)}} title="Delete Table"><Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive"/></Button>
+                        </div>
+                      </CardFooter>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-10 border-2 border-dashed rounded-lg bg-muted/30">
+                  <Users className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                  <h3 className="text-xl font-semibold mb-2">No Tables Yet</h3>
+                  <p className="text-muted-foreground mb-4">Add tables to start managing your restaurant floor.</p>
+                  <Button onClick={openAddModal} className="bg-accent hover:bg-accent/90 text-accent-foreground">
+                    <PlusCircle className="mr-2 h-4 w-4" /> Add First Table
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Right Panel: Bill Management (POS-like) */}
+        {selectedTable && isBillPanelVisible && (
+          <div className={billPanelClasses}>
+            <BillPanel
+              selectedTable={selectedTable}
+              billItems={currentBillItems}
+              isLoading={formSubmitting}
+              onUpdateItemQuantity={handleUpdateItemQuantityInBill}
+              onRemoveItem={handleRemoveItemFromBill}
+              onFinalizeBill={handleFinalizeBill}
+              onClose={() => { setSelectedTable(null); setIsBillPanelVisible(false); setIsMenuSelectionPanelOpen(false); setCurrentBillItems([]); }}
+              onToggleMenuSelection={() => setIsMenuSelectionPanelOpen(!isMenuSelectionPanelOpen)}
+              isMenuSelectionOpen={isMenuSelectionPanelOpen}
+            />
+          </div>
+        )}
+      </div>
 
 
       <Dialog open={isTableModalOpen} onOpenChange={setIsTableModalOpen}>
@@ -570,3 +574,4 @@ const BillPanel = ({ selectedTable, billItems, isLoading, onUpdateItemQuantity, 
     </div>
   );
 };
+
