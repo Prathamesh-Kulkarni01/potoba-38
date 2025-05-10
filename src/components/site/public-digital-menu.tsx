@@ -1,3 +1,5 @@
+
+
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -7,12 +9,13 @@ import type { RestaurantProfile, MenuCategory, MenuSubcategory, MenuItem as Menu
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import LoadingSpinner from '@/components/shared/loading-spinner';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { 
   Utensils, ShoppingCart, PlusCircle, MinusCircle, Trash2, Send, PackageOpen, ChefHat, 
-  Search, Flame, Soup, Fish, Cake, Coffee, Salad, Pizza as PizzaIcon, Hamburger, MoreHorizontal
+  Search, Flame, Soup, Fish, Cake, Coffee, Salad, Pizza as PizzaIcon, Sandwich, MoreHorizontal
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogClose } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -31,7 +34,7 @@ interface PublicDigitalMenuProps {
 
 const getCategoryIcon = (categoryName: string): React.ElementType => {
   const name = categoryName.toLowerCase();
-  if (name.includes('burger')) return Hamburger;
+  if (name.includes('burger') || name.includes('sandwich')) return Sandwich;
   if (name.includes('pizza')) return PizzaIcon;
   if (name.includes('salad')) return Salad;
   if (name.includes('soup')) return Soup;
@@ -375,3 +378,5 @@ const MenuItemCard = ({ item, onAddToCart }: MenuItemCardProps) => {
     </Card>
   );
 };
+
+
