@@ -6,17 +6,19 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth/context';
 import { getRestaurant } from '@/lib/firebase/firestore';
 import { getOrdersByRestaurant, updateOrderStatus } from '@/lib/firebase/orders';
-import type { RestaurantProfile, Order, OrderStatus, OrderItem } from '@/types';
+import type { RestaurantProfile, Order, OrderStatus as OrderStatusType, OrderItem } from '@/types'; // Renamed OrderStatus to OrderStatusType to avoid conflict
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import LoadingSpinner from '@/components/shared/loading-spinner';
 import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { ShoppingCart, Edit, CheckCircle, XCircle, Clock, Utensils, Send } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns'; // For formatting timestamps
+import { Timestamp } from 'firebase/firestore'; // Import Timestamp
 
-const orderStatusColors: Record<OrderStatus, string> = {
+const orderStatusColors: Record<OrderStatusType, string> = {
   pending_customer_confirmation: 'bg-gray-500',
   pending_kitchen: 'bg-yellow-500',
   confirmed_by_kitchen: 'bg-orange-500',
@@ -29,7 +31,7 @@ const orderStatusColors: Record<OrderStatus, string> = {
   cancelled_by_restaurant: 'bg-red-700',
 };
 
-const orderStatusLabels: Record<OrderStatus, string> = {
+const orderStatusLabels: Record<OrderStatusType, string> = {
   pending_customer_confirmation: 'Pending Customer',
   pending_kitchen: 'Pending Kitchen',
   confirmed_by_kitchen: 'Kitchen Confirmed',
@@ -43,7 +45,7 @@ const orderStatusLabels: Record<OrderStatus, string> = {
 };
 
 // Define possible next statuses for each current status
-const possibleNextStatuses: Record<OrderStatus, OrderStatus[]> = {
+const possibleNextStatuses: Record<OrderStatusType, OrderStatusType[]> = {
   pending_customer_confirmation: ['pending_kitchen', 'cancelled_by_restaurant'],
   pending_kitchen: ['confirmed_by_kitchen', 'cancelled_by_restaurant'],
   confirmed_by_kitchen: ['preparing', 'cancelled_by_restaurant'],
@@ -55,6 +57,12 @@ const possibleNextStatuses: Record<OrderStatus, OrderStatus[]> = {
   cancelled_by_customer: [],
   cancelled_by_restaurant: [],
 };
+
+// Client-side specific Order type where Timestamps are converted to Dates
+interface ClientOrder extends Omit<Order, 'createdAt' | 'updatedAt'> {
+  createdAt: Date;
+  updatedAt: Date;
+}
 
 
 export default function OrderManagementPage() {
@@ -68,9 +76,9 @@ export default function OrderManagementPage() {
   const { toast } = useToast();
 
   const [restaurant, setRestaurant] = useState<RestaurantProfile | null>(null);
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [orders, setOrders] = useState<ClientOrder[]>([]); // Use ClientOrder type
   const [pageLoading, setPageLoading] = useState(true);
-  const [selectedFilterStatus, setSelectedFilterStatus] = useState<OrderStatus | 'all'>('all');
+  const [selectedFilterStatus, setSelectedFilterStatus] = useState<OrderStatusType | 'all'>('all');
 
   const fetchRestaurantAndOrders = useCallback(async () => {
     if (!restaurantId || !user) return;
@@ -80,11 +88,30 @@ export default function OrderManagementPage() {
       if (restaurantData && (restaurantData.ownerId === user.uid || (role === 'staff' && user.restaurantId === restaurantId))) {
         setRestaurant(restaurantData);
         const statusFilter = selectedFilterStatus === 'all' ? undefined : [selectedFilterStatus];
-        let fetchedOrders = await getOrdersByRestaurant(restaurantId, statusFilter);
+        let fetchedOrdersRaw = await getOrdersByRestaurant(restaurantId, statusFilter);
+        
         if (filterTableId) {
-          fetchedOrders = fetchedOrders.filter(order => order.tableId === filterTableId);
+          fetchedOrdersRaw = fetchedOrdersRaw.filter(order => order.tableId === filterTableId);
         }
-        setOrders(fetchedOrders);
+
+        const convertTimestampToDate = (ts: any): Date => {
+          if (ts && typeof ts.seconds === 'number' && typeof ts.nanoseconds === 'number') {
+            return new Date(ts.seconds * 1000 + ts.nanoseconds / 1000000);
+          }
+          if (ts instanceof Timestamp) return ts.toDate();
+          if (typeof ts === 'string') return new Date(ts);
+          if (ts instanceof Date) return ts;
+          console.warn("Unparseable timestamp encountered:", ts);
+          return new Date(); 
+        };
+
+        const fetchedOrdersClient: ClientOrder[] = fetchedOrdersRaw.map(o => ({
+          ...o,
+          createdAt: convertTimestampToDate(o.createdAt),
+          updatedAt: convertTimestampToDate(o.updatedAt),
+        }));
+
+        setOrders(fetchedOrdersClient);
       } else {
         toast({ variant: "destructive", title: "Access Denied", description: "Restaurant not found or you don't have permission." });
         router.replace('/dashboard');
@@ -114,7 +141,7 @@ export default function OrderManagementPage() {
     }
   }, [restaurantId, user, role, authLoading, router, fetchRestaurantAndOrders]);
 
-  const handleStatusChange = async (orderId: string, newStatus: OrderStatus) => {
+  const handleStatusChange = async (orderId: string, newStatus: OrderStatusType) => {
     try {
       await updateOrderStatus(restaurantId, orderId, newStatus);
       toast({ title: "Order Status Updated", description: `Order marked as ${orderStatusLabels[newStatus]}.` });
@@ -124,7 +151,7 @@ export default function OrderManagementPage() {
     }
   };
 
-  const OrderCard = ({ order }: { order: Order }) => (
+  const OrderCard = ({ order }: { order: ClientOrder }) => ( // Order prop is now ClientOrder
     <Card className="shadow-md hover:shadow-lg transition-shadow">
       <CardHeader>
         <div className="flex justify-between items-center">
@@ -132,7 +159,7 @@ export default function OrderManagementPage() {
           <Badge className={`${orderStatusColors[order.status]} text-white text-xs px-2 py-1`}>{orderStatusLabels[order.status]}</Badge>
         </div>
         <CardDescription>
-          Created: {format(order.createdAt.toDate(), 'PPpp')}
+          Created: {format(order.createdAt, 'PPpp')} {/* order.createdAt is now a Date object */}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -152,7 +179,7 @@ export default function OrderManagementPage() {
          <div className="flex w-full gap-2">
             <Select 
               defaultValue={order.status}
-              onValueChange={(newStatus) => handleStatusChange(order.id, newStatus as OrderStatus)}
+              onValueChange={(newStatus) => handleStatusChange(order.id, newStatus as OrderStatusType)}
               disabled={possibleNextStatuses[order.status]?.length === 0 && order.status !== 'completed'}
             >
               <SelectTrigger id={`status-${order.id}`} className="flex-grow">
@@ -198,7 +225,7 @@ export default function OrderManagementPage() {
               </CardDescription>
             </div>
             <div className="w-full md:w-auto md:min-w-[200px]">
-                <Select value={selectedFilterStatus} onValueChange={(value) => setSelectedFilterStatus(value as OrderStatus | 'all')}>
+                <Select value={selectedFilterStatus} onValueChange={(value) => setSelectedFilterStatus(value as OrderStatusType | 'all')}>
                     <SelectTrigger><SelectValue placeholder="Filter by status..." /></SelectTrigger>
                     <SelectContent>
                         <SelectItem value="all">All Active Orders</SelectItem>
@@ -225,7 +252,7 @@ export default function OrderManagementPage() {
               <ShoppingCart className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
               <h3 className="text-xl font-semibold mb-2">No Orders Found</h3>
               <p className="text-muted-foreground">
-                {selectedFilterStatus === 'all' ? 'There are no active orders currently.' : `No orders match the status: ${orderStatusLabels[selectedFilterStatus as OrderStatus]}.`}
+                {selectedFilterStatus === 'all' ? 'There are no active orders currently.' : `No orders match the status: ${orderStatusLabels[selectedFilterStatus as OrderStatusType]}.`}
               </p>
             </div>
           )}
@@ -234,3 +261,4 @@ export default function OrderManagementPage() {
     </div>
   );
 }
+
