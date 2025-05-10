@@ -38,7 +38,7 @@ export async function addTable(restaurantId: string, tableData: Omit<Table, 'id'
 
   const docRef = await addDoc(tablesCol, partialTableData);
 
-  const qrCodeValue = `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:9002'}/menu/table/${docRef.id}`;
+  const qrCodeValue = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://6000-firebase-studio-1746809721561.cluster-ancjwrkgr5dvux4qug5rbzyc2y.cloudworkstations.dev'}/menu/table/${docRef.id}`;
   await updateDoc(docRef, { qrCodeValue });
 
   return {
@@ -102,3 +102,4 @@ export async function deleteTable(restaurantId: string, tableId: string): Promis
   const tableRef = doc(db, 'restaurants', restaurantId, 'tables', tableId);
   await deleteDoc(tableRef);
 }
+
