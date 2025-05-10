@@ -6,19 +6,20 @@ import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/ui/button'; // Added
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Separator } from '@/components/ui/separator';
+import { Separator } from '@/components/ui/separator'; // Added
 import LoadingSpinner from '@/components/shared/loading-spinner';
 import { useCart } from '@/components/site/public-homepage/cart-store';
 import { getRestaurant } from '@/lib/firebase/firestore';
 import type { RestaurantProfile, OrderItem, Order, OrderStatus } from '@/types';
 import { createOrder } from '@/lib/firebase/orders';
 import TopNavigationBar from '@/components/site/public-homepage/top-navigation-bar';
-import SiteFooter from '@/components/site/public-homepage/site-footer';
+// Changed import path for SiteFooter to relative
+import SiteFooter from '../../../../components/site/public-homepage/site-footer';
 import { AlertCircle, CreditCard, ShoppingBag, Truck, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 

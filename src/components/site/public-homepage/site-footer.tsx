@@ -3,13 +3,18 @@
 
 import Link from 'next/link';
 import { Facebook, Twitter, Instagram, Youtube } from 'lucide-react';
+import { useState, useEffect } from 'react';
 
 interface SiteFooterProps {
   restaurantName: string;
 }
 
 export default function SiteFooter({ restaurantName }: SiteFooterProps) {
-  const currentYear = new Date().getFullYear();
+  const [currentYear, setCurrentYear] = useState<number | null>(null);
+
+  useEffect(() => {
+    setCurrentYear(new Date().getFullYear());
+  }, []);
 
   return (
     <footer className="bg-card text-card-foreground border-t border-border/50 py-8 md:py-12 mt-auto">
@@ -45,10 +50,11 @@ export default function SiteFooter({ restaurantName }: SiteFooterProps) {
         </div>
         <div className="border-t border-border/50 pt-6 text-center">
           <p className="text-xs text-muted-foreground">
-            &copy; {currentYear} {restaurantName}. All Rights Reserved.
+            &copy; {currentYear || new Date().getFullYear()} {restaurantName}. All Rights Reserved.
           </p>
         </div>
       </div>
     </footer>
   );
 }
+
