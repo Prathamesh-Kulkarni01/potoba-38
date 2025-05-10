@@ -23,7 +23,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
-// Removed Timestamp import as dates are now strings
 
 const tableFormSchema = z.object({
   tableNumber: z.string().min(1, "Table number is required."),
@@ -46,7 +45,7 @@ export default function TableManagementPage() {
   const { toast } = useToast();
 
   const [restaurant, setRestaurant] = useState<RestaurantProfile | null>(null);
-  const [tables, setTables] = useState<FirebaseTableType[]>([]); // Now uses FirebaseTableType directly, which has string dates
+  const [tables, setTables] = useState<FirebaseTableType[]>([]); 
   const [pageLoading, setPageLoading] = useState(true);
   const [formSubmitting, setFormSubmitting] = useState(false);
 
@@ -69,7 +68,7 @@ export default function TableManagementPage() {
       const restaurantData = await getRestaurant(restaurantId);
       if (restaurantData && restaurantData.ownerId === user.uid) {
         setRestaurant(restaurantData);
-        const fetchedTables = await getTables(restaurantId); // getTables now returns tables with string dates
+        const fetchedTables = await getTables(restaurantId); 
         setTables(fetchedTables);
       } else {
         toast({ variant: "destructive", title: "Access Denied", description: "Restaurant not found or you don't have permission." });
@@ -100,12 +99,9 @@ export default function TableManagementPage() {
     setFormSubmitting(true);
     try {
       if (editingTable) {
-        // When updating, pass the original status. Or if status edit is intended, include it in form.
-        // The updateTable function in tables.ts now handles setting updatedAt to serverTimestamp()
         await updateTable(restaurantId, editingTable.id, { ...values, status: editingTable.status });
         toast({ title: "Table Updated", description: `Table ${values.tableNumber} has been updated.` });
       } else {
-        // addTable in tables.ts now handles createdAt and updatedAt internally
         await addTable(restaurantId, values);
         toast({ title: "Table Added", description: `Table ${values.tableNumber} has been added.` });
       }
@@ -124,7 +120,6 @@ export default function TableManagementPage() {
     try {
       const tableToUpdate = tables.find(t => t.id === tableId);
       if (!tableToUpdate) return;
-      // updateTable in tables.ts handles updatedAt
       await updateTable(restaurantId, tableId, { status: newStatus, tableNumber: tableToUpdate.tableNumber, capacity: tableToUpdate.capacity });
       toast({ title: "Status Updated", description: `Table ${tableToUpdate.tableNumber} is now ${newStatus}.` });
       fetchRestaurantData(); 
@@ -170,6 +165,28 @@ export default function TableManagementPage() {
   if (!restaurant) {
     return <Card><CardHeader><CardTitle>Error</CardTitle></CardHeader><CardContent><p>Restaurant not found or no permission.</p></CardContent></Card>;
   }
+  
+  const getDisplayTestLink = (storedQrValue: string) => {
+    const configuredBaseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://6000-firebase-studio-1746809721561.cluster-ancjwrkgr5dvux4qug5rbzyc2y.cloudworkstations.dev';
+    try {
+      const storedUrlObject = new URL(storedQrValue);
+      const pathAndQuery = storedUrlObject.pathname + storedUrlObject.search + storedUrlObject.hash;
+      // Ensure no double slashes
+      const displayUrl = (configuredBaseUrl.endsWith('/') ? configuredBaseUrl.slice(0, -1) : configuredBaseUrl) + 
+                         (pathAndQuery.startsWith('/') ? pathAndQuery : '/' + pathAndQuery);
+      return displayUrl;
+    } catch (e) {
+      // If qrModalTable.qrCodeValue is not a full valid URL (e.g. just a path),
+      // or some other parsing error.
+      if (storedQrValue.startsWith('/')) {
+         const displayUrl = (configuredBaseUrl.endsWith('/') ? configuredBaseUrl.slice(0, -1) : configuredBaseUrl) + storedQrValue;
+         return displayUrl;
+      }
+      console.warn("Could not reliably reconstruct test link from stored qrCodeValue:", storedQrValue);
+      return storedQrValue; // Fallback to using the stored value as is
+    }
+  };
+
 
   return (
     <div className="space-y-6">
@@ -282,7 +299,7 @@ export default function TableManagementPage() {
                     />
                     <Input type="text" readOnly value={qrModalTable.qrCodeValue} className="text-center text-xs"/>
                     <p className="text-xs text-muted-foreground">
-                        Test link: <a href={qrModalTable.qrCodeValue} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{qrModalTable.qrCodeValue}</a>
+                        Test link: <a href={getDisplayTestLink(qrModalTable.qrCodeValue)} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{getDisplayTestLink(qrModalTable.qrCodeValue)}</a>
                     </p>
                 </div>
                 <DialogFooter>
@@ -294,3 +311,4 @@ export default function TableManagementPage() {
     </div>
   );
 }
+
