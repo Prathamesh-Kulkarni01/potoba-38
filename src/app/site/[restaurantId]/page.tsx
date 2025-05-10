@@ -5,7 +5,7 @@ import { getMenuCategories, getMenuSubcategories, getMenuItems } from '@/lib/fir
 import type { RestaurantProfile, MenuCategory, MenuItem, MenuSubcategory } from '@/types';
 import { notFound } from 'next/navigation';
 import { convertFirebaseTimestampToString } from '@/lib/firebase/utils';
-import RestaurantHomepageClient from '@/components/site/public-homepage/restaurant-homepage-client'; // Updated import
+import SingleRestaurantFoodAppClient from '@/components/site/public-digital-menu/single-restaurant-food-app-client';
 
 interface RestaurantPublicPageProps {
   params: {
@@ -35,7 +35,7 @@ export async function generateMetadata({ params }: RestaurantPublicPageProps) {
   }
   const restaurant = stringifyTimestamps(restaurantData);
   return {
-    title: `${restaurant.name} - Order Online`,
+    title: `${restaurant.name} - Order Food Online`,
     description: `Order delicious food from ${restaurant.name}. ${restaurant.type ? `Specializing in ${restaurant.type} cuisine.` : ''}`,
   };
 }
@@ -62,23 +62,52 @@ export default async function RestaurantPublicPage({ params }: RestaurantPublicP
   const menuItems: (MenuItem & { createdAt: string; updatedAt: string })[] = 
     menuItemsData.map(item => stringifyTimestamps(item) as MenuItem & { createdAt: string; updatedAt: string });
   
-  const popularDishes = menuItems.filter(item => item.availability && (item.order < 5 || item.name.toLowerCase().includes('special'))).slice(0, 6);
+  // For "Popular Items" - take a few available items, maybe with high order or specific tag if available
+  // For now, just take first few available items as "popular"
+  const popularItems = menuItems.filter(item => item.availability).slice(0, 6);
 
-  // Mock special offers for now
-  const specialOffers = [
-    { id: "1", title: "Weekend Special: 20% Off", description: "Enjoy 20% off on all main courses this weekend!", imageUrl: `https://picsum.photos/seed/${restaurantId}offer1/600/400`, dataAiHint: "food discount weekend" },
-    { id: "2", title: "Combo Bonanza", description: "Get a free dessert with any family combo meal.", imageUrl: `https://picsum.photos/seed/${restaurantId}offer2/600/400`, dataAiHint: "combo meal dessert" },
+  // Mock offers for now, or fetch if you have an offers collection
+  const offers = [
+    { 
+      id: "1", 
+      title: "50% OFF", 
+      description: "Up to $10 | Use code WELCOME50",
+      color: "bg-gradient-to-r from-purple-500 to-indigo-600" // Match provided UI
+    },
+    { 
+      id: "2", 
+      title: "FREE DELIVERY", 
+      description: "On orders above $15 | Limited time",
+      color: "bg-gradient-to-r from-orange-400 to-pink-500"
+    },
+    { 
+      id: "3", 
+      title: "COMBO DEAL", 
+      description: "Save 30% on family combos",
+      color: "bg-gradient-to-r from-green-400 to-cyan-500"
+    }
   ];
+
+  // Details needed by the new UI, some might be mocked or derived if not in RestaurantProfile
+  const restaurantDisplayInfo = {
+    name: restaurant.name,
+    logo: restaurant.settings?.customDomain ? `https://logo.clearbit.com/${restaurant.settings.customDomain}` : `https://picsum.photos/seed/${restaurant.id}logo/60/60`, // Example logic for logo
+    coverImage: `https://picsum.photos/seed/${restaurant.id}cover/400/150`,
+    cuisine: restaurant.type || "Delicious Food", // Use restaurant type as cuisine
+    rating: 4.6, // Mocked, or fetch from reviews system
+    deliveryTime: "25-30 min", // Mocked, or derive from settings
+    minOrder: "$10", // Mocked, or derive from settings
+    isOpen: true, // Mocked, or derive from operational hours settings
+  };
   
   return (
-    <RestaurantHomepageClient
-      restaurant={restaurant}
-      categories={categories}
-      subcategories={subcategories}
-      menuItems={menuItems}
-      popularDishes={popularDishes}
-      specialOffers={specialOffers}
+    <SingleRestaurantFoodAppClient
+      restaurantData={restaurant} // Pass the full profile for any other needs
+      restaurantDisplayInfo={restaurantDisplayInfo}
+      menuCategoriesData={categories}
+      allMenuItemsData={menuItems} // Pass all items, client can filter
+      popularItemsData={popularItems} // Pass pre-selected popular items
+      offersData={offers}
     />
   );
 }
-
