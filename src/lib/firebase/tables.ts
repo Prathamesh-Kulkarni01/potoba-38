@@ -1,3 +1,4 @@
+
 // src/lib/firebase/tables.ts
 'use server';
 import {
@@ -24,25 +25,19 @@ const getTablesCollection = (restaurantId: string) => {
 
 export async function addTable(restaurantId: string, tableData: Omit<Table, 'id' | 'restaurantId' | 'qrCodeValue' | 'createdAt' | 'updatedAt' | 'status'>): Promise<Table> {
   const tablesCol = getTablesCollection(restaurantId);
-  const createdAt = serverTimestamp();
-  const updatedAt = serverTimestamp();
-  
-  // Generate a preliminary qrCodeValue, this will be updated with the actual doc ID post-creation
-  // Or, use a pre-generated unique ID if your QR strategy needs it.
-  // For simplicity, we'll make qrCodeValue dependent on the table's future ID.
+  const now = Timestamp.now();
   
   const partialTableData = {
     ...tableData,
     restaurantId,
     status: 'available' as TableStatus,
-    createdAt,
-    updatedAt,
-    qrCodeValue: '', // Placeholder, will be updated
+    createdAt: now, // Store as Timestamp in Firestore
+    updatedAt: now, // Store as Timestamp in Firestore
+    qrCodeValue: '', 
   };
 
   const docRef = await addDoc(tablesCol, partialTableData);
 
-  // Now update with the actual QR code value using the document ID
   const qrCodeValue = `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:9002'}/menu/table/${docRef.id}`;
   await updateDoc(docRef, { qrCodeValue });
 
@@ -52,21 +47,24 @@ export async function addTable(restaurantId: string, tableData: Omit<Table, 'id'
     restaurantId,
     qrCodeValue,
     status: 'available' as TableStatus,
-    createdAt: Timestamp.now(), // Optimistic
-    updatedAt: Timestamp.now(), // Optimistic
-  } as Table;
+    createdAt: now.toDate().toISOString(), // Return as ISO string
+    updatedAt: now.toDate().toISOString(), // Return as ISO string
+  };
 }
 
 export async function getTables(restaurantId: string): Promise<Table[]> {
   const tablesCol = getTablesCollection(restaurantId);
   const q = query(tablesCol, orderBy('tableNumber', 'asc'));
   const snapshot = await getDocs(q);
-  return snapshot.docs.map(doc => ({ 
-      id: doc.id, 
-      ...doc.data(),
-      createdAt: doc.data().createdAt as Timestamp, // Ensure Timestamps are correctly typed
-      updatedAt: doc.data().updatedAt as Timestamp
-    } as Table));
+  return snapshot.docs.map(docSnap => {
+    const data = docSnap.data();
+    return { 
+      id: docSnap.id, 
+      ...data,
+      createdAt: (data.createdAt as Timestamp).toDate().toISOString(),
+      updatedAt: (data.updatedAt as Timestamp).toDate().toISOString()
+    } as Table; // Cast to Table, which now expects string dates
+  });
 }
 
 export async function getTable(restaurantId: string, tableId: string): Promise<Table | null> {
@@ -74,28 +72,33 @@ export async function getTable(restaurantId: string, tableId: string): Promise<T
   const tableRef = doc(db, 'restaurants', restaurantId, 'tables', tableId);
   const docSnap = await getDoc(tableRef);
   if (docSnap.exists()) {
+    const data = docSnap.data();
     return { 
       id: docSnap.id, 
-      ...docSnap.data(),
-      createdAt: docSnap.data().createdAt as Timestamp,
-      updatedAt: docSnap.data().updatedAt as Timestamp
-    } as Table;
+      ...data,
+      createdAt: (data.createdAt as Timestamp).toDate().toISOString(),
+      updatedAt: (data.updatedAt as Timestamp).toDate().toISOString()
+    } as Table; // Cast to Table
   }
   return null;
 }
 
-export async function updateTable(restaurantId: string, tableId: string, data: Partial<Omit<Table, 'id' | 'restaurantId' | 'createdAt'>>): Promise<void> {
+export async function updateTable(restaurantId: string, tableId: string, data: Partial<Omit<Table, 'id' | 'restaurantId' | 'createdAt' | 'updatedAt'>>): Promise<void> {
   if (!db) throw new Error("Firestore is not initialized.");
   const tableRef = doc(db, 'restaurants', restaurantId, 'tables', tableId);
-  // Ensure qrCodeValue is updated if tableNumber changes and your QR strategy depends on it, or handle separately.
-  // For this example, qrCodeValue is based on ID, so it doesn't change with tableNumber.
-  await updateDoc(tableRef, { ...data, updatedAt: serverTimestamp() });
+  
+  // ServerTimestamp should be used for Firestore update, not for the data object if it expects strings
+  const updateData: any = { ...data, updatedAt: serverTimestamp() };
+  
+  // If data includes createdAt or updatedAt as strings, remove them before sending to Firestore if they are meant to be managed by serverTimestamp
+  if (typeof data.createdAt === 'string') delete updateData.createdAt;
+  // updatedAt is always set to serverTimestamp()
+
+  await updateDoc(tableRef, updateData);
 }
 
 export async function deleteTable(restaurantId: string, tableId: string): Promise<void> {
   if (!db) throw new Error("Firestore is not initialized.");
   const tableRef = doc(db, 'restaurants', restaurantId, 'tables', tableId);
-  // Consider implications: what happens to active orders for this table?
-  // This simple delete doesn't handle that.
   await deleteDoc(tableRef);
 }

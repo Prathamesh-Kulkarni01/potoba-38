@@ -1,3 +1,4 @@
+
 // src/app/dashboard/table-management/[restaurantId]/page.tsx
 'use client';
 
@@ -7,7 +8,7 @@ import Image from 'next/image';
 import { useAuth } from '@/lib/auth/context';
 import { getRestaurant } from '@/lib/firebase/firestore';
 import { addTable, getTables, updateTable, deleteTable } from '@/lib/firebase/tables';
-import type { RestaurantProfile, Table as FirebaseTable, TableStatus } from '@/types';
+import type { RestaurantProfile, Table as FirebaseTableType, TableStatus } from '@/types'; // Renamed to FirebaseTableType for clarity
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import LoadingSpinner from '@/components/shared/loading-spinner';
 import { Button } from '@/components/ui/button';
@@ -22,13 +23,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
-import { Timestamp } from 'firebase/firestore';
-
-// Client-side representation of Table with string dates
-interface ClientTable extends Omit<FirebaseTable, 'createdAt' | 'updatedAt'> {
-  createdAt: string;
-  updatedAt: string;
-}
+// Removed Timestamp import as dates are now strings
 
 const tableFormSchema = z.object({
   tableNumber: z.string().min(1, "Table number is required."),
@@ -51,15 +46,15 @@ export default function TableManagementPage() {
   const { toast } = useToast();
 
   const [restaurant, setRestaurant] = useState<RestaurantProfile | null>(null);
-  const [tables, setTables] = useState<ClientTable[]>([]); // Use ClientTable for state
+  const [tables, setTables] = useState<FirebaseTableType[]>([]); // Now uses FirebaseTableType directly, which has string dates
   const [pageLoading, setPageLoading] = useState(true);
   const [formSubmitting, setFormSubmitting] = useState(false);
 
   const [isTableModalOpen, setIsTableModalOpen] = useState(false);
-  const [editingTable, setEditingTable] = useState<ClientTable | null>(null); // Use ClientTable for editing state
+  const [editingTable, setEditingTable] = useState<FirebaseTableType | null>(null); 
   
-  const [deleteConfirmation, setDeleteConfirmation] = useState<{ isOpen: boolean; data: ClientTable; } | null>(null);
-  const [qrModalTable, setQrModalTable] = useState<ClientTable | null>(null);
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{ isOpen: boolean; data: FirebaseTableType; } | null>(null);
+  const [qrModalTable, setQrModalTable] = useState<FirebaseTableType | null>(null);
 
 
   const form = useForm<TableFormValues>({
@@ -74,14 +69,8 @@ export default function TableManagementPage() {
       const restaurantData = await getRestaurant(restaurantId);
       if (restaurantData && restaurantData.ownerId === user.uid) {
         setRestaurant(restaurantData);
-        const fetchedTablesFromFirebase = await getTables(restaurantId);
-        // Convert Timestamps to ISO strings before setting state
-        const serializedTables: ClientTable[] = fetchedTablesFromFirebase.map(table => ({
-          ...table,
-          createdAt: (table.createdAt as Timestamp).toDate().toISOString(),
-          updatedAt: (table.updatedAt as Timestamp).toDate().toISOString(),
-        }));
-        setTables(serializedTables);
+        const fetchedTables = await getTables(restaurantId); // getTables now returns tables with string dates
+        setTables(fetchedTables);
       } else {
         toast({ variant: "destructive", title: "Access Denied", description: "Restaurant not found or you don't have permission." });
         router.replace('/dashboard');
@@ -112,13 +101,15 @@ export default function TableManagementPage() {
     try {
       if (editingTable) {
         // When updating, pass the original status. Or if status edit is intended, include it in form.
+        // The updateTable function in tables.ts now handles setting updatedAt to serverTimestamp()
         await updateTable(restaurantId, editingTable.id, { ...values, status: editingTable.status });
         toast({ title: "Table Updated", description: `Table ${values.tableNumber} has been updated.` });
       } else {
+        // addTable in tables.ts now handles createdAt and updatedAt internally
         await addTable(restaurantId, values);
         toast({ title: "Table Added", description: `Table ${values.tableNumber} has been added.` });
       }
-      fetchRestaurantData(); // Refetches and re-serializes
+      fetchRestaurantData(); 
       setIsTableModalOpen(false);
       setEditingTable(null);
       form.reset({ tableNumber: '', capacity: 1 });
@@ -133,15 +124,16 @@ export default function TableManagementPage() {
     try {
       const tableToUpdate = tables.find(t => t.id === tableId);
       if (!tableToUpdate) return;
+      // updateTable in tables.ts handles updatedAt
       await updateTable(restaurantId, tableId, { status: newStatus, tableNumber: tableToUpdate.tableNumber, capacity: tableToUpdate.capacity });
       toast({ title: "Status Updated", description: `Table ${tableToUpdate.tableNumber} is now ${newStatus}.` });
-      fetchRestaurantData(); // Refetches and re-serializes
+      fetchRestaurantData(); 
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message || "Failed to update status." });
     }
   };
   
-  const openDeleteDialog = (table: ClientTable) => {
+  const openDeleteDialog = (table: FirebaseTableType) => {
     setDeleteConfirmation({ isOpen: true, data: table });
   };
 
@@ -151,7 +143,7 @@ export default function TableManagementPage() {
     try {
       await deleteTable(restaurantId, deleteConfirmation.data.id);
       toast({ title: "Table Deleted", description: `Table ${deleteConfirmation.data.tableNumber} has been deleted.` });
-      fetchRestaurantData(); // Refetches and re-serializes
+      fetchRestaurantData(); 
       setDeleteConfirmation(null);
     } catch (error: any) {
       toast({ variant: "destructive", title: "Deletion Failed", description: error.message || "Could not delete table." });
@@ -160,7 +152,7 @@ export default function TableManagementPage() {
     }
   };
 
-  const openEditModal = (table: ClientTable) => {
+  const openEditModal = (table: FirebaseTableType) => {
     setEditingTable(table);
     form.reset({ tableNumber: table.tableNumber, capacity: table.capacity });
     setIsTableModalOpen(true);

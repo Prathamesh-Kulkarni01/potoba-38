@@ -1,3 +1,4 @@
+
 import type { User as FirebaseUser } from 'firebase/auth';
 import type { Timestamp } from 'firebase/firestore';
 
@@ -23,7 +24,7 @@ export interface RestaurantProfile {
   ownerId: string;
   name: string;
   type?: string; // e.g., Italian, Cafe, Fine Dining
-  createdAt: Timestamp;
+  createdAt: Timestamp; 
   // Add other restaurant-specific fields like address, phone, etc.
   subscriptionPlan?: string; // Example: 'basic', 'premium'
   stripeCustomerId?: string;
@@ -102,8 +103,8 @@ export interface Table {
   status: TableStatus;
   qrCodeValue: string; // String value to be encoded in QR (e.g., URL to /menu/table/{id})
   currentOrderIds?: string[]; // IDs of active orders associated with this table for a session
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
+  createdAt: string; // Changed from Timestamp to string
+  updatedAt: string; // Changed from Timestamp to string
 }
 
 // Ordering System Types
@@ -147,5 +148,4 @@ export interface Order {
   transactionId?: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;
-  // Potentially: customerId (if users can log in to order)
 }
