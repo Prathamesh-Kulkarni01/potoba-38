@@ -1,4 +1,5 @@
 
+
 import type { User as FirebaseUser } from 'firebase/auth';
 import type { Timestamp } from 'firebase/firestore';
 
@@ -25,11 +26,17 @@ export interface RestaurantProfile {
   name: string;
   type?: string; // e.g., Italian, Cafe, Fine Dining
   createdAt: Timestamp; 
-  // Add other restaurant-specific fields like address, phone, etc.
   subscriptionPlan?: string; // Example: 'basic', 'premium'
   stripeCustomerId?: string;
   subscriptionStatus?: 'active' | 'inactive' | 'trialing';
   taxRate?: number; // e.g., 0.10 for 10%
+  settings?: {
+    onlineOrderingEnabled?: boolean;
+    tableReservationsEnabled?: boolean;
+    notificationEmail?: string;
+    customDomain?: string | null; // Allow null if no custom domain is set
+    // other future settings can be added here
+  };
 }
 
 export interface MenuCategory {
@@ -157,4 +164,5 @@ export interface ClientOrder extends Omit<Order, 'createdAt' | 'updatedAt'> {
   createdAt: string; // ISO string
   updatedAt: string; // ISO string
 }
+
 

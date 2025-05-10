@@ -1,44 +1,93 @@
+// src/app/dashboard/restaurant/[restaurantId]/settings/page.tsx
 'use client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Settings } from "lucide-react";
+import { Settings, Globe, ExternalLink } from "lucide-react";
 import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth/context";
 import { useEffect, useState } from "react";
-import { getRestaurant } from "@/lib/firebase/firestore";
+import { getRestaurant, updateRestaurantProfile } from "@/lib/firebase/firestore"; // Assuming updateRestaurantProfile exists
+import type { RestaurantProfile } from "@/types";
 import LoadingSpinner from "@/components/shared/loading-spinner";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import Link from "next/link";
+import { useToast } from "@/hooks/use-toast";
 
 export default function RestaurantSettingsPage() {
   const params = useParams();
   const restaurantId = params.restaurantId as string;
   const { user, role } = useAuth();
   const router = useRouter();
-  const [restaurant, setRestaurant] = useState<{name: string, ownerId: string} | null>(null);
+  const { toast } = useToast();
+  const [restaurant, setRestaurant] = useState<RestaurantProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [formSubmitting, setFormSubmitting] = useState(false);
+
+  // Form state (could use react-hook-form for more complex forms)
+  const [onlineOrderingEnabled, setOnlineOrderingEnabled] = useState(false);
+  const [tableReservationsEnabled, setTableReservationsEnabled] = useState(false);
+  const [notificationEmail, setNotificationEmail] = useState('');
+  const [customDomain, setCustomDomain] = useState('');
+
 
   useEffect(() => {
     if (!restaurantId) {
+      toast({ variant: "destructive", title: "Error", description: "Restaurant ID is missing."});
       router.push('/dashboard');
       return;
     }
-     if (user && role === 'owner') {
+    if (user && role === 'owner') {
       getRestaurant(restaurantId).then(data => {
         if (data && data.ownerId === user.uid) {
-          setRestaurant({name: data.name, ownerId: data.ownerId});
-        } else if (data) { // Restaurant exists but not owned by current user
+          setRestaurant(data);
+          // Initialize form state from restaurant data
+          setOnlineOrderingEnabled(data.settings?.onlineOrderingEnabled ?? false);
+          setTableReservationsEnabled(data.settings?.tableReservationsEnabled ?? false);
+          setNotificationEmail(data.settings?.notificationEmail || `orders@${data.name.toLowerCase().replace(/\s+/g, '')}.example.com`);
+          setCustomDomain(data.settings?.customDomain || '');
+        } else if (data) {
+           toast({ variant: "destructive", title: "Access Denied", description: "You are not authorized to manage this restaurant."});
            router.push('/dashboard');
+        } else {
+            toast({ variant: "destructive", title: "Not Found", description: "Restaurant not found."});
+            router.push('/dashboard');
         }
         setLoading(false);
-      }).catch(() => setLoading(false));
-    } else if (user) { // Not an owner
+      }).catch(() => {
+        toast({ variant: "destructive", title: "Error", description: "Failed to load restaurant settings."});
+        setLoading(false)
+      });
+    } else if (user) {
+      toast({ variant: "destructive", title: "Access Denied", description: "You are not authorized to view this page."});
       router.push('/dashboard');
       setLoading(false);
     }
-  }, [restaurantId, user, role, router]);
+  }, [restaurantId, user, role, router, toast]);
+
+  const handleSaveChanges = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!restaurant) return;
+    setFormSubmitting(true);
+    try {
+      const settingsToUpdate = {
+        onlineOrderingEnabled,
+        tableReservationsEnabled,
+        notificationEmail,
+        customDomain: customDomain || null, // Store as null if empty
+      };
+      await updateRestaurantProfile(restaurant.id, { settings: settingsToUpdate });
+      toast({ title: "Settings Saved", description: "Your restaurant settings have been updated."});
+    } catch (error) {
+      console.error("Error saving settings:", error);
+      toast({ variant: "destructive", title: "Save Failed", description: "Could not save settings."});
+    } finally {
+      setFormSubmitting(false);
+    }
+  };
 
   if (loading) {
     return <div className="flex justify-center items-center h-full"><LoadingSpinner /></div>;
@@ -52,6 +101,9 @@ export default function RestaurantSettingsPage() {
       </Card>
     );
   }
+  
+  const publicPageUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/site/${restaurantId}`;
+
 
   return (
     <div className="space-y-6">
@@ -62,49 +114,133 @@ export default function RestaurantSettingsPage() {
             Settings for {restaurant.name}
           </CardTitle>
           <CardDescription>
-            Manage specific settings for your restaurant. This feature is currently under development.
+            Manage general settings, online presence, and more for your restaurant.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-8 max-w-2xl">
-           <Image 
-              src={`https://picsum.photos/seed/restosettings${restaurantId}/600/200`}
-              alt="Restaurant Settings" 
-              width={600} 
-              height={200} 
-              className="rounded-md mb-6 object-cover"
-              data-ai-hint="modern settings interface"
-            />
-          <form className="space-y-6">
-            <div>
-              <Label htmlFor="onlineOrdering">Online Ordering</Label>
-              <div className="flex items-center space-x-2 mt-1">
-                <Switch id="onlineOrdering" />
-                <Label htmlFor="onlineOrdering">Enable Online Orders</Label>
-              </div>
-              <CardDescription className="text-xs mt-1">Allow customers to place orders directly through the app.</CardDescription>
-            </div>
+        <CardContent>
+          <Tabs defaultValue="general" className="w-full">
+            <TabsList className="grid w-full grid-cols-1 md:grid-cols-2 lg:grid-cols-2 mb-6 max-w-md">
+              <TabsTrigger value="general">General Settings</TabsTrigger>
+              <TabsTrigger value="webpage">Webpage Management</TabsTrigger>
+            </TabsList>
 
-            <div>
-              <Label htmlFor="tableReservations">Table Reservations</Label>
-               <div className="flex items-center space-x-2 mt-1">
-                <Switch id="tableReservations" defaultChecked/>
-                <Label htmlFor="tableReservations">Enable Table Reservations</Label>
-              </div>
-              <CardDescription className="text-xs mt-1">Allow customers to reserve tables in advance.</CardDescription>
-            </div>
-            
-            <div>
-              <Label htmlFor="notificationEmail">Notification Email</Label>
-              <Input id="notificationEmail" type="email" defaultValue={`orders@${restaurant.name.toLowerCase().replace(/\s+/g, '')}.com`} className="mt-1" />
-              <CardDescription className="text-xs mt-1">Email address to receive notifications for new orders and reservations.</CardDescription>
-            </div>
-            
-            <Button type="submit" className="bg-accent hover:bg-accent/90 text-accent-foreground" disabled>
-              Save Settings (Coming Soon)
-            </Button>
-          </form>
+            <TabsContent value="general">
+              <Card className="border-primary/20 shadow-md">
+                <CardHeader>
+                    <CardTitle className="text-xl">General Configuration</CardTitle>
+                    <CardDescription>Control core functionalities like online orders and reservations.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-8 max-w-2xl">
+                    <Image 
+                      src={`https://picsum.photos/seed/restosettings${restaurantId}/600/200`}
+                      alt="Restaurant Settings" 
+                      width={600} 
+                      height={200} 
+                      className="rounded-lg mb-6 object-cover shadow-md"
+                      data-ai-hint="modern settings interface"
+                    />
+                  <form onSubmit={handleSaveChanges} className="space-y-6">
+                    <div>
+                      <Label htmlFor="onlineOrdering">Online Ordering</Label>
+                      <div className="flex items-center space-x-2 mt-1">
+                        <Switch id="onlineOrdering" checked={onlineOrderingEnabled} onCheckedChange={setOnlineOrderingEnabled} />
+                        <Label htmlFor="onlineOrdering">Enable Online Orders</Label>
+                      </div>
+                      <CardDescription className="text-xs mt-1">Allow customers to place orders directly through the app.</CardDescription>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="tableReservations">Table Reservations</Label>
+                      <div className="flex items-center space-x-2 mt-1">
+                        <Switch id="tableReservations" checked={tableReservationsEnabled} onCheckedChange={setTableReservationsEnabled} />
+                        <Label htmlFor="tableReservations">Enable Table Reservations</Label>
+                      </div>
+                      <CardDescription className="text-xs mt-1">Allow customers to reserve tables in advance.</CardDescription>
+                    </div>
+                    
+                    <div>
+                      <Label htmlFor="notificationEmail">Notification Email</Label>
+                      <Input id="notificationEmail" type="email" value={notificationEmail} onChange={(e)=>setNotificationEmail(e.target.value)} className="mt-1" />
+                      <CardDescription className="text-xs mt-1">Email address to receive notifications for new orders and reservations.</CardDescription>
+                    </div>
+                    
+                    <Button type="submit" className="bg-accent hover:bg-accent/90 text-accent-foreground" disabled={formSubmitting}>
+                      {formSubmitting ? <LoadingSpinner className="mr-2 h-4 w-4"/> : "Save General Settings"}
+                    </Button>
+                  </form>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="webpage">
+                <Card className="border-accent/20 shadow-md">
+                    <CardHeader>
+                        <CardTitle className="text-xl flex items-center"><Globe className="mr-2 h-5 w-5 text-accent"/>Public Webpage</CardTitle>
+                        <CardDescription>Manage your restaurant's public-facing webpage and domain settings.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-8 max-w-2xl">
+                         <Image 
+                            src={`https://picsum.photos/seed/webpage${restaurantId}/600/200`}
+                            alt="Webpage Management" 
+                            width={600} 
+                            height={200} 
+                            className="rounded-lg mb-6 object-cover shadow-md"
+                            data-ai-hint="website builder interface"
+                        />
+                        <div className="space-y-4">
+                            <div>
+                                <h3 className="font-semibold text-lg text-foreground">Your Restaurant's Public Link</h3>
+                                <p className="text-sm text-muted-foreground">Share this link with your customers so they can view your restaurant's page.</p>
+                                <div className="mt-2 flex items-center gap-2 p-3 bg-muted rounded-md">
+                                    <Link href={publicPageUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate flex-grow">
+                                    {publicPageUrl}
+                                    </Link>
+                                    <Button variant="ghost" size="icon" asChild>
+                                        <Link href={publicPageUrl} target="_blank" rel="noopener noreferrer" title="Open in new tab">
+                                            <ExternalLink className="h-4 w-4"/>
+                                        </Link>
+                                    </Button>
+                                </div>
+                            </div>
+                            <form onSubmit={handleSaveChanges} className="space-y-6 pt-4 border-t">
+                                <div>
+                                <Label htmlFor="customDomain">Custom Domain (Optional)</Label>
+                                <Input 
+                                    id="customDomain" 
+                                    type="text" 
+                                    placeholder="e.g., www.myrestaurant.com" 
+                                    value={customDomain}
+                                    onChange={(e) => setCustomDomain(e.target.value)}
+                                    className="mt-1" 
+                                />
+                                <CardDescription className="text-xs mt-1">
+                                    Enter your custom domain. You will need to configure DNS settings separately. Feature coming soon.
+                                </CardDescription>
+                                </div>
+                                <Button type="submit" className="bg-accent hover:bg-accent/90 text-accent-foreground" disabled={formSubmitting || true}>
+                                     {formSubmitting ? <LoadingSpinner className="mr-2 h-4 w-4"/> : "Save Domain Settings (Coming Soon)"}
+                                </Button>
+                            </form>
+                        </div>
+                    </CardContent>
+                </Card>
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
     </div>
   );
+}
+
+// Add this to your types/index.ts if not already present and update RestaurantProfile
+declare module '@/types' {
+  interface RestaurantProfile {
+    settings?: {
+      onlineOrderingEnabled?: boolean;
+      tableReservationsEnabled?: boolean;
+      notificationEmail?: string;
+      customDomain?: string | null; // Allow null for no custom domain
+      // other settings
+    };
+  }
 }
