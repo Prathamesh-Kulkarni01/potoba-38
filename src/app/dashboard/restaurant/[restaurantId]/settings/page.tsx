@@ -1,12 +1,12 @@
 // src/app/dashboard/restaurant/[restaurantId]/settings/page.tsx
 'use client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Settings, Globe, ExternalLink } from "lucide-react";
+import { Settings, Globe, ExternalLink, Construction } from "lucide-react"; // Added Construction for placeholder
 import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth/context";
 import { useEffect, useState } from "react";
-import { getRestaurant, updateRestaurantProfile } from "@/lib/firebase/firestore"; // Assuming updateRestaurantProfile exists
+import { getRestaurant, updateRestaurantProfile } from "@/lib/firebase/firestore"; 
 import type { RestaurantProfile } from "@/types";
 import LoadingSpinner from "@/components/shared/loading-spinner";
 import { Button } from "@/components/ui/button";
@@ -27,7 +27,7 @@ export default function RestaurantSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [formSubmitting, setFormSubmitting] = useState(false);
 
-  // Form state (could use react-hook-form for more complex forms)
+  // Form state
   const [onlineOrderingEnabled, setOnlineOrderingEnabled] = useState(false);
   const [tableReservationsEnabled, setTableReservationsEnabled] = useState(false);
   const [notificationEmail, setNotificationEmail] = useState('');
@@ -44,7 +44,6 @@ export default function RestaurantSettingsPage() {
       getRestaurant(restaurantId).then(data => {
         if (data && data.ownerId === user.uid) {
           setRestaurant(data);
-          // Initialize form state from restaurant data
           setOnlineOrderingEnabled(data.settings?.onlineOrderingEnabled ?? false);
           setTableReservationsEnabled(data.settings?.tableReservationsEnabled ?? false);
           setNotificationEmail(data.settings?.notificationEmail || `orders@${data.name.toLowerCase().replace(/\s+/g, '')}.example.com`);
@@ -77,7 +76,7 @@ export default function RestaurantSettingsPage() {
         onlineOrderingEnabled,
         tableReservationsEnabled,
         notificationEmail,
-        customDomain: customDomain || null, // Store as null if empty
+        customDomain: customDomain || null, 
       };
       await updateRestaurantProfile(restaurant.id, { settings: settingsToUpdate });
       toast({ title: "Settings Saved", description: "Your restaurant settings have been updated."});
@@ -119,9 +118,10 @@ export default function RestaurantSettingsPage() {
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="general" className="w-full">
-            <TabsList className="grid w-full grid-cols-1 md:grid-cols-2 lg:grid-cols-2 mb-6 max-w-md">
-              <TabsTrigger value="general">General Settings</TabsTrigger>
-              <TabsTrigger value="webpage">Webpage Management</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-1 md:grid-cols-3 mb-6 max-w-xl">
+              <TabsTrigger value="general">General</TabsTrigger>
+              <TabsTrigger value="webpage">Webpage</TabsTrigger>
+              <TabsTrigger value="advanced">Advanced</TabsTrigger>
             </TabsList>
 
             <TabsContent value="general">
@@ -175,7 +175,7 @@ export default function RestaurantSettingsPage() {
             <TabsContent value="webpage">
                 <Card className="border-accent/20 shadow-md">
                     <CardHeader>
-                        <CardTitle className="text-xl flex items-center"><Globe className="mr-2 h-5 w-5 text-accent"/>Public Webpage</CardTitle>
+                        <CardTitle className="text-xl flex items-center"><Globe className="mr-2 h-5 w-5 text-accent"/>Public Webpage Management</CardTitle>
                         <CardDescription>Manage your restaurant's public-facing webpage and domain settings.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-8 max-w-2xl">
@@ -225,6 +225,19 @@ export default function RestaurantSettingsPage() {
                     </CardContent>
                 </Card>
             </TabsContent>
+            <TabsContent value="advanced">
+              <Card className="border-gray-400/20 shadow-md">
+                <CardHeader>
+                    <CardTitle className="text-xl">Advanced Settings</CardTitle>
+                    <CardDescription>Configure advanced options and integrations.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-8 max-w-2xl text-center">
+                  <Construction className="h-16 w-16 text-muted-foreground mx-auto my-6" />
+                  <p className="text-muted-foreground">Advanced settings and integrations are under construction.</p>
+                  <p className="text-xs text-muted-foreground">This section will include options for API keys, third-party service integrations, and more granular control over restaurant operations.</p>
+                </CardContent>
+              </Card>
+            </TabsContent>
           </Tabs>
         </CardContent>
       </Card>
@@ -233,14 +246,5 @@ export default function RestaurantSettingsPage() {
 }
 
 // Add this to your types/index.ts if not already present and update RestaurantProfile
-declare module '@/types' {
-  interface RestaurantProfile {
-    settings?: {
-      onlineOrderingEnabled?: boolean;
-      tableReservationsEnabled?: boolean;
-      notificationEmail?: string;
-      customDomain?: string | null; // Allow null for no custom domain
-      // other settings
-    };
-  }
-}
+// This declaration seems to be already present or compatible with the existing types.
+// No changes needed in types/index.ts for this specific update.

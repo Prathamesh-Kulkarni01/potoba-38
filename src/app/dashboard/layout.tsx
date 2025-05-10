@@ -1,5 +1,3 @@
-
-
 'use client';
 
 import { useEffect, type ReactNode, useState, useCallback } from 'react';
@@ -26,10 +24,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button';
 import BottomNavigationBar, { type BottomNavItem } from '@/components/dashboard/bottom-navigation-bar';
 import { useIsMobile as useIsMobileDirect } from '@/hooks/use-mobile';
-import { LayoutDashboard, Users, Utensils, ChefHat, SquareMenu, Settings, ShieldCheck, Store, PlusCircle, BookCopy, ListOrdered, Briefcase } from 'lucide-react'; // Added ListOrdered for Orders, Briefcase for Table Management
+import { LayoutDashboard, Users, Utensils, ChefHat, SquareMenu, Settings, ShieldCheck, Store, PlusCircle, BookCopy, ListOrdered, Briefcase, ExternalLink } from 'lucide-react'; // Added ExternalLink, ListOrdered for Orders, Briefcase for Table Management
 import type { RestaurantProfile } from '@/types';
 import { getRestaurantsByOwner } from '@/lib/firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 const FullScreenLoader = () => (
   <div className="flex h-screen items-center justify-center bg-background">
@@ -213,22 +212,40 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             <SidebarContent>
               {authContextRole === 'owner' && (
                 <div className="p-2 space-y-2 group-data-[collapsible=icon]:hidden">
-                  <Select value={selectedRestaurantId || ''} onValueChange={handleRestaurantChange}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select Restaurant..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ownedRestaurants.length > 0 ? (
-                        ownedRestaurants.map(restaurant => (
-                          <SelectItem key={restaurant.id} value={restaurant.id}>
-                            {restaurant.name}
-                          </SelectItem>
-                        ))
-                      ) : (
-                        <SelectItem value="no-restaurants" disabled>No restaurants found</SelectItem>
-                      )}
-                    </SelectContent>
-                  </Select>
+                  <div className="flex items-center space-x-2">
+                    <Select value={selectedRestaurantId || ''} onValueChange={handleRestaurantChange}>
+                      <SelectTrigger className="w-full flex-grow">
+                        <SelectValue placeholder="Select Restaurant..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ownedRestaurants.length > 0 ? (
+                          ownedRestaurants.map(restaurant => (
+                            <SelectItem key={restaurant.id} value={restaurant.id}>
+                              {restaurant.name}
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <SelectItem value="no-restaurants" disabled>No restaurants found</SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
+                    {selectedRestaurantId && (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button variant="outline" size="icon" asChild className="h-9 w-9 flex-shrink-0">
+                              <Link href={`/site/${selectedRestaurantId}`} target="_blank" rel="noopener noreferrer">
+                                <ExternalLink className="h-4 w-4" />
+                              </Link>
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Open Public Page</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    )}
+                  </div>
                   <Button variant="outline" size="sm" className="w-full" asChild>
                     <Link href="/dashboard/create-restaurant">
                       <PlusCircle className="mr-2 h-4 w-4" /> Create New
@@ -303,24 +320,35 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
               <Image src="https://picsum.photos/seed/restoapplogo/32/32" alt="App Logo" width={32} height={32} className="rounded-md" data-ai-hint="modern logo" />
               <h1 className="text-xl font-bold text-primary">AuthZen</h1>
             </Link>
-             {authContextRole === 'owner' && (
-                  <Select value={selectedRestaurantId || ''} onValueChange={handleRestaurantChange}>
-                    <SelectTrigger className="w-auto h-8 text-xs px-2 py-1 max-w-[150px] truncate">
-                      <SelectValue placeholder="Restaurant" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ownedRestaurants.map(restaurant => (
-                        <SelectItem key={restaurant.id} value={restaurant.id} className="text-xs">
-                          {restaurant.name}
+             <div className="flex items-center gap-2">
+                {authContextRole === 'owner' && (
+                  <>
+                    <Select value={selectedRestaurantId || ''} onValueChange={handleRestaurantChange}>
+                        <SelectTrigger className="w-auto h-8 text-xs px-2 py-1 max-w-[110px] truncate">
+                        <SelectValue placeholder="Restaurant" />
+                        </SelectTrigger>
+                        <SelectContent>
+                        {ownedRestaurants.map(restaurant => (
+                            <SelectItem key={restaurant.id} value={restaurant.id} className="text-xs">
+                            {restaurant.name}
+                            </SelectItem>
+                        ))}
+                        <SelectItem value="create_new_restaurant_redirect_target" className="text-xs text-primary">
+                            Create New
                         </SelectItem>
-                      ))}
-                       <SelectItem value="create_new_restaurant_redirect_target" className="text-xs text-primary">
-                           Create New
-                       </SelectItem>
-                    </SelectContent>
-                  </Select>
+                        </SelectContent>
+                    </Select>
+                    {selectedRestaurantId && (
+                        <Button variant="ghost" size="icon" asChild className="h-8 w-8 text-primary p-0">
+                            <Link href={`/site/${selectedRestaurantId}`} target="_blank" rel="noopener noreferrer" title="Open Public Page">
+                                <ExternalLink className="h-4 w-4" />
+                            </Link>
+                        </Button>
+                    )}
+                  </>
                 )}
-            <UserNav />
+                <UserNav />
+            </div>
           </header>
           <main className="flex-1 bg-background p-4 pt-6 pb-20">
             {children}
