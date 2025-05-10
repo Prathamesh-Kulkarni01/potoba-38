@@ -7,9 +7,9 @@ import Image from 'next/image';
 import { useAuth } from '@/lib/auth/context';
 import { getRestaurant } from '@/lib/firebase/firestore';
 import { addTable, getTables, updateTable, deleteTable } from '@/lib/firebase/tables';
-import { getOrdersByTable, updateOrderStatus, createOrder } from '@/lib/firebase/orders';
-import { getMenuItems as fetchMenuItemsFirebase, getMenuCategories, getMenuSubcategories } from '@/lib/firebase/menu'; // Added category/subcategory imports
-import type { RestaurantProfile, Table as FirebaseTableType, TableStatus, Order, OrderItem, MenuItem as MenuItemType, MenuCategory, MenuSubcategory } from '@/types'; // Added MenuCategory, MenuSubcategory
+import { getOrdersByTable, updateOrder, createOrder } from '@/lib/firebase/orders';
+import { getMenuItems as fetchMenuItemsFirebase, getMenuCategories, getMenuSubcategories } from '@/lib/firebase/menu';
+import type { RestaurantProfile, Table as FirebaseTableType, TableStatus, Order, OrderItem, MenuItem as MenuItemType, MenuCategory, MenuSubcategory } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import LoadingSpinner from '@/components/shared/loading-spinner';
 import { Button } from '@/components/ui/button';
@@ -25,7 +25,8 @@ import * as z from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import MenuSelectionForBill from '@/components/table-management/menu-selection-for-bill'; // New component
+import MenuSelectionForBill from '@/components/table-management/menu-selection-for-bill';
+import { cn } from '@/lib/utils';
 
 const tableFormSchema = z.object({
   tableNumber: z.string().min(1, "Table number is required."),
@@ -62,11 +63,11 @@ export default function TableManagementPage() {
   const [selectedTable, setSelectedTable] = useState<FirebaseTableType | null>(null);
   const [selectedTableOrders, setSelectedTableOrders] = useState<Order[]>([]);
   const [menuItems, setMenuItemsState] = useState<MenuItemType[]>([]);
-  const [categories, setCategoriesState] = useState<MenuCategory[]>([]); // For menu selection
-  const [subcategories, setSubcategoriesState] = useState<MenuSubcategory[]>([]); // For menu selection
+  const [categories, setCategoriesState] = useState<MenuCategory[]>([]);
+  const [subcategories, setSubcategoriesState] = useState<MenuSubcategory[]>([]);
   const [currentBillItems, setCurrentBillItems] = useState<OrderItem[]>([]);
   const [isBillPanelVisible, setIsBillPanelVisible] = useState(false);
-  const [isMenuSelectionPanelOpen, setIsMenuSelectionPanelOpen] = useState(false); // For new panel
+  const [isMenuSelectionPanelOpen, setIsMenuSelectionPanelOpen] = useState(false);
 
   const form = useForm<TableFormValues>({
     resolver: zodResolver(tableFormSchema),
@@ -119,7 +120,7 @@ export default function TableManagementPage() {
   const handleSelectTable = async (table: FirebaseTableType) => {
     setSelectedTable(table);
     setIsBillPanelVisible(true);
-    setIsMenuSelectionPanelOpen(false); // Close menu selection when a new table is selected, or keep open based on UX pref
+    setIsMenuSelectionPanelOpen(false); 
     setFormSubmitting(true); 
     try {
       const orders = await getOrdersByTable(restaurantId, table.id, ['pending_kitchen', 'confirmed_by_kitchen', 'preparing', 'ready_for_pickup', 'served', 'payment_pending']);
@@ -161,7 +162,6 @@ export default function TableManagementPage() {
             quantity,
             unitPrice: menuItem.price,
             totalPrice: quantity * menuItem.price,
-            // optional: copy other relevant details like variant info if applicable
         }];
         }
     });
@@ -193,7 +193,7 @@ export default function TableManagementPage() {
     try {
       const activeOrder = selectedTableOrders.find(o => o.status === 'served' || o.status === 'payment_pending');
       const subtotal = currentBillItems.reduce((sum, item) => sum + item.totalPrice, 0);
-      const taxRate = restaurant?.taxRate ?? 0.10; // Use restaurant-specific tax rate or default
+      const taxRate = restaurant?.taxRate ?? 0.10; 
       const taxAmount = subtotal * taxRate;
       const totalAmount = subtotal + taxAmount;
 
@@ -208,13 +208,13 @@ export default function TableManagementPage() {
           subtotal,
           taxAmount,
           totalAmount,
-          status: 'payment_pending' as OrderStatus, // Corrected type
+          status: 'payment_pending' as OrderStatus, 
         };
         await createOrder(restaurantId, newOrderData);
         toast({ title: "Bill Finalized", description: `Bill for table ${selectedTable.tableNumber} created and pending payment.` });
       }
-      if (selectedTable.status !== 'occupied' && selectedTable.status !== 'needs_cleaning') { // Assuming needs_cleaning means they paid but table not ready
-         await updateTable(restaurantId, selectedTable.id, { status: 'occupied' }); // Or 'needs_cleaning' post-payment
+      if (selectedTable.status !== 'occupied' && selectedTable.status !== 'needs_cleaning') { 
+         await updateTable(restaurantId, selectedTable.id, { status: 'occupied' }); 
       }
       
       handleSelectTable(selectedTable); 
@@ -321,26 +321,28 @@ export default function TableManagementPage() {
       return storedQrValue;
     }
   };
+  
+  // Dynamic classes for panel widths
+  const tableGridPanelClasses = cn(
+    "p-4 overflow-y-auto transition-all duration-300 ease-in-out flex-grow",
+    selectedTable && isBillPanelVisible ? "md:w-3/5" : "w-full"
+  );
 
-  const tableGridCols = () => {
-    if (selectedTable && isMenuSelectionPanelOpen) return 'md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-2'; // Tables | Menu | Bill
-    if (selectedTable && !isMenuSelectionPanelOpen) return 'md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3'; // Tables | Bill
-    return 'sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'; // Only Tables
-  };
+  const billPanelClasses = cn(
+    "p-4 border-l bg-card text-card-foreground overflow-y-auto flex flex-col transition-all duration-300 ease-in-out",
+    "w-full md:w-2/5"
+  );
 
+  const menuSelectionPanelClasses = cn(
+    "absolute top-0 left-0 h-full bg-card shadow-xl z-20 transition-transform duration-300 ease-in-out overflow-y-auto border-r",
+    "w-full md:w-[320px] lg:w-[380px]", // Adjusted width
+    isMenuSelectionPanelOpen ? "transform translate-x-0" : "transform -translate-x-full"
+  );
 
   return (
-    <div className="flex h-[calc(100vh-theme(spacing.16))] overflow-hidden"> {/* Adjust height based on your header */}
-      {/* Left Panel: Table Grid */}
-       <div className={`p-4 overflow-y-auto transition-all duration-300 ease-in-out ${
-         selectedTable && isMenuSelectionPanelOpen ? 'w-full md:w-1/3' : 
-         selectedTable && !isMenuSelectionPanelOpen ? 'w-full md:w-3/5' : 
-         'w-full'
-        } ${selectedTable && !isBillPanelVisible ? 'w-full' : '' }
-        ${selectedTable && isBillPanelVisible && !isMenuSelectionPanelOpen ? 'md:block' : 'block'}
-        ${selectedTable && isBillPanelVisible && isMenuSelectionPanelOpen ? 'md:block' : 'block'}
-
-        `}>
+    <div className="flex h-[calc(100vh-theme(spacing.16)-1px)] overflow-hidden relative"> {/* Adjusted height for header */}
+      {/* Table Grid Panel */}
+      <div className={tableGridPanelClasses}>
         <Card className="shadow-xl h-full flex flex-col">
           <CardHeader>
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
@@ -357,16 +359,20 @@ export default function TableManagementPage() {
           </CardHeader>
           <CardContent className="flex-grow">
             {tables.length > 0 ? (
-              <div className={`grid grid-cols-1 ${tableGridCols()} gap-4`}>
+               <div className={`grid grid-cols-1 ${
+                  (selectedTable && isBillPanelVisible) 
+                    ? 'sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-2' // Fewer columns when bill panel is open
+                    : 'sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4' // More columns when table grid is wider
+                } gap-4`}>
                 {tables.map(table => (
                   <Card 
                     key={table.id} 
-                    className={`flex flex-col shadow-md hover:shadow-lg transition-all group ${selectedTable?.id === table.id ? 'ring-2 ring-primary shadow-xl scale-105' : 'hover:scale-[1.02]'}`}
+                    className={`flex flex-col shadow-md hover:shadow-lg transition-all group cursor-pointer ${selectedTable?.id === table.id ? 'ring-2 ring-primary shadow-xl scale-105' : 'hover:scale-[1.02]'}`}
                     onClick={() => handleSelectTable(table)}
                   >
                     <CardHeader className="pb-2">
                       <div className="flex justify-between items-center">
-                          <CardTitle className="text-lg cursor-pointer">Table {table.tableNumber}</CardTitle>
+                          <CardTitle className="text-lg">{Table} {table.tableNumber}</CardTitle>
                           <div className={`h-3 w-3 rounded-full ${statusColors[table.status]}`} title={table.status}></div>
                       </div>
                       <CardDescription>Capacity: {table.capacity} guests</CardDescription>
@@ -403,27 +409,9 @@ export default function TableManagementPage() {
         </Card>
       </div>
 
-      {/* Middle Panel: Menu Item Selection (Collapsible) */}
-      {selectedTable && isBillPanelVisible && (
-        <div className={`transition-all duration-300 ease-in-out overflow-hidden flex flex-col border-l ${isMenuSelectionPanelOpen ? 'w-full md:w-1/3 p-4 bg-card' : 'w-0 p-0 border-none'}`}>
-          {isMenuSelectionPanelOpen && (
-            <MenuSelectionForBill
-                menuItems={menuItems}
-                categories={categories}
-                subcategories={subcategories}
-                onAddItemToBill={handleAddItemToBill}
-                onClosePanel={() => setIsMenuSelectionPanelOpen(false)}
-            />
-          )}
-        </div>
-      )}
-
-
       {/* Right Panel: Bill Management (POS-like) */}
-       {selectedTable && isBillPanelVisible && (
-        <div className={`p-4 border-l bg-card text-card-foreground overflow-y-auto flex flex-col transition-all duration-300 ease-in-out ${
-          isMenuSelectionPanelOpen ? 'w-full md:w-1/3' : 'w-full md:w-2/5'
-        }`}>
+      {selectedTable && isBillPanelVisible && (
+        <div className={billPanelClasses}>
           <BillPanel
             selectedTable={selectedTable}
             billItems={currentBillItems}
@@ -437,6 +425,22 @@ export default function TableManagementPage() {
           />
         </div>
       )}
+      
+      {/* Floating Menu Item Selection Panel */}
+      {selectedTable && isBillPanelVisible && (
+        <div className={menuSelectionPanelClasses}>
+          {isMenuSelectionPanelOpen && ( 
+            <MenuSelectionForBill
+                menuItems={menuItems}
+                categories={categories}
+                subcategories={subcategories}
+                onAddItemToBill={handleAddItemToBill}
+                onClosePanel={() => setIsMenuSelectionPanelOpen(false)}
+            />
+          )}
+        </div>
+      )}
+
 
       <Dialog open={isTableModalOpen} onOpenChange={setIsTableModalOpen}>
         <DialogContent>
@@ -509,13 +513,13 @@ interface BillPanelProps {
   onRemoveItem: (menuItemId: string) => void;
   onFinalizeBill: () => void;
   onClose: () => void;
-  onToggleMenuSelection: () => void; // To open/close the MenuSelectionForBill panel
+  onToggleMenuSelection: () => void;
   isMenuSelectionOpen: boolean;
 }
 
 const BillPanel = ({ selectedTable, billItems, isLoading, onUpdateItemQuantity, onRemoveItem, onFinalizeBill, onClose, onToggleMenuSelection, isMenuSelectionOpen }: BillPanelProps) => {
   const subtotal = billItems.reduce((sum, item) => sum + item.totalPrice, 0);
-  const taxRate = 0.10; // Example 10% tax - should come from restaurant settings
+  const taxRate = 0.10; 
   const taxAmount = subtotal * taxRate;
   const totalAmount = subtotal + taxAmount;
 
@@ -528,7 +532,7 @@ const BillPanel = ({ selectedTable, billItems, isLoading, onUpdateItemQuantity, 
               {isMenuSelectionOpen ? <X className="h-4 w-4 mr-1" /> : <Utensils className="h-4 w-4 mr-1" />}
               {isMenuSelectionOpen ? 'Close Menu' : 'Add Items'}
             </Button>
-            <Button variant="ghost" size="icon" onClick={onClose} className="md:hidden">
+            <Button variant="ghost" size="icon" onClick={onClose} className="md:hidden"> {/* Only show close on mobile if Bill Panel itself is primary view */}
                 <X className="h-5 w-5" />
             </Button>
         </div>
