@@ -148,6 +148,13 @@ export interface Order {
   kitchenNotes?: string; // Notes from staff to kitchen or vice-versa
   paymentMethod?: string;
   transactionId?: string;
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
+  createdAt: Timestamp; // Use Timestamp for Firestore interactions
+  updatedAt: Timestamp; // Use Timestamp for Firestore interactions
 }
+
+// ClientOrder is used for passing data to client components, ensuring Timestamps are strings.
+export interface ClientOrder extends Omit<Order, 'createdAt' | 'updatedAt'> {
+  createdAt: string; // ISO string
+  updatedAt: string; // ISO string
+}
+
