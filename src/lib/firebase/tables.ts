@@ -20,9 +20,8 @@ import {
 } from 'firebase/firestore';
 import { db } from './config';
 import type { Table, TableStatus } from '@/types';
-import { convertFirebaseTimestampToString } from './utils';
+import { convertFirebaseTimestampToString, getTablesCollectionPath } from './utils';
 
-export const getTablesCollectionPath = (restaurantId: string) => `restaurants/${restaurantId}/tables`;
 
 export async function addTable(restaurantId: string, tableData: Omit<Table, 'id' | 'restaurantId' | 'tableDocId' | 'qrCodeValue' | 'createdAt' | 'updatedAt' | 'status'>): Promise<Table> {
   if (!db) throw new Error("Firestore is not initialized.");
@@ -133,3 +132,4 @@ export async function deleteTable(restaurantId: string, tableId: string): Promis
   const tableRef = doc(db, getTablesCollectionPath(restaurantId), tableId);
   await deleteDoc(tableRef);
 }
+

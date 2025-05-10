@@ -7,10 +7,11 @@ import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { useAuth } from '@/lib/auth/context';
 import { getRestaurant } from '@/lib/firebase/firestore';
-import { addTable, updateTable, deleteTable, getTablesCollectionPath } from '@/lib/firebase/tables'; // Changed import
-import { getOrdersCollectionPath, updateOrder, createOrder } from '@/lib/firebase/orders'; // Changed import
+import { addTable, updateTable, deleteTable } from '@/lib/firebase/tables'; // Changed import
+import { updateOrder, createOrder } from '@/lib/firebase/orders'; // Changed import
+import { getOrdersCollectionPath, getTablesCollectionPath } from '@/lib/firebase/utils'; // Import from utils
 import { getMenuItems as fetchMenuItemsFirebase, getMenuCategories, getMenuSubcategories } from '@/lib/firebase/menu';
-import type { RestaurantProfile, Table as FirebaseTableType, TableStatus, Order as OrderType, OrderItem, MenuItem as MenuItemType, MenuCategory, MenuSubcategory, ClientOrder } from '@/types';
+import type { RestaurantProfile, Table as FirebaseTableType, TableStatus, OrderStatus, OrderItem, MenuItem as MenuItemType, MenuCategory, MenuSubcategory, ClientOrder } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import LoadingSpinner from '@/components/shared/loading-spinner';
 import { Button } from '@/components/ui/button';

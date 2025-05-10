@@ -1,4 +1,3 @@
-
 // src/lib/firebase/orders.ts
 'use server';
 
@@ -19,9 +18,7 @@ import {
 } from 'firebase/firestore';
 import { db } from './config';
 import type { Order, OrderStatus, OrderItem, ClientOrder } from '@/types';
-import { convertFirebaseTimestampToString } from './utils'; // Import the utility
-
-export const getOrdersCollectionPath = (restaurantId: string) => `restaurants/${restaurantId}/orders`;
+import { convertFirebaseTimestampToString, getOrdersCollectionPath } from './utils'; // Import the utility
 
 const safeString = (value: any): string | undefined => typeof value === 'string' ? value : undefined;
 const safeNumber = (value: any): number | undefined => typeof value === 'number' && !isNaN(value) ? value : undefined;

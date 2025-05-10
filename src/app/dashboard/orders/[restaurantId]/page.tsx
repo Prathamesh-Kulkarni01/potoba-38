@@ -7,7 +7,8 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { useAuth } from '@/lib/auth/context';
 import { getRestaurant } from '@/lib/firebase/firestore';
-import { updateOrderStatus, getOrdersCollectionPath } from '@/lib/firebase/orders'; // Removed getOrdersByRestaurant
+import { updateOrderStatus } from '@/lib/firebase/orders'; // Removed getOrdersByRestaurant
+import { getOrdersCollectionPath } from '@/lib/firebase/utils'; // Import from utils
 import type { RestaurantProfile, OrderStatus as OrderStatusType, OrderItem, ClientOrder } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import LoadingSpinner from '@/components/shared/loading-spinner';

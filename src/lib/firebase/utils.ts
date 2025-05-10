@@ -25,3 +25,8 @@ export const convertFirebaseTimestampToString = (ts: any): string => {
     console.warn("Unhandled timestamp format in convertFirebaseTimestampToString, returning current date as ISO string:", ts);
     return new Date().toISOString(); 
 };
+
+export const getOrdersCollectionPath = (restaurantId: string): string => `restaurants/${restaurantId}/orders`;
+
+export const getTablesCollectionPath = (restaurantId: string): string => `restaurants/${restaurantId}/tables`;
+
