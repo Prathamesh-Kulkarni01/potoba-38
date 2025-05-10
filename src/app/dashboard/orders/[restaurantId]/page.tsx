@@ -1,7 +1,7 @@
 // src/app/dashboard/orders/[restaurantId]/page.tsx
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { useAuth } from '@/lib/auth/context';
@@ -12,12 +12,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import LoadingSpinner from '@/components/shared/loading-spinner';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from '@/components/ui/badge';
-import { ShoppingCart, Eye, MoreHorizontal, Clock, Utensils, CheckCircle, XCircle, Send } from 'lucide-react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ShoppingCart, Eye, MoreHorizontal, Clock, Utensils, CheckCircle, XCircle, Send, CalendarIcon, Filter, ArrowUpDown } from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from '@/hooks/use-toast';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { Timestamp } from 'firebase/firestore';
 import {
   DropdownMenu,
@@ -25,6 +26,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import type { DateRange } from "react-day-picker";
+import { cn } from '@/lib/utils';
 
 const orderStatusConfig: Record<OrderStatusType, { label: string; color: string; icon?: React.ElementType, shortLabel?: string }> = {
   pending_customer_confirmation: { label: 'Pending Customer Confirmation', shortLabel: 'Pending Cust.', color: 'bg-gray-500 text-gray-50', icon: Clock },
@@ -33,13 +38,12 @@ const orderStatusConfig: Record<OrderStatusType, { label: string; color: string;
   preparing: { label: 'Preparing', shortLabel: 'Preparing', color: 'bg-blue-500 text-blue-50', icon: Utensils },
   ready_for_pickup: { label: 'Ready for Pickup', shortLabel: 'Ready Pickup', color: 'bg-purple-500 text-purple-50', icon: ShoppingCart },
   served: { label: 'Served', shortLabel: 'Served', color: 'bg-teal-500 text-teal-50', icon: CheckCircle },
-  payment_pending: { label: 'Payment Pending', shortLabel: 'Payment Pend.', color: 'bg-indigo-500 text-indigo-50', icon: DollarSign },
+  payment_pending: { label: 'Payment Pending', shortLabel: 'Payment Pend.', color: 'bg-indigo-500 text-indigo-50', icon: DollarSignIcon },
   completed: { label: 'Completed', shortLabel: 'Completed', color: 'bg-green-500 text-green-50', icon: CheckCircle },
   cancelled_by_customer: { label: 'Cancelled by Customer', shortLabel: 'Cancelled (Cust)', color: 'bg-red-600 text-red-50', icon: XCircle },
   cancelled_by_restaurant: { label: 'Cancelled by Restaurant', shortLabel: 'Cancelled (Rest)', color: 'bg-red-700 text-red-50', icon: XCircle },
 };
 
-// Define possible next statuses for each current status
 const possibleNextStatuses: Record<OrderStatusType, OrderStatusType[]> = {
   pending_customer_confirmation: ['pending_kitchen', 'cancelled_by_restaurant', 'cancelled_by_customer'],
   pending_kitchen: ['confirmed_by_kitchen', 'cancelled_by_restaurant'],
@@ -54,46 +58,54 @@ const possibleNextStatuses: Record<OrderStatusType, OrderStatusType[]> = {
 };
 
 interface ClientOrder extends Omit<Order, 'createdAt' | 'updatedAt'> {
-  createdAt: string; // Changed from Date to string (ISO format)
-  updatedAt: string; // Changed from Date to string (ISO format)
+  createdAt: string;
+  updatedAt: string;
 }
 
-function DollarSign(props: React.SVGProps<SVGSVGElement>) {
+function DollarSignIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
-    <svg
-      {...props}
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <line x1="12" x2="12" y1="2" y2="22" />
-      <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-    </svg>
-  )
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" > <line x1="12" x2="12" y1="2" y2="22" /> <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /> </svg>
+  );
 }
 
+type MainTabValue = 'active' | 'all' | 'pending_kitchen' | 'cancelled';
+
+const MAIN_TABS: { value: MainTabValue; label: string; statuses?: OrderStatusType[] }[] = [
+  { value: 'all', label: 'All Orders' },
+  { value: 'active', label: 'Active', statuses: ['pending_customer_confirmation', 'pending_kitchen', 'confirmed_by_kitchen', 'preparing', 'ready_for_pickup', 'served', 'payment_pending'] },
+  { value: 'pending_kitchen', label: 'Pending Kitchen', statuses: ['pending_kitchen', 'confirmed_by_kitchen'] },
+  { value: 'cancelled', label: 'Cancelled', statuses: ['cancelled_by_customer', 'cancelled_by_restaurant'] },
+];
+
+const DETAILED_STATUS_OPTIONS = (Object.keys(orderStatusConfig) as OrderStatusType[]).map(status => ({
+    value: status,
+    label: orderStatusConfig[status].label,
+}));
 
 export default function OrderManagementPage() {
   const params = useParams();
   const restaurantId = params.restaurantId as string;
-  const searchParams = useSearchParams();
-  const filterTableId = searchParams.get('tableId');
+  const searchParamsHook = useSearchParams(); // Renamed to avoid conflict with internal searchParams variable
 
   const { user, role, initialLoading: authLoading } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
 
   const [restaurant, setRestaurant] = useState<RestaurantProfile | null>(null);
-  const [orders, setOrders] = useState<ClientOrder[]>([]);
+  const [allFetchedOrders, setAllFetchedOrders] = useState<ClientOrder[]>([]);
+  const [displayedOrders, setDisplayedOrders] = useState<ClientOrder[]>([]);
   const [pageLoading, setPageLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<OrderStatusType | 'all'>('all');
   const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
+
+  // Filtering and Sorting State
+  const [activeMainTab, setActiveMainTab] = useState<MainTabValue>('active');
+  const [detailedStatusFilter, setDetailedStatusFilter] = useState<OrderStatusType | null>(null);
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+  const [priceRange, setPriceRange] = useState<{ min: string; max: string }>({ min: '', max: '' });
+  const [sortConfig, setSortConfig] = useState<{ key: keyof ClientOrder | null; direction: 'ascending' | 'descending' }>({ key: 'createdAt', direction: 'descending' });
+
+  const tableIdFilter = useMemo(() => searchParamsHook.get('tableId'), [searchParamsHook]);
+
 
   const fetchRestaurantAndOrders = useCallback(async () => {
     if (!restaurantId || !user) return;
@@ -102,44 +114,36 @@ export default function OrderManagementPage() {
       const restaurantData = await getRestaurant(restaurantId);
       if (restaurantData && (restaurantData.ownerId === user.uid || (role === 'staff' && user.restaurantId === restaurantId))) {
         setRestaurant(restaurantData);
-        const statusFilter = activeTab === 'all' ? undefined : [activeTab];
-        let fetchedOrdersRaw = await getOrdersByRestaurant(restaurantId, statusFilter);
         
-        if (filterTableId) {
-          fetchedOrdersRaw = fetchedOrdersRaw.filter(order => order.tableId === filterTableId);
+        // Firestore query optimization: only filter by detailedStatusFilter or main tab if not "all"
+        let queryStatuses: OrderStatus[] | undefined = undefined;
+        if (detailedStatusFilter) {
+          queryStatuses = [detailedStatusFilter];
+        } else if (activeMainTab !== 'all') {
+          queryStatuses = MAIN_TABS.find(tab => tab.value === activeMainTab)?.statuses;
         }
+        // Date range filtering in Firestore query
+        let startDate: Timestamp | undefined = undefined;
+        let endDate: Timestamp | undefined = undefined;
+        if (dateRange?.from) startDate = Timestamp.fromDate(dateRange.from);
+        if (dateRange?.to) endDate = Timestamp.fromDate(dateRange.to);
 
+        const fetchedOrdersRaw = await getOrdersByRestaurant(restaurantId, queryStatuses, startDate, endDate, tableIdFilter || undefined);
+        
         const convertTimestampToString = (ts: any): string => {
-          if (ts instanceof Timestamp) {
-            return ts.toDate().toISOString();
-          }
-          if (ts instanceof Date) { // Should ideally not happen if source is Firestore Timestamp
-            return ts.toISOString();
-          }
-           if (typeof ts === 'string') { // If it's already a string, assume it's valid ISO
-             try {
-               new Date(ts); // Check if it's a valid date string
-               return ts;
-             } catch (e) {
-               console.warn("Invalid date string encountered during conversion:", ts);
-               return new Date().toISOString(); // Fallback
-             }
-           }
-          // Fallback for Firestore Timestamp structure if not instance of Timestamp (e.g. after serialization)
-          if (ts && typeof ts.seconds === 'number' && typeof ts.nanoseconds === 'number') {
-            return new Date(ts.seconds * 1000 + ts.nanoseconds / 1000000).toISOString();
-          }
-          console.warn("Unexpected timestamp format during conversion:", ts, "Returning current date as ISO string.");
-          return new Date().toISOString(); 
+           if (ts instanceof Timestamp) return ts.toDate().toISOString();
+           if (ts instanceof Date) return ts.toISOString();
+           if (typeof ts === 'string') { try { new Date(ts); return ts; } catch (e) { /* fallback */ }}
+           if (ts && typeof ts.seconds === 'number' && typeof ts.nanoseconds === 'number') return new Date(ts.seconds * 1000 + ts.nanoseconds / 1000000).toISOString();
+           return new Date().toISOString(); 
         };
         
         const fetchedOrdersClient: ClientOrder[] = fetchedOrdersRaw.map(o => ({
           ...o,
           createdAt: convertTimestampToString(o.createdAt),
           updatedAt: convertTimestampToString(o.updatedAt),
-        })).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()); 
-
-        setOrders(fetchedOrdersClient);
+        }));
+        setAllFetchedOrders(fetchedOrdersClient);
       } else {
         toast({ variant: "destructive", title: "Access Denied", description: "Restaurant not found or you don't have permission." });
         router.replace('/dashboard');
@@ -150,24 +154,53 @@ export default function OrderManagementPage() {
     } finally {
       setPageLoading(false);
     }
-  }, [restaurantId, user, role, router, toast, activeTab, filterTableId]);
+  }, [restaurantId, user, role, router, toast, activeMainTab, detailedStatusFilter, dateRange, tableIdFilter]);
 
   useEffect(() => {
     if (authLoading) return;
     if (!user || (role !== 'owner' && role !== 'staff')) {
-      router.replace('/dashboard');
-      return;
+      router.replace('/dashboard'); return;
     }
     if (role === 'staff' && user.restaurantId !== restaurantId) {
-        router.replace('/dashboard');
-        return;
+      router.replace('/dashboard'); return;
     }
-    if (restaurantId) {
-      fetchRestaurantAndOrders();
-    } else {
-      router.replace('/dashboard');
-    }
+    if (restaurantId) fetchRestaurantAndOrders();
+    else router.replace('/dashboard');
   }, [restaurantId, user, role, authLoading, router, fetchRestaurantAndOrders]);
+
+  // Apply client-side filters (price) and sorting
+  useEffect(() => {
+    let filtered = [...allFetchedOrders];
+
+    // Price filter
+    const minPrice = parseFloat(priceRange.min);
+    const maxPrice = parseFloat(priceRange.max);
+    if (!isNaN(minPrice)) filtered = filtered.filter(order => order.totalAmount >= minPrice);
+    if (!isNaN(maxPrice)) filtered = filtered.filter(order => order.totalAmount <= maxPrice);
+
+    // Sorting
+    if (sortConfig.key) {
+      filtered.sort((a, b) => {
+        const valA = a[sortConfig.key!];
+        const valB = b[sortConfig.key!];
+        let comparison = 0;
+        if (typeof valA === 'string' && typeof valB === 'string') {
+          comparison = valA.localeCompare(valB);
+        } else if (typeof valA === 'number' && typeof valB === 'number') {
+          comparison = valA - valB;
+        } else if (valA instanceof Date && valB instanceof Date) {
+            comparison = valA.getTime() - valB.getTime();
+        } else if (typeof valA === 'string' && typeof valB === 'string' && (sortConfig.key === 'createdAt' || sortConfig.key === 'updatedAt')) {
+            // Dates are strings, convert for comparison
+            comparison = new Date(valA).getTime() - new Date(valB).getTime();
+        }
+
+
+        return sortConfig.direction === 'ascending' ? comparison : -comparison;
+      });
+    }
+    setDisplayedOrders(filtered);
+  }, [allFetchedOrders, priceRange, sortConfig]);
 
   const handleStatusChange = async (orderId: string, newStatus: OrderStatusType) => {
     setUpdatingOrderId(orderId);
@@ -182,35 +215,34 @@ export default function OrderManagementPage() {
     }
   };
 
-  const handleViewDetails = (order: ClientOrder) => {
-    toast({ title: "Feature Coming Soon", description: `Details for Order #${order.id.substring(0,6)} will be shown here.`});
+  const handleSort = (key: keyof ClientOrder) => {
+    setSortConfig(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === 'ascending' ? 'descending' : 'ascending',
+    }));
   };
-
-
-  if (authLoading || pageLoading) {
-    return <div className="flex h-full items-center justify-center"><LoadingSpinner className="h-10 w-10 text-primary" /></div>;
-  }
-  if (!restaurant) {
-    return <Card><CardHeader><CardTitle>Error</CardTitle></CardHeader><CardContent><p>Restaurant not found or no permission.</p></CardContent></Card>;
-  }
-
+  
   const getItemsSummary = (items: OrderItem[]) => {
     if (!items || items.length === 0) return "No items";
     const totalQuantity = items.reduce((sum, item) => sum + item.quantity, 0);
     return `${totalQuantity} item${totalQuantity > 1 ? 's' : ''}`;
   };
+
+  if (authLoading || pageLoading && !restaurant) {
+    return <div className="flex h-full items-center justify-center"><LoadingSpinner className="h-10 w-10 text-primary" /></div>;
+  }
+  if (!restaurant) {
+    return <Card><CardHeader><CardTitle>Error</CardTitle></CardHeader><CardContent><p>Restaurant data could not be loaded.</p></CardContent></Card>;
+  }
   
-  const statusTabs: { value: OrderStatusType | 'all'; label: string }[] = [
-    { value: 'all', label: 'All Active' },
-    ...Object.entries(orderStatusConfig)
-     .filter(([statusKey]) => !['completed', 'cancelled_by_customer', 'cancelled_by_restaurant'].includes(statusKey)) // Exclude completed/cancelled from main tabs
-     .map(([statusKey, { shortLabel, label }]) => ({
-        value: statusKey as OrderStatusType,
-        label: shortLabel || label,
-    })),
-    { value: 'completed', label: orderStatusConfig.completed.shortLabel || orderStatusConfig.completed.label },
-    { value: 'cancelled_by_restaurant', label: orderStatusConfig.cancelled_by_restaurant.shortLabel || orderStatusConfig.cancelled_by_restaurant.label }
-  ];
+  const SortableTableHead = ({ columnKey, children }: { columnKey: keyof ClientOrder, children: React.ReactNode }) => (
+    <TableHead onClick={() => handleSort(columnKey)} className="cursor-pointer hover:bg-muted/50">
+      <div className="flex items-center gap-2">
+        {children}
+        {sortConfig.key === columnKey && <ArrowUpDown className={`h-3 w-3 ${sortConfig.direction === 'descending' ? 'rotate-180' : ''}`} />}
+      </div>
+    </TableHead>
+  );
 
 
   return (
@@ -219,109 +251,120 @@ export default function OrderManagementPage() {
         <CardHeader>
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
             <div className="mb-4 md:mb-0">
-              <CardTitle className="text-2xl md:text-3xl flex items-center">
-                <ShoppingCart className="mr-3 h-7 w-7 text-primary" /> Order Management
-              </CardTitle>
-              <CardDescription>
-                View and manage orders for {restaurant.name}. {filterTableId ? `(Filtered for Table ${orders.find(o => o.tableId === filterTableId)?.tableNumber || filterTableId})` : ''}
-              </CardDescription>
+              <CardTitle className="text-2xl md:text-3xl flex items-center"> <ShoppingCart className="mr-3 h-7 w-7 text-primary" /> Order Management </CardTitle>
+              <CardDescription> View and manage orders for {restaurant.name}. {tableIdFilter ? `(Filtered for Table ${allFetchedOrders.find(o => o.tableId === tableIdFilter)?.tableNumber || tableIdFilter})` : ''} </CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent>
-          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as OrderStatusType | 'all')} className="w-full">
-            <TabsList className="grid w-full grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:flex lg:flex-wrap lg:w-auto mb-4">
-              {statusTabs.map(tab => (
-                <TabsTrigger key={tab.value} value={tab.value} className="text-xs px-2 py-1.5 h-auto lg:flex-initial">
-                  {tab.label}
-                </TabsTrigger>
-              ))}
-            </TabsList>
+          <div className="mb-6 space-y-4">
+            <Tabs value={activeMainTab} onValueChange={(value) => { setActiveMainTab(value as MainTabValue); setDetailedStatusFilter(null); }} className="w-full">
+              <TabsList className="grid w-full grid-cols-2 sm:flex sm:flex-wrap">
+                {MAIN_TABS.map(tab => ( <TabsTrigger key={tab.value} value={tab.value} className="text-xs px-2 py-1.5 h-auto sm:flex-initial"> {tab.label} </TabsTrigger> ))}
+              </TabsList>
+            </Tabs>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+              <div className="space-y-1">
+                <label htmlFor="detailed-status-filter" className="text-sm font-medium text-muted-foreground">Filter by Specific Status</label>
+                <Select value={detailedStatusFilter || ''} onValueChange={(value) => setDetailedStatusFilter(value as OrderStatusType || null)}>
+                  <SelectTrigger id="detailed-status-filter" className="h-10"><SelectValue placeholder="Select status..." /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All Specific Statuses</SelectItem>
+                    {DETAILED_STATUS_OPTIONS.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
 
-            <TabsContent value={activeTab} className="mt-0"> {/* Remove mt-6 if TabsList has mb-4 */}
-              {orders.length > 0 ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-[100px]">Order ID</TableHead>
-                      <TableHead>Table</TableHead>
-                      <TableHead>Created</TableHead>
-                      <TableHead>Items</TableHead>
-                      <TableHead className="text-right">Total</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right w-[180px]">Actions</TableHead>
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-muted-foreground">Filter by Date Range</label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button id="date" variant={"outline"} className={cn("w-full justify-start text-left font-normal h-10", !dateRange && "text-muted-foreground")} >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {dateRange?.from ? (dateRange.to ? (<>{format(dateRange.from, "LLL dd, y")} - {format(dateRange.to, "LLL dd, y")}</>) : (format(dateRange.from, "LLL dd, y"))) : (<span>Pick a date range</span>)}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start"><Calendar initialFocus mode="range" defaultMonth={dateRange?.from} selected={dateRange} onSelect={setDateRange} numberOfMonths={2}/></PopoverContent>
+                </Popover>
+              </div>
+
+              <div className="space-y-1">
+                 <label className="text-sm font-medium text-muted-foreground">Filter by Price Range</label>
+                 <div className="flex gap-2">
+                    <Input type="number" placeholder="Min $" value={priceRange.min} onChange={e => setPriceRange(p => ({...p, min: e.target.value}))} className="h-10" />
+                    <Input type="number" placeholder="Max $" value={priceRange.max} onChange={e => setPriceRange(p => ({...p, max: e.target.value}))} className="h-10" />
+                 </div>
+              </div>
+              <Button onClick={() => {setDetailedStatusFilter(null); setDateRange(undefined); setPriceRange({min:'', max:''}); setActiveMainTab('active');}} variant="outline" className="h-10 self-end">
+                <Filter className="mr-2 h-4 w-4"/> Clear Filters
+              </Button>
+            </div>
+          </div>
+
+          {pageLoading && displayedOrders.length === 0 ? (
+            <div className="text-center py-10"><LoadingSpinner className="h-8 w-8 text-primary" /></div>
+          ) : displayedOrders.length > 0 ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <SortableTableHead columnKey="id">Order ID</SortableTableHead>
+                  <SortableTableHead columnKey="tableNumber">Table</SortableTableHead>
+                  <SortableTableHead columnKey="createdAt">Created</SortableTableHead>
+                  <TableHead>Items</TableHead>
+                  <SortableTableHead columnKey="totalAmount">Total</SortableTableHead>
+                  <SortableTableHead columnKey="status">Status</SortableTableHead>
+                  <TableHead className="text-right w-[180px]">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {displayedOrders.map(order => {
+                  const StatusIcon = orderStatusConfig[order.status]?.icon;
+                  return (
+                    <TableRow key={order.id} className="hover:bg-muted/50">
+                      <TableCell className="font-medium text-xs">#{order.id.substring(0, 6)}...</TableCell>
+                      <TableCell>{order.tableNumber || 'N/A'}</TableCell>
+                      <TableCell className="text-xs">{format(parseISO(order.createdAt), 'MMM d, p')}</TableCell>
+                      <TableCell className="text-xs">{getItemsSummary(order.items)}</TableCell>
+                      <TableCell className="text-right font-medium">${order.totalAmount.toFixed(2)}</TableCell>
+                      <TableCell>
+                        <Badge className={`${orderStatusConfig[order.status].color} text-xs whitespace-nowrap`}>
+                          {StatusIcon && <StatusIcon className="h-3 w-3 mr-1.5" />}
+                          {orderStatusConfig[order.status].label}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end space-x-2">
+                          <Select value={order.status} onValueChange={(newStatus) => handleStatusChange(order.id, newStatus as OrderStatusType)} disabled={updatingOrderId === order.id || (possibleNextStatuses[order.status]?.length === 0 && order.status !== 'completed')} >
+                            <SelectTrigger id={`status-${order.id}`} className="h-8 text-xs w-[130px] bg-card"> <SelectValue placeholder="Update..." /> </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value={order.status} disabled>{orderStatusConfig[order.status].label} (Current)</SelectItem>
+                              {possibleNextStatuses[order.status]?.map(nextStatus => (<SelectItem key={nextStatus} value={nextStatus} className="text-xs">{orderStatusConfig[nextStatus].label}</SelectItem>))}
+                              {!['completed', 'cancelled_by_customer', 'cancelled_by_restaurant'].includes(order.status) && (<SelectItem value="completed" className="text-xs">{orderStatusConfig.completed.label}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8" disabled={updatingOrderId === order.id}><MoreHorizontal className="h-4 w-4" /><span className="sr-only">Order Actions</span></Button></DropdownMenuTrigger>
+                            <DropdownMenuContent align="end"> <DropdownMenuItem onClick={() => toast({ title: "Feature Coming Soon", description: `Details for Order #${order.id.substring(0,6)} will be shown here.`})}><Eye className="mr-2 h-4 w-4" /> View Details </DropdownMenuItem> </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {orders.map(order => {
-                      const StatusIcon = orderStatusConfig[order.status]?.icon;
-                      return (
-                        <TableRow key={order.id} className="hover:bg-muted/50">
-                          <TableCell className="font-medium text-xs">#{order.id.substring(0, 6)}...</TableCell>
-                          <TableCell>{order.tableNumber || 'N/A'}</TableCell>
-                          <TableCell className="text-xs">{format(new Date(order.createdAt), 'MMM d, p')}</TableCell>
-                          <TableCell className="text-xs">{getItemsSummary(order.items)}</TableCell>
-                          <TableCell className="text-right font-medium">${order.totalAmount.toFixed(2)}</TableCell>
-                          <TableCell>
-                            <Badge className={`${orderStatusConfig[order.status].color} text-xs whitespace-nowrap`}>
-                              {StatusIcon && <StatusIcon className="h-3 w-3 mr-1.5" />}
-                              {orderStatusConfig[order.status].label}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex items-center justify-end space-x-2">
-                              <Select 
-                                value={order.status}
-                                onValueChange={(newStatus) => handleStatusChange(order.id, newStatus as OrderStatusType)}
-                                disabled={updatingOrderId === order.id || (possibleNextStatuses[order.status]?.length === 0 && order.status !== 'completed')}
-                              >
-                                <SelectTrigger id={`status-${order.id}`} className="h-8 text-xs w-[130px] bg-card">
-                                  <SelectValue placeholder="Update..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value={order.status} disabled>{orderStatusConfig[order.status].label} (Current)</SelectItem>
-                                  {possibleNextStatuses[order.status]?.map(nextStatus => (
-                                    <SelectItem key={nextStatus} value={nextStatus} className="text-xs">{orderStatusConfig[nextStatus].label}</SelectItem>
-                                  ))}
-                                  {!['completed', 'cancelled_by_customer', 'cancelled_by_restaurant'].includes(order.status) && (
-                                    <SelectItem value="completed" className="text-xs">{orderStatusConfig.completed.label}</SelectItem>
-                                  )}
-                                </SelectContent>
-                              </Select>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-8 w-8" disabled={updatingOrderId === order.id}>
-                                    <MoreHorizontal className="h-4 w-4" />
-                                    <span className="sr-only">Order Actions</span>
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem onClick={() => handleViewDetails(order)}>
-                                    <Eye className="mr-2 h-4 w-4" /> View Details
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              ) : (
-                <div className="text-center py-10 border-2 border-dashed rounded-lg bg-muted/30">
-                  <ShoppingCart className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                  <h3 className="text-xl font-semibold mb-2">No Orders Found</h3>
-                  <p className="text-muted-foreground">
-                    {activeTab === 'all' ? 'There are no active or recent orders currently.' : `No orders match the status: ${orderStatusConfig[activeTab as OrderStatusType]?.label || activeTab}.`}
-                  </p>
-                  <Image src="https://picsum.photos/seed/noorders/300/200" alt="No orders illustration" width={300} height={200} className="mt-6 mx-auto rounded-md opacity-70" data-ai-hint="empty list food" />
-                </div>
-              )}
-            </TabsContent>
-          </Tabs>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          ) : (
+            <div className="text-center py-10 border-2 border-dashed rounded-lg bg-muted/30">
+              <ShoppingCart className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+              <h3 className="text-xl font-semibold mb-2">No Orders Found</h3>
+              <p className="text-muted-foreground">Try adjusting your filters or check back later.</p>
+              <Image src="https://picsum.photos/seed/noordersfilter/300/200" alt="No orders illustration" width={300} height={200} className="mt-6 mx-auto rounded-md opacity-70" data-ai-hint="empty plate filter"/>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
   );
 }
+

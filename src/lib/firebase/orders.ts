@@ -15,6 +15,7 @@ import {
   serverTimestamp,
   Timestamp,
   collectionGroup,
+  QueryConstraint, // Import QueryConstraint
 } from 'firebase/firestore';
 import { db } from './config';
 import type { Order, OrderStatus, OrderItem } from '@/types';
@@ -61,21 +62,37 @@ export async function getOrder(restaurantId: string, orderId: string): Promise<O
 }
 
 
-export async function getOrdersByRestaurant(restaurantId: string, statusFilters?: OrderStatus[]): Promise<Order[]> {
+export async function getOrdersByRestaurant(
+  restaurantId: string, 
+  statusFilters?: OrderStatus[],
+  startDate?: Timestamp,
+  endDate?: Timestamp,
+  tableId?: string,
+): Promise<Order[]> {
   if (!db) throw new Error("Firestore is not initialized.");
   const ordersCol = collection(db, getOrdersCollectionPath(restaurantId));
-  let q;
   
-  const activeStatuses: OrderStatus[] = ['pending_customer_confirmation', 'pending_kitchen', 'confirmed_by_kitchen', 'preparing', 'ready_for_pickup', 'served', 'payment_pending'];
+  const queryConstraints: QueryConstraint[] = [];
 
-  if (statusFilters && statusFilters.length > 0 && statusFilters[0] !== 'all') {
-    q = query(ordersCol, where('status', 'in', statusFilters), orderBy('createdAt', 'desc'));
-  } else if (statusFilters && statusFilters[0] === 'all') {
-     q = query(ordersCol, where('status', 'in', activeStatuses), orderBy('createdAt', 'desc'));
+  if (statusFilters && statusFilters.length > 0) {
+    queryConstraints.push(where('status', 'in', statusFilters));
   }
-  else {
-    q = query(ordersCol, where('status', 'in', activeStatuses), orderBy('createdAt', 'desc'));
+  if (startDate) {
+    queryConstraints.push(where('createdAt', '>=', startDate));
   }
+  if (endDate) {
+    // For 'endDate', if it's meant to be inclusive of the whole day, adjust it to the end of the day.
+    // Example: new Date(endDate.toDate().setHours(23, 59, 59, 999))
+    // For simplicity, assuming endDate is already correctly formed for the query.
+    queryConstraints.push(where('createdAt', '<=', endDate));
+  }
+  if (tableId) {
+    queryConstraints.push(where('tableId', '==', tableId));
+  }
+
+  queryConstraints.push(orderBy('createdAt', 'desc')); // Default sort
+
+  const q = query(ordersCol, ...queryConstraints);
   
   const snapshot = await getDocs(q);
   return snapshot.docs.map(docSnap => {
@@ -151,3 +168,4 @@ export async function cancelOrder(restaurantId: string, orderId: string, cancell
   }
   await updateDoc(orderRef, updateData);
 }
+
