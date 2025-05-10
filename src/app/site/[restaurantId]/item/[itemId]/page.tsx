@@ -28,6 +28,9 @@ const stringifyItemTimestamps = <T extends { createdAt?: any, updatedAt?: any }>
 
 
 export async function generateMetadata({ params }: ItemPageProps) {
+  if (!params.itemId || typeof params.itemId !== 'string' || params.itemId.trim() === '') {
+    return { title: 'Invalid Item Request' };
+  }
   const itemResult = await getMenuItemByIdFromGroup(params.itemId);
   if (!itemResult || itemResult.restaurantId !== params.restaurantId) {
     return {
@@ -44,6 +47,11 @@ export async function generateMetadata({ params }: ItemPageProps) {
 export default async function ItemPage({ params }: ItemPageProps) {
   const { restaurantId, itemId } = params;
 
+  if (!itemId || typeof itemId !== 'string' || itemId.trim() === '') {
+    console.error("ItemPage: Invalid itemId received from params:", itemId);
+    notFound();
+  }
+
   const restaurantData = await getRestaurant(restaurantId);
   if (!restaurantData) {
     notFound();
@@ -52,6 +60,7 @@ export default async function ItemPage({ params }: ItemPageProps) {
 
   const itemResult = await getMenuItemByIdFromGroup(itemId);
   if (!itemResult || itemResult.restaurantId !== restaurantId) {
+    console.warn(`Item with ID ${itemId} found, but restaurantId ${itemResult?.restaurantId} does not match expected ${restaurantId}. Or item not found.`);
     notFound();
   }
   const menuItem = stringifyItemTimestamps(itemResult.menuItem) as MenuItem & { createdAt: string; updatedAt: string };
@@ -82,4 +91,3 @@ export default async function ItemPage({ params }: ItemPageProps) {
     />
   );
 }
-

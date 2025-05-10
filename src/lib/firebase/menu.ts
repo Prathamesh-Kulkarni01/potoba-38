@@ -1,5 +1,4 @@
 
-
 import {
   collection,
   addDoc,
@@ -16,7 +15,8 @@ import {
   WriteBatch,
   writeBatch,
   collectionGroup,
-  limit, // Added limit
+  limit, 
+  FieldPath, // Import FieldPath
 } from 'firebase/firestore';
 import { db } from './config';
 import type { MenuCategory, MenuSubcategory, MenuItem, MenuItemVariant, AvailabilityRule } from '@/types';
@@ -165,82 +165,39 @@ export async function getMenuItems(restaurantId: string): Promise<MenuItem[]> {
 
 export async function getMenuItemByIdFromGroup(itemId: string): Promise<{ menuItem: MenuItem, restaurantId: string, categoryId: string, subcategoryId: string | null } | null> {
   if (!db) throw new Error("Firestore is not initialized.");
+
+  if (!itemId || typeof itemId !== 'string' || itemId.trim() === '') {
+    console.error("getMenuItemByIdFromGroup: Invalid itemId received:", itemId);
+    return null;
+  }
+
   const itemsGroupRef = collectionGroup(db, 'menuItems');
-  // Firestore collection group queries cannot directly query by document ID if it's not a field.
-  // A common practice is to store the document ID also as a field (e.g., `itemId` or `docId`) if you need to query it across groups.
-  // However, if `itemId` is the actual document ID, and it's unique across *all* `menuItems` subcollections,
-  // then a more complex approach or a direct path (if known) would be needed.
-  // For this scenario, assuming `itemId` refers to a unique field *within* the menuItem documents or we can find it.
-  // A simpler approach for a specific item *if its path is known or can be derived* is better.
-  // This function assumes `itemId` is the document ID and we're trying to find it across any restaurant/category/subcategory.
-  // This is generally INEFFICIENT if not indexed properly. A better solution is to fetch item if restaurantId/categoryId are known.
-
-  // This function is a simplified example and might require specific Firestore indexes to work efficiently (e.g., on a field named 'itemIdField' if 'itemId' is not the doc ID).
-  // If `itemId` IS the document ID and it is unique across all restaurants, you'd typically know more context (like restaurantId at least).
-
-  // Let's assume for this example that itemId is the document ID and we're trying to locate it.
-  // This approach is NOT ideal for performance without knowing the full path.
-  // A more robust solution would involve querying a field that stores the item's unique ID if `itemId` is not the doc ID, or constructing the path if parts are known.
-
-  // For the purpose of this example, we'll assume you have an `itemId` field in your documents.
-  // If `itemId` parameter *is* the document ID, then getting its parent path is tricky with collectionGroup.
-  // **This function needs to be re-evaluated based on how `itemId` is used and if it's a doc ID or a field.**
-  // **Assuming `itemId` is the document ID and we are looking for it in any `menuItems` subcollection.**
-  // **The best way to get a document by ID is by its full path, not a collectionGroup query by ID.**
-
-  // Correct approach if itemId is document ID AND you know the full path parts (e.g. from URL params)
-  // If only itemId is known and it could be anywhere, that's a very broad query.
-
-  // Given the use case (public item page /site/[restaurantId]/item/[itemId]),
-  // we expect `itemId` to be the document ID of a menu item.
-  // We also have `restaurantId`. We'd still need categoryId and possibly subcategoryId.
-  // A more direct way: Fetch ALL items for the restaurant and then filter by ID client-side (if # items is small)
-  // OR: Re-think. If we are on /site/restaurantX/item/itemY, `itemY` IS the doc ID.
-  // We need its full path. `getDoc(doc(db, "restaurants/../menuItems", itemId))`
-  // The problem is the middle part of the path.
-
-  // A collectionGroup query where `__name__` (document ID) equals `itemId` is possible but requires an index.
-  const q = query(itemsGroupRef, where( "__name__", "==", itemId), limit(1));
+  
+  // Use FieldPath.documentId() for querying by document ID.
+  // Ensure itemId is just the ID string.
+  const q = query(itemsGroupRef, where(FieldPath.documentId(), "==", itemId), limit(1));
+  
   const snapshot = await getDocs(q);
 
   if (snapshot.empty) {
+    console.log(`No menu item found with ID: ${itemId} in collection group 'menuItems'.`);
     return null;
   }
   const docSnap = snapshot.docs[0];
   const data = docSnap.data();
 
-  // Extract parent path segments (this is a bit of a hack and assumes structure)
-  // Path: restaurants/{restaurantId}/menuCategories/{categoryId}/[menuSubcategories/{subcategoryId}/]menuItems/{itemId}
-  const pathSegments = docSnap.ref.path.split('/');
-  // Example: ["restaurants", "res123", "menuCategories", "cat456", "menuItems", "item789"]
-  // Or:      ["restaurants", "res123", "menuCategories", "cat456", "menuSubcategories", "sub789", "menuItems", "itemXYZ"]
-
-  let restaurantId: string | undefined;
-  let categoryId: string | undefined;
-  let subcategoryId: string | null = null;
-
-  if (pathSegments[0] === 'restaurants' && pathSegments[1]) {
-    restaurantId = pathSegments[1];
+  // The parent path extraction logic remains, but ensure the data itself contains necessary IDs.
+  // It's more reliable if restaurantId, categoryId, and subcategoryId are fields within the MenuItem document.
+  if (!data.restaurantId || !data.categoryId) {
+     console.error("MenuItem document is missing restaurantId or categoryId fields:", docSnap.id, data);
+     return null;
   }
-  if (pathSegments[2] === 'menuCategories' && pathSegments[3]) {
-    categoryId = pathSegments[3];
-  }
-  if (pathSegments.length === 8 && pathSegments[4] === 'menuSubcategories' && pathSegments[5]) {
-     subcategoryId = pathSegments[5];
-  }
-
-
-  if (!restaurantId || !categoryId) {
-    console.error("Could not determine full path for menu item:", docSnap.ref.path);
-    return null;
-  }
-
 
   return {
     menuItem: { id: docSnap.id, ...data } as MenuItem,
-    restaurantId: data.restaurantId, // This field MUST exist in your MenuItem document
-    categoryId: data.categoryId,     // This field MUST exist
-    subcategoryId: data.subcategoryId || null // This field MUST exist (or be null)
+    restaurantId: data.restaurantId, 
+    categoryId: data.categoryId,     
+    subcategoryId: data.subcategoryId || null 
   };
 }
 
@@ -349,4 +306,3 @@ export async function deleteMenuItem(restaurantId: string, categoryId: string, s
   }
   await deleteDoc(itemRefPath);
 }
-
