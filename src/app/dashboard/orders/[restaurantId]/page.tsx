@@ -124,17 +124,25 @@ export default function OrderManagementPage() {
           queryStatuses = MAIN_TABS.find(tab => tab.value === activeMainTab)?.statuses;
         }
         
-        let startDate: Timestamp | undefined = undefined;
-        let endDate: Timestamp | undefined = undefined;
-        if (dateRange?.from) startDate = Timestamp.fromDate(dateRange.from);
+        let startDateISOString: string | undefined = undefined;
+        let endDateISOString: string | undefined = undefined;
+
+        if (dateRange?.from) {
+          startDateISOString = dateRange.from.toISOString();
+        }
         if (dateRange?.to) {
             const toDate = new Date(dateRange.to);
             toDate.setHours(23, 59, 59, 999); // Set to end of day
-            endDate = Timestamp.fromDate(toDate);
+            endDateISOString = toDate.toISOString();
         }
 
-
-        const fetchedOrdersRaw = await getOrdersByRestaurant(restaurantId, queryStatuses, startDate, endDate, tableIdFilter || undefined);
+        const fetchedOrdersRaw = await getOrdersByRestaurant(
+          restaurantId, 
+          queryStatuses, 
+          startDateISOString, 
+          endDateISOString, 
+          tableIdFilter || undefined
+        );
         
         const convertTimestampToString = (ts: any): string => {
            if (ts instanceof Timestamp) return ts.toDate().toISOString();

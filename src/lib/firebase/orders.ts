@@ -65,8 +65,8 @@ export async function getOrder(restaurantId: string, orderId: string): Promise<O
 export async function getOrdersByRestaurant(
   restaurantId: string, 
   statusFilters?: OrderStatus[],
-  startDate?: Timestamp,
-  endDate?: Timestamp,
+  startDateISO?: string, // Changed from Timestamp
+  endDateISO?: string,   // Changed from Timestamp
   tableId?: string,
 ): Promise<Order[]> {
   if (!db) throw new Error("Firestore is not initialized.");
@@ -77,14 +77,12 @@ export async function getOrdersByRestaurant(
   if (statusFilters && statusFilters.length > 0) {
     queryConstraints.push(where('status', 'in', statusFilters));
   }
-  if (startDate) {
-    queryConstraints.push(where('createdAt', '>=', startDate));
+  if (startDateISO) {
+    queryConstraints.push(where('createdAt', '>=', Timestamp.fromDate(new Date(startDateISO))));
   }
-  if (endDate) {
-    // For 'endDate', if it's meant to be inclusive of the whole day, adjust it to the end of the day.
-    // Example: new Date(endDate.toDate().setHours(23, 59, 59, 999))
-    // For simplicity, assuming endDate is already correctly formed for the query.
-    queryConstraints.push(where('createdAt', '<=', endDate));
+  if (endDateISO) {
+    // endDateISO is expected to be an ISO string for the end of the day
+    queryConstraints.push(where('createdAt', '<=', Timestamp.fromDate(new Date(endDateISO))));
   }
   if (tableId) {
     queryConstraints.push(where('tableId', '==', tableId));
@@ -168,4 +166,3 @@ export async function cancelOrder(restaurantId: string, orderId: string, cancell
   }
   await updateDoc(orderRef, updateData);
 }
-
