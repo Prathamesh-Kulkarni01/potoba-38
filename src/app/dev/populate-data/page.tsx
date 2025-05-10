@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import LoadingSpinner from '@/components/shared/loading-spinner';
 import { useToast } from '@/hooks/use-toast';
-import type { RestaurantProfile, MenuItem, Table as FirebaseTableType } from '@/types';
+import type { RestaurantProfile, MenuItem, Table as FirebaseTableType, OrderStatus } from '@/types';
 import { addMenuCategory, addMenuSubcategory, addMenuItem } from '@/lib/firebase/menu';
 import { addTable } from '@/lib/firebase/tables';
 import { createOrder as createFirebaseOrder } from '@/lib/firebase/orders';
@@ -19,25 +19,32 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 
 // Dummy Data Generation Functions
 const DUMMY_CATEGORIES = [
-  { name: "Appetizers", order: 1 },
-  { name: "Soups & Salads", order: 2 },
-  { name: "Main Courses", order: 3 },
-  { name: "Burgers & Sandwiches", order: 4 },
-  { name: "Desserts", order: 5 },
-  { name: "Beverages", order: 6 },
+  { name: "Starters (Shuruaat)", order: 1 },
+  { name: "Soups (Shorba)", order: 2 },
+  { name: "Tandoori & Grills (Tandoor Se)", order: 3 },
+  { name: "Main Courses (Mukhya Bhojan)", order: 4 },
+  { name: "Breads (Rotiyaan)", order: 5 },
+  { name: "Rice & Biryani (Chawal Aur Biryani)", order: 6 },
+  { name: "Desserts (Mithaiyan)", order: 7 },
+  { name: "Beverages ( पेय)", order: 8 },
 ];
 
 const DUMMY_SUB_CATEGORIES: Record<string, { name: string, order: number }[]> = {
-  "Main Courses": [
-    { name: "Vegetarian Mains", order: 1 },
-    { name: "Chicken Dishes", order: 2 },
-    { name: "Beef & Lamb", order: 3 },
-    { name: "Seafood", order: 4 },
+  "Starters (Shuruaat)": [
+    { name: "Vegetarian Starters", order: 1 },
+    { name: "Non-Vegetarian Starters", order: 2 },
   ],
-  "Beverages": [
-    { name: "Hot Drinks", order: 1 },
-    { name: "Cold Drinks", order: 2 },
-    { name: "Fresh Juices", order: 3 },
+  "Main Courses (Mukhya Bhojan)": [
+    { name: "Vegetarian Curries", order: 1 },
+    { name: "Chicken Curries", order: 2 },
+    { name: "Lamb & Mutton Curries", order: 3 },
+    { name: "Seafood Curries", order: 4 },
+    { name: "Dal (Lentils)", order: 5},
+  ],
+  "Beverages ( पेय)": [
+    { name: "Lassi & Chaas", order: 1 },
+    { name: "Soft Drinks & Juices", order: 2 },
+    { name: "Tea & Coffee", order: 3 },
   ],
 };
 
@@ -46,30 +53,52 @@ const getRandomOrder = () => Math.floor(Math.random() * 100);
 const getRandomBoolean = () => Math.random() < 0.85; // 85% chance of true
 
 const DUMMY_MENU_ITEMS_POOL: Omit<MenuItem, 'id' | 'restaurantId' | 'categoryId' | 'subcategoryId' | 'createdAt' | 'updatedAt' | 'order' | 'price' | 'availability'>[] = [
-  // Appetizers
-  { name: "Crispy Spring Rolls", description: "Golden fried spring rolls served with sweet chili sauce.", dietaryTags: ["vegetarian"], imageUrl: "https://picsum.photos/seed/springrolls/400/250" },
-  { name: "Garlic Bread with Cheese", description: "Toasted baguette slices topped with garlic butter and melted mozzarella.", imageUrl: "https://picsum.photos/seed/garlicbread/400/250" },
-  // Soups & Salads
-  { name: "Classic Caesar Salad", description: "Crisp romaine lettuce, croutons, parmesan, and Caesar dressing.", calories: 350, imageUrl: "https://picsum.photos/seed/caesarsalad/400/250" },
-  { name: "Tomato Basil Soup", description: "Creamy tomato soup with fresh basil.", dietaryTags: ["vegetarian", "gluten-free"], calories: 250, imageUrl: "https://picsum.photos/seed/tomatosoup/400/250" },
-  // Vegetarian Mains
-  { name: "Vegetable Stir-fry", description: "Assorted fresh vegetables stir-fried in a savory sauce, served with rice.", dietaryTags: ["vegan", "vegetarian"], calories: 450, imageUrl: "https://picsum.photos/seed/vegstirfry/400/250" },
-  { name: "Paneer Tikka Masala", description: "Grilled paneer cubes in a rich, creamy tomato-based gravy.", dietaryTags: ["vegetarian"], calories: 550, imageUrl: "https://picsum.photos/seed/paneertikka/400/250" },
-  // Chicken Dishes
-  { name: "Grilled Chicken Breast", description: "Juicy grilled chicken breast served with mashed potatoes and steamed vegetables.", calories: 500, imageUrl: "https://picsum.photos/seed/grilledchicken/400/250" },
-  { name: "Chicken Alfredo Pasta", description: "Creamy Alfredo sauce with grilled chicken and fettuccine pasta.", calories: 700, imageUrl: "https://picsum.photos/seed/chickenalfredo/400/250" },
-  // Beef & Lamb
-  { name: "Classic Beef Burger", description: "Grilled beef patty, lettuce, tomato, onion, pickles, and special sauce on a sesame bun. Served with fries.", calories: 800, imageUrl: "https://picsum.photos/seed/beefburger/400/250" },
-  { name: "Lamb Chops", description: "Grilled lamb chops marinated in herbs and spices, served with roasted potatoes.", calories: 750, imageUrl: "https://picsum.photos/seed/lambchops/400/250" },
-  // Seafood
-  { name: "Grilled Salmon", description: " flaky salmon fillet grilled to perfection, served with asparagus.", calories: 600, imageUrl: "https://picsum.photos/seed/grilledsalmon/400/250" },
-  // Hot Drinks
-  { name: "Espresso", description: "A strong shot of coffee.", calories: 5, imageUrl: "https://picsum.photos/seed/espresso/400/250" },
-  { name: "Cappuccino", description: "Espresso with steamed milk and foam.", calories: 120, imageUrl: "https://picsum.photos/seed/cappuccino/400/250" },
-  // Cold Drinks
-  { name: "Iced Latte", description: "Chilled espresso with milk over ice.", calories: 150, imageUrl: "https://picsum.photos/seed/icedlatte/400/250" },
-  { name: "Coca-Cola", description: "Classic Coca-Cola.", calories: 140, imageUrl: "https://picsum.photos/seed/cocacola/400/250" },
+  // Vegetarian Starters
+  { name: "Paneer Tikka", description: "Cubes of paneer marinated in yogurt and spices, grilled in a tandoor.", dietaryTags: ["vegetarian"], calories: 280, imageUrl: "https://picsum.photos/seed/paneertikka/400/250" },
+  { name: "Vegetable Samosa", description: "Crispy pastry filled with spiced potatoes and peas, served with chutney.", dietaryTags: ["vegetarian", "vegan"], calories: 150, imageUrl: "https://picsum.photos/seed/samosa/400/250" },
+  { name: "Hara Bhara Kebab", description: "Spinach and green pea patties, mildly spiced and pan-fried.", dietaryTags: ["vegetarian"], calories: 200, imageUrl: "https://picsum.photos/seed/harakebab/400/250" },
+  // Non-Vegetarian Starters
+  { name: "Chicken Tikka", description: "Boneless chicken pieces marinated in yogurt and spices, grilled in a tandoor.", calories: 300, imageUrl: "https://picsum.photos/seed/chickentikka/400/250" },
+  { name: "Seekh Kebab", description: "Minced lamb seasoned with spices, skewered and grilled.", calories: 350, imageUrl: "https://picsum.photos/seed/seekhkebab/400/250" },
+  // Soups
+  { name: "Tomato Shorba", description: "A light and tangy tomato soup with Indian spices.", dietaryTags: ["vegetarian", "vegan"], calories: 120, imageUrl: "https://picsum.photos/seed/tomatoshorba/400/250" },
+  { name: "Mulligatawny Soup", description: "A traditional Anglo-Indian lentil and vegetable soup, subtly spiced.", dietaryTags: ["vegetarian"], calories: 180, imageUrl: "https://picsum.photos/seed/mulligatawny/400/250" },
+  // Tandoori & Grills
+  { name: "Tandoori Chicken", description: "Whole chicken marinated in yogurt and spices, roasted in a tandoor.", calories: 450, imageUrl: "https://picsum.photos/seed/tandoorichicken/400/250" },
+  { name: "Fish Tikka Ajwaini", description: "Chunks of fish marinated with carom seeds (ajwain) and spices, grilled.", calories: 320, imageUrl: "https://picsum.photos/seed/fishtikka/400/250" },
+  // Vegetarian Curries
+  { name: "Palak Paneer", description: "Paneer cubes in a smooth spinach gravy.", dietaryTags: ["vegetarian"], calories: 400, imageUrl: "https://picsum.photos/seed/palakpaneer/400/250" },
+  { name: "Malai Kofta", description: "Deep-fried paneer and vegetable dumplings in a rich, creamy tomato-cashew gravy.", dietaryTags: ["vegetarian"], calories: 550, imageUrl: "https://picsum.photos/seed/malaikofta/400/250" },
+  { name: "Chana Masala", description: "Chickpeas cooked in a spicy onion-tomato gravy.", dietaryTags: ["vegetarian", "vegan"], calories: 350, imageUrl: "https://picsum.photos/seed/chanamasala/400/250" },
+  // Chicken Curries
+  { name: "Butter Chicken (Murgh Makhani)", description: "Tandoori chicken pieces cooked in a rich tomato and butter gravy.", calories: 600, imageUrl: "https://picsum.photos/seed/butterchicken/400/250" },
+  { name: "Chicken Korma", description: "Chicken cooked in a mild, creamy yogurt and nut-based gravy.", calories: 580, imageUrl: "https://picsum.photos/seed/chickenkorma/400/250" },
+  // Lamb & Mutton Curries
+  { name: "Rogan Josh", description: "Aromatic Kashmiri lamb curry with a rich red gravy.", calories: 650, imageUrl: "https://picsum.photos/seed/roganjosh/400/250" },
+  { name: "Mutton Vindaloo", description: "Spicy and tangy Goan mutton curry.", calories: 700, imageUrl: "https://picsum.photos/seed/muttonvindaloo/400/250" },
+  // Dal (Lentils)
+  { name: "Dal Makhani", description: "Black lentils and kidney beans slow-cooked with butter and cream.", dietaryTags: ["vegetarian"], calories: 450, imageUrl: "https://picsum.photos/seed/dalmakhani/400/250" },
+  { name: "Dal Tadka", description: "Yellow lentils tempered with spices and ghee.", dietaryTags: ["vegetarian", "vegan option available"], calories: 300, imageUrl: "https://picsum.photos/seed/daltadka/400/250" },
+  // Breads
+  { name: "Naan", description: "Soft leavened bread baked in a tandoor.", dietaryTags: ["vegetarian"], calories: 200, imageUrl: "https://picsum.photos/seed/naan/400/250" },
+  { name: "Garlic Naan", description: "Naan bread topped with garlic and butter.", dietaryTags: ["vegetarian"], calories: 250, imageUrl: "https://picsum.photos/seed/garlicnaan/400/250" },
+  { name: "Tandoori Roti", description: "Whole wheat bread baked in a tandoor.", dietaryTags: ["vegetarian", "vegan"], calories: 150, imageUrl: "https://picsum.photos/seed/tandooriroti/400/250" },
+  { name: "Lachha Paratha", description: "Layered flaky whole wheat bread.", dietaryTags: ["vegetarian"], calories: 220, imageUrl: "https://picsum.photos/seed/lachhaparatha/400/250" },
+  // Rice & Biryani
+  { name: "Steamed Rice", description: "Plain steamed basmati rice.", dietaryTags: ["vegetarian", "vegan", "gluten-free"], calories: 180, imageUrl: "https://picsum.photos/seed/steamedrice/400/250" },
+  { name: "Vegetable Biryani", description: "Aromatic basmati rice cooked with mixed vegetables and spices.", dietaryTags: ["vegetarian"], calories: 400, imageUrl: "https://picsum.photos/seed/vegbiryani/400/250" },
+  { name: "Chicken Biryani", description: "Fragrant basmati rice cooked with chicken and a blend of spices.", calories: 550, imageUrl: "https://picsum.photos/seed/chickenbiryani/400/250" },
+  // Desserts
+  { name: "Gulab Jamun", description: "Deep-fried milk solids dumplings soaked in sugar syrup.", dietaryTags: ["vegetarian"], calories: 300, imageUrl: "https://picsum.photos/seed/gulabjamun/400/250" },
+  { name: "Rasmalai", description: "Spongy cottage cheese patties soaked in saffron-flavored sweetened milk.", dietaryTags: ["vegetarian"], calories: 250, imageUrl: "https://picsum.photos/seed/rasmalai/400/250" },
+  // Beverages - Lassi & Chaas
+  { name: "Sweet Lassi", description: "Creamy yogurt-based drink, sweetened.", dietaryTags: ["vegetarian"], calories: 220, imageUrl: "https://picsum.photos/seed/sweetlassi/400/250" },
+  { name: "Masala Chaas", description: "Spiced buttermilk, refreshing and digestive.", dietaryTags: ["vegetarian"], calories: 80, imageUrl: "https://picsum.photos/seed/masalachas/400/250" },
+  // Beverages - Soft Drinks & Juices
+  { name: "Fresh Lime Soda", description: "Refreshing soda with fresh lime juice, sweet or salted.", dietaryTags: ["vegetarian", "vegan"], calories: 100, imageUrl: "https://picsum.photos/seed/limesoda/400/250" },
+  { name: "Mango Juice", description: "Freshly squeezed mango juice (seasonal).", dietaryTags: ["vegetarian", "vegan"], calories: 150, imageUrl: "https://picsum.photos/seed/mangojuice/400/250" },
 ];
+
 
 export default function PopulateDataPage() {
   const { user } = useAuth();
@@ -116,9 +145,9 @@ export default function PopulateDataPage() {
             const newSubCategory = await addMenuSubcategory(restaurantId, newCategory.id, { name: subCat.name, order: subCat.order });
             addLog(`  Created subcategory: ${newSubCategory.name} under ${newCategory.name}`);
             // Add items to subcategory
-            for (let i = 0; i < 3; i++) { // Add 3 items per subcategory
+            for (let i = 0; i < 2; i++) { // Add 2 items per subcategory
               const itemTemplate = DUMMY_MENU_ITEMS_POOL[Math.floor(Math.random() * DUMMY_MENU_ITEMS_POOL.length)];
-              const newItemData = { ...itemTemplate, price: getRandomPrice(5, 25), order: getRandomOrder(), availability: getRandomBoolean() };
+              const newItemData = { ...itemTemplate, price: getRandomPrice(8, 30), order: getRandomOrder(), availability: getRandomBoolean() };
               const newItem = await addMenuItem(restaurantId, newCategory.id, newSubCategory.id, newItemData);
               createdMenuItems.push(newItem);
               addLog(`    Added item: ${newItem.name} to ${newSubCategory.name}`);
@@ -126,9 +155,9 @@ export default function PopulateDataPage() {
           }
         } else {
            // Add items directly to category
-           for (let i = 0; i < 4; i++) { // Add 4 items per category without subs
+           for (let i = 0; i < 3; i++) { // Add 3 items per category without subs
             const itemTemplate = DUMMY_MENU_ITEMS_POOL[Math.floor(Math.random() * DUMMY_MENU_ITEMS_POOL.length)];
-            const newItemData = { ...itemTemplate, price: getRandomPrice(3, 15), order: getRandomOrder(), availability: getRandomBoolean() };
+            const newItemData = { ...itemTemplate, price: getRandomPrice(4, 20), order: getRandomOrder(), availability: getRandomBoolean() };
             const newItem = await addMenuItem(restaurantId, newCategory.id, null, newItemData);
             createdMenuItems.push(newItem);
             addLog(`    Added item: ${newItem.name} to ${newCategory.name}`);
@@ -161,15 +190,14 @@ export default function PopulateDataPage() {
             orderItems.push({ menuItemId: menuItem.id, menuItemName: menuItem.name, quantity, unitPrice: menuItem.price, totalPrice });
             subtotal += totalPrice;
           }
-          const orderStatuses: any[] = ['pending_kitchen', 'confirmed_by_kitchen', 'preparing', 'served', 'completed', 'cancelled_by_restaurant'];
+          const orderStatuses: OrderStatus[] = ['pending_kitchen', 'confirmed_by_kitchen', 'preparing', 'served', 'completed', 'cancelled_by_restaurant'];
           const randomStatus = orderStatuses[Math.floor(Math.random() * orderStatuses.length)];
           
-          // Simulate past orders by adjusting createdAt
           const pastDate = new Date();
-          pastDate.setDate(pastDate.getDate() - Math.floor(Math.random() * 7)); // Orders within the last 7 days
+          pastDate.setDate(pastDate.getDate() - Math.floor(Math.random() * 7)); 
           pastDate.setHours(Math.floor(Math.random() * 24), Math.floor(Math.random() * 60));
 
-
+          // Prepare order data for Firestore (Timestamps are handled by serverTimestamp in createOrder)
           const orderData = {
             tableId: table.id,
             tableNumber: table.tableNumber,
@@ -177,11 +205,10 @@ export default function PopulateDataPage() {
             subtotal,
             totalAmount: parseFloat((subtotal * 1.1).toFixed(2)), // Assuming 10% tax/service
             status: randomStatus,
-            // createdAt and updatedAt will be set by serverTimestamp in createFirebaseOrder, but we can't easily set them to past for dummy data via serverTimestamp directly client-side
-            // For dummy generation, direct Timestamps might be needed if precise past dates are critical.
-            // The createFirebaseOrder will use serverTimestamp. For this dummy script, it's acceptable.
+            // createdAt and updatedAt are set server-side by createFirebaseOrder
           };
           const newOrder = await createFirebaseOrder(restaurantId, orderData);
+          // Log creation but use newOrder.id which is the actual ID. Status is from randomStatus
           addLog(`Created order ${newOrder.id} for table ${table.tableNumber} with status ${randomStatus}`);
         }
         addLog(`--- Orders population complete. ---`);
@@ -272,3 +299,4 @@ export default function PopulateDataPage() {
     </div>
   );
 }
+
