@@ -142,8 +142,8 @@ export interface OrderItem {
 export interface Order {
   id: string; // Firestore document ID
   restaurantId: string;
-  tableId: string; // Reference to the Table.id
-  tableNumber: string; // Denormalized for easier display
+  tableId?: string | null; // Reference to the Table.id, optional for online/takeaway orders
+  tableNumber?: string | null; // Denormalized for easier display, optional
   items: OrderItem[];
   subtotal: number; // Sum of all OrderItem.totalPrice
   taxAmount?: number;
@@ -160,9 +160,12 @@ export interface Order {
 }
 
 // ClientOrder is used for passing data to client components, ensuring Timestamps are strings.
-export interface ClientOrder extends Omit<Order, 'createdAt' | 'updatedAt'> {
+export interface ClientOrder extends Omit<Order, 'createdAt' | 'updatedAt' | 'tableId' | 'tableNumber'> {
   createdAt: string; // ISO string
   updatedAt: string; // ISO string
+  tableId?: string | null;
+  tableNumber?: string | null;
 }
+
 
 
