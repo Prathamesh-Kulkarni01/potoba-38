@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import type { RestaurantProfile, MenuCategory, MenuSubcategory, MenuItem } from '@/types';
@@ -12,6 +11,7 @@ import AboutRestaurantSection from './about-restaurant-section';
 import SiteFooter from './site-footer';
 import type { CartItem } from './cart-store'; 
 import { useCart } from './cart-store'; 
+import { useToast } from '@/hooks/use-toast';
 
 interface RestaurantHomepageClientProps {
   restaurant: RestaurantProfile & { createdAt: string; updatedAt: string };
@@ -30,11 +30,15 @@ export default function RestaurantHomepageClient({
   popularDishes,
   specialOffers,
 }: RestaurantHomepageClientProps) {
-  const { cart, addToCart, removeFromCart, updateQuantity, clearCart } = useCart();
+  const { cart, addToCart } = useCart();
+  const { toast } = useToast();
   const [activeCategoryId, setActiveCategoryId] = useState<string>('all'); // 'all' or category.id
 
   const filteredMenuItems = useMemo(() => {
     if (activeCategoryId === 'all') {
+      // If 'all' is selected, we might show popular items or a subset of all items.
+      // For this example, let's assume MenuDisplaySection handles showing popular vs all.
+      // Here, we just pass all available items.
       return allMenuItems.filter(item => item.availability);
     }
     return allMenuItems.filter(item => item.categoryId === activeCategoryId && item.availability);
@@ -49,16 +53,20 @@ export default function RestaurantHomepageClient({
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const handleAddToCart = (item: MenuItem, quantity: number = 1) => {
+  const handleAddToCart = (item: MenuItem) => {
     const cartItem: CartItem = {
       menuItemId: item.id,
       menuItemName: item.name,
-      quantity: quantity,
+      quantity: 1, // Default quantity to add
       unitPrice: item.price,
-      totalPrice: item.price * quantity,
+      totalPrice: item.price, // For single item, total price is unit price
       imageUrl: item.imageUrl || undefined, 
     };
     addToCart(cartItem);
+    toast({
+        title: `${item.name} Added to Cart`,
+        description: `Price: $${item.price.toFixed(2)}`,
+    });
   };
 
 
@@ -69,6 +77,7 @@ export default function RestaurantHomepageClient({
         restaurantLogoUrl={`https://picsum.photos/seed/${restaurant.id}logo/40/40`}
         cartItemCount={cart.reduce((sum, item) => sum + item.quantity, 0)}
         showShadow={showNavShadow}
+        restaurantId={restaurant.id}
       />
       <main className="flex-grow">
         <HeroSection
@@ -80,15 +89,16 @@ export default function RestaurantHomepageClient({
             if (menuSection) {
               menuSection.scrollIntoView({ behavior: 'smooth' });
             }
+            // Optionally, set active category to the first actual category
             setActiveCategoryId(categories[0]?.id || 'all');
           }}
         />
         
         <MenuDisplaySection
           restaurantId={restaurant.id}
-          popularDishes={popularDishes}
-          menuItems={filteredMenuItems}
-          allMenuItems={allMenuItems} 
+          popularDishes={popularDishes.filter(item => item.availability)}
+          menuItems={filteredMenuItems} // These are already filtered by activeCategory and availability
+          allMenuItems={allMenuItems.filter(item => item.availability)} 
           categories={categories}
           subcategories={subcategories} 
           activeCategoryId={activeCategoryId}
@@ -110,3 +120,4 @@ export default function RestaurantHomepageClient({
     </div>
   );
 }
+

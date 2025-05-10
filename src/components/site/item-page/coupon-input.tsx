@@ -6,13 +6,14 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Tag } from 'lucide-react';
+import LoadingSpinner from '@/components/shared/loading-spinner';
 
 interface CouponInputProps {
   couponCode: string;
   onCouponCodeChange: (code: string) => void;
   onApplyCoupon: () => void;
-  appliedDiscount: number; // To show feedback e.g. 0.1 for 10%
-  isProcessing?: boolean; // if coupon application involves async call
+  appliedDiscount: number; // To show feedback e.g. 0.1 for 10%; -1 for invalid
+  isProcessing?: boolean; 
 }
 
 export default function CouponInput({ 
@@ -23,9 +24,9 @@ export default function CouponInput({
     isProcessing 
 }: CouponInputProps) {
   return (
-    <div className="space-y-2 rounded-lg border border-input p-4 bg-card">
+    <div className="space-y-2 rounded-lg border border-input p-4 bg-card shadow-sm">
       <Label htmlFor="couponCode" className="text-sm font-medium text-foreground">
-        Apply Coupon
+        Have a Coupon?
       </Label>
       <div className="flex items-center gap-2">
         <Input
@@ -34,29 +35,31 @@ export default function CouponInput({
           placeholder="Enter coupon code"
           value={couponCode}
           onChange={(e) => onCouponCodeChange(e.target.value)}
-          className="h-10 text-sm flex-grow"
+          className="h-9 text-sm flex-grow"
+          disabled={isProcessing}
         />
         <Button 
             onClick={onApplyCoupon} 
             variant="outline" 
-            size="default" 
-            className="h-10 text-sm whitespace-nowrap"
+            size="sm" 
+            className="h-9 text-sm whitespace-nowrap"
             disabled={isProcessing || !couponCode}
         >
-          <Tag className="mr-2 h-4 w-4" />
+          {isProcessing ? <LoadingSpinner className="h-4 w-4" /> : <Tag className="mr-1.5 h-4 w-4" />}
           Apply
         </Button>
       </div>
       {appliedDiscount > 0 && (
-        <p className="text-xs text-green-600 font-medium">
+        <p className="text-xs text-green-600 font-medium pt-1">
           {(appliedDiscount * 100).toFixed(0)}% discount applied!
         </p>
       )}
-       {appliedDiscount === -1 && ( // Special value to indicate invalid coupon after trying
-        <p className="text-xs text-destructive font-medium">
+       {appliedDiscount === -1 && ( 
+        <p className="text-xs text-destructive font-medium pt-1">
           Invalid coupon code.
         </p>
       )}
     </div>
   );
 }
+

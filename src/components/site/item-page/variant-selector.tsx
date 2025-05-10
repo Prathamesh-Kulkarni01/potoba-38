@@ -51,3 +51,4 @@ export default function VariantSelector({ variants, selectedVariants, onVariantC
     </Card>
   );
 }
+

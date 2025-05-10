@@ -29,6 +29,7 @@ const stringifyItemTimestamps = <T extends { createdAt?: any, updatedAt?: any }>
 
 export async function generateMetadata({ params }: ItemPageProps) {
   if (!params.itemId || typeof params.itemId !== 'string' || params.itemId.trim() === '') {
+    // This case should ideally be caught before, but good to handle
     return { title: 'Invalid Item Request' };
   }
   const itemResult = await getMenuItemByIdFromGroup(params.itemId);
@@ -59,8 +60,9 @@ export default async function ItemPage({ params }: ItemPageProps) {
   const restaurant = stringifyItemTimestamps(restaurantData) as RestaurantProfile & { createdAt: string; updatedAt: string };
 
   const itemResult = await getMenuItemByIdFromGroup(itemId);
+
   if (!itemResult || itemResult.restaurantId !== restaurantId) {
-    console.warn(`Item with ID ${itemId} found, but restaurantId ${itemResult?.restaurantId} does not match expected ${restaurantId}. Or item not found.`);
+    console.warn(`Item with ID ${itemId} found, but its restaurantId ${itemResult?.restaurantId} does not match expected ${restaurantId}. Or item was not found via itemIdString query.`);
     notFound();
   }
   const menuItem = stringifyItemTimestamps(itemResult.menuItem) as MenuItem & { createdAt: string; updatedAt: string };
@@ -91,3 +93,4 @@ export default async function ItemPage({ params }: ItemPageProps) {
     />
   );
 }
+

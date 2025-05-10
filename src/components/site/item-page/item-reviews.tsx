@@ -72,3 +72,4 @@ export default function ItemReviews({ reviews, averageRating, totalReviews }: It
     </Card>
   );
 }
+

@@ -36,11 +36,11 @@ export default function OrderSummarySidebar({
   cartItemCount,
 }: OrderSummarySidebarProps) {
   return (
-    <Card className="sticky top-24 shadow-xl border-primary/30"> {/* Adjust top based on header height */}
+    <Card className="shadow-xl border-primary/20"> 
       <CardHeader>
         <CardTitle className="text-xl font-semibold flex items-center text-foreground">
           <ShoppingCart className="mr-3 h-5 w-5 text-primary" />
-          Your Order Configuration
+          Order Summary
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
@@ -49,13 +49,13 @@ export default function OrderSummarySidebar({
           <span>${(baseItemPrice * quantity).toFixed(2)}</span>
         </div>
         <p className="text-xs text-muted-foreground">
-            Customizations and addons will adjust the final price.
+            Note: Final price per item may vary based on customizations. Shown above is base price for quantity.
         </p>
         
         <Separator />
         
         <div className="flex justify-between">
-          <span>Subtotal (Selected Item):</span>
+          <span>Subtotal (this item config):</span>
           <span className="font-medium">${subtotal.toFixed(2)}</span>
         </div>
         <div className="flex justify-between">
@@ -72,7 +72,7 @@ export default function OrderSummarySidebar({
         <Separator />
         
         <div className="flex justify-between text-lg font-bold text-primary">
-          <span>Item Total:</span>
+          <span>Current Item Total:</span>
           <span>${finalTotal.toFixed(2)}</span>
         </div>
       </CardContent>
@@ -88,10 +88,11 @@ export default function OrderSummarySidebar({
         <Button variant="outline" asChild className="w-full">
           <Link href={`/site/${restaurantId}/checkout`}>
             <CreditCard className="mr-2 h-4 w-4" />
-            Proceed to Checkout ({cartItemCount} items)
+            Go to Checkout ({cartItemCount} items)
           </Link>
         </Button>
       </CardFooter>
     </Card>
   );
 }
+

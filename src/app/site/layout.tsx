@@ -1,7 +1,7 @@
 
 import type { Metadata } from 'next';
 import '../globals.css'; // Main global styles
-import { ThemeProvider } from '@/components/shared/theme-provider'; // For dark/light mode if applicable
+import { ThemeProvider } from '@/components/shared/theme-provider';
 
 // Default metadata, can be overridden by specific restaurant pages
 export const metadata: Metadata = {
@@ -15,6 +15,7 @@ export default function RestaurantSiteLayout({
   children: React.ReactNode;
 }>) {
   return (
+    // ThemeProvider wraps the content, no extra html/body tags here
     <ThemeProvider
         attribute="class"
         defaultTheme="system" // Or restaurant-specific theme if that system is built
@@ -25,3 +26,4 @@ export default function RestaurantSiteLayout({
     </ThemeProvider>
   );
 }
+

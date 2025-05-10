@@ -41,3 +41,4 @@ export default function CrossSellSection({ items, restaurantId, onAddToCart }: C
     </Card>
   );
 }
+

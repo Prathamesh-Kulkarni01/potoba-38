@@ -7,18 +7,19 @@ export interface CartItem {
   menuItemId: string;
   menuItemName: string;
   quantity: number;
-  unitPrice: number;
-  totalPrice: number;
-  imageUrl?: string; // Optional: for displaying in cart
-  // Add other relevant fields like variant choices if needed
+  unitPrice: number; // This should be the price of the specific configuration (base + variants + addons)
+  totalPrice: number; // quantity * unitPrice
+  imageUrl?: string;
+  variantChoices?: { variantName: string; optionName: string; optionPrice: number }[];
+  // addonChoices?: { addonName: string; addonPrice: number }[]; // Could be added similarly
 }
 
 interface CartState {
   cart: CartItem[];
   addToCart: (item: CartItem) => void;
-  removeFromCart: (menuItemId: string) => void; // Removes one quantity or the item if quantity becomes 0
-  updateQuantity: (menuItemId: string, quantity: number) => void; // Sets specific quantity
-  deleteFromCart: (menuItemId: string) => void; // Completely removes item regardless of quantity
+  removeFromCart: (menuItemId: string) => void; 
+  updateQuantity: (menuItemId: string, quantity: number) => void;
+  deleteFromCart: (menuItemId: string) => void; 
   clearCart: () => void;
 }
 
@@ -28,23 +29,29 @@ export const useCart = create<CartState>()(
       cart: [],
       addToCart: (itemToAdd) => {
         set((state) => {
+          // For simplicity, we assume items with same menuItemId are merged by quantity.
+          // A more complex cart would treat items with different variants as distinct entries,
+          // possibly by creating a unique composite ID (menuItemId + variantHash).
           const existingItemIndex = state.cart.findIndex(
-            (item) => item.menuItemId === itemToAdd.menuItemId // && check for variants if they exist
+            (item) => item.menuItemId === itemToAdd.menuItemId && 
+                       JSON.stringify(item.variantChoices) === JSON.stringify(itemToAdd.variantChoices) // Basic check for same variant config
           );
+
           if (existingItemIndex !== -1) {
             const updatedCart = [...state.cart];
             const existingItem = updatedCart[existingItemIndex];
-            existingItem.quantity += itemToAdd.quantity;
-            existingItem.totalPrice = existingItem.quantity * existingItem.unitPrice;
+            existingItem.quantity += itemToAdd.quantity; // Add to quantity
+            existingItem.totalPrice = existingItem.quantity * existingItem.unitPrice; // Recalculate total
             return { cart: updatedCart };
           } else {
+            // If not existing or different variants, add as new item
             return { cart: [...state.cart, itemToAdd] };
           }
         });
       },
-      removeFromCart: (menuItemId) => {
+      removeFromCart: (menuItemId) => { // This now refers to decrementing or removing if qty is 1
         set((state) => {
-          const existingItem = state.cart.find((item) => item.menuItemId === menuItemId);
+          const existingItem = state.cart.find((item) => item.menuItemId === menuItemId); // Simple find by ID for now
           if (existingItem) {
             if (existingItem.quantity > 1) {
               return {
@@ -55,36 +62,39 @@ export const useCart = create<CartState>()(
                 ),
               };
             } else {
+              // If quantity is 1, remove the item
               return { cart: state.cart.filter((item) => item.menuItemId !== menuItemId) };
             }
           }
-          return state; // No change if item not found
+          return state; 
         });
       },
       updateQuantity: (menuItemId, quantity) => {
         set((state) => {
           if (quantity <= 0) {
+            // If new quantity is 0 or less, remove the item
             return { cart: state.cart.filter((item) => item.menuItemId !== menuItemId) };
           }
           return {
             cart: state.cart.map((item) =>
-              item.menuItemId === menuItemId
+              item.menuItemId === menuItemId // Simple find by ID for now
                 ? { ...item, quantity, totalPrice: quantity * item.unitPrice }
                 : item
             ),
           };
         });
       },
-      deleteFromCart: (menuItemId) => {
+      deleteFromCart: (menuItemId) => { // Explicitly delete item regardless of quantity
          set((state) => ({
-           cart: state.cart.filter((item) => item.menuItemId !== menuItemId)
+           cart: state.cart.filter((item) => item.menuItemId !== menuItemId) // Simple find by ID
          }));
       },
       clearCart: () => set({ cart: [] }),
     }),
     {
-      name: 'restaurant-food-cart', // name of the item in the storage (must be unique)
-      storage: createJSONStorage(() => localStorage), // (optional) by default, 'localStorage' is used
+      name: 'restaurant-food-cart', 
+      storage: createJSONStorage(() => localStorage), 
     }
   )
 );
+

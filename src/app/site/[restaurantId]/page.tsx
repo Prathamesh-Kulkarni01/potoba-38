@@ -2,10 +2,10 @@
 // src/app/site/[restaurantId]/page.tsx
 import { getRestaurant } from '@/lib/firebase/firestore';
 import { getMenuCategories, getMenuSubcategories, getMenuItems } from '@/lib/firebase/menu';
-import type { RestaurantProfile, MenuCategory, MenuItem } from '@/types';
+import type { RestaurantProfile, MenuCategory, MenuItem, MenuSubcategory } from '@/types';
 import { notFound } from 'next/navigation';
 import { convertFirebaseTimestampToString } from '@/lib/firebase/utils';
-import PublicDigitalMenu from '@/components/site/public-digital-menu'; // Updated import
+import RestaurantHomepageClient from '@/components/site/public-homepage/restaurant-homepage-client'; // Updated import
 
 interface RestaurantPublicPageProps {
   params: {
@@ -52,20 +52,33 @@ export default async function RestaurantPublicPage({ params }: RestaurantPublicP
     stringifyTimestamps(restaurantDataResult) as RestaurantProfile & { createdAt: string; updatedAt: string };
 
   const categoriesData: MenuCategory[] = (await getMenuCategories(restaurantId)).sort((a, b) => a.order - b.order);
-  // Subcategories are not directly used by PublicDigitalMenu but might be needed for deeper menu structures if adapted
-  // const subcategoriesData: MenuSubcategory[] = (await getMenuSubcategories(restaurantId)).sort((a,b) => a.order - b.order); 
+  const subcategoriesData: MenuSubcategory[] = (await getMenuSubcategories(restaurantId)).sort((a,b) => a.order - b.order); 
   const menuItemsData: MenuItem[] = (await getMenuItems(restaurantId)).sort((a,b) => a.order - b.order);
 
   const categories: (MenuCategory & { createdAt: string; updatedAt: string })[] = 
     categoriesData.map(cat => stringifyTimestamps(cat) as MenuCategory & { createdAt: string; updatedAt: string });
+  const subcategories: (MenuSubcategory & { createdAt: string; updatedAt: string })[] =
+    subcategoriesData.map(sub => stringifyTimestamps(sub) as MenuSubcategory & { createdAt: string; updatedAt: string });
   const menuItems: (MenuItem & { createdAt: string; updatedAt: string })[] = 
     menuItemsData.map(item => stringifyTimestamps(item) as MenuItem & { createdAt: string; updatedAt: string });
   
+  const popularDishes = menuItems.filter(item => item.availability && (item.order < 5 || item.name.toLowerCase().includes('special'))).slice(0, 6);
+
+  // Mock special offers for now
+  const specialOffers = [
+    { id: "1", title: "Weekend Special: 20% Off", description: "Enjoy 20% off on all main courses this weekend!", imageUrl: `https://picsum.photos/seed/${restaurantId}offer1/600/400`, dataAiHint: "food discount weekend" },
+    { id: "2", title: "Combo Bonanza", description: "Get a free dessert with any family combo meal.", imageUrl: `https://picsum.photos/seed/${restaurantId}offer2/600/400`, dataAiHint: "combo meal dessert" },
+  ];
+  
   return (
-    <PublicDigitalMenu
-      restaurantData={restaurant}
-      menuCategoriesData={categories}
-      menuItemsData={menuItems}
+    <RestaurantHomepageClient
+      restaurant={restaurant}
+      categories={categories}
+      subcategories={subcategories}
+      menuItems={menuItems}
+      popularDishes={popularDishes}
+      specialOffers={specialOffers}
     />
   );
 }
+

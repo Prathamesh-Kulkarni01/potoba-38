@@ -10,7 +10,7 @@ import Link from 'next/link';
 
 interface DishCardProps {
   dish: MenuItem & { createdAt: string; updatedAt: string };
-  restaurantId: string; // Added to form the link
+  restaurantId: string; 
   onAddToCart: (dish: MenuItem) => void;
 }
 

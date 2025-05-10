@@ -164,9 +164,10 @@ export interface Order {
 export interface ClientOrder extends Omit<Order, 'createdAt' | 'updatedAt' | 'tableId' | 'tableNumber'> {
   createdAt: string; // ISO string
   updatedAt: string; // ISO string
-  tableId?: string | null;
-  tableNumber?: string | null;
+  tableId?: string | null; // Make optional for online orders
+  tableNumber?: string | null; // Make optional for online orders
 }
+
 
 
 
