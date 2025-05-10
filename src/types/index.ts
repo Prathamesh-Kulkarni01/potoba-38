@@ -98,6 +98,7 @@ export type TableStatus = 'available' | 'occupied' | 'reserved' | 'needs_cleanin
 export interface Table {
   id: string; // Firestore document ID
   restaurantId: string;
+  tableDocId: string; // Stores its own document ID for collection group queries
   tableNumber: string; // User-defined table identifier (e.g., "T1", "A5", "Patio 2")
   capacity: number;
   status: TableStatus;
