@@ -16,7 +16,7 @@ import {
   writeBatch,
   collectionGroup,
   limit,
-  documentId, // Changed from FieldPath
+  setDoc, // Import setDoc
 } from 'firebase/firestore';
 import { db } from './config';
 import type { MenuCategory, MenuSubcategory, MenuItem, MenuItemVariant, AvailabilityRule } from '@/types';
@@ -148,9 +148,6 @@ export async function getMenuItems(restaurantId: string): Promise<MenuItem[]> {
   if (!db) throw new Error("Firestore is not initialized.");
   
   const itemsColGroup = collectionGroup(db, 'menuItems');
-  // Note: collectionGroup queries require specific indexes on fields like restaurantId.
-  // For ordering, ensure composite indexes exist if combining where with multiple orderBy.
-  // Example: (restaurantId asc, order asc, name asc)
   const q = query(itemsColGroup, where('restaurantId', '==', restaurantId), orderBy('categoryId'), orderBy('subcategoryId'), orderBy('order', 'asc'), orderBy('name', 'asc'));
   
   const snapshot = await getDocs(q);
@@ -163,32 +160,33 @@ export async function getMenuItems(restaurantId: string): Promise<MenuItem[]> {
   );
 }
 
-export async function getMenuItemByIdFromGroup(itemId: string): Promise<{ menuItem: MenuItem, restaurantId: string, categoryId: string, subcategoryId: string | null } | null> {
+export async function getMenuItemByIdFromGroup(itemIdValue: string): Promise<{ menuItem: MenuItem, restaurantId: string, categoryId: string, subcategoryId: string | null } | null> {
   if (!db) throw new Error("Firestore is not initialized.");
 
-  if (!itemId || typeof itemId !== 'string' || itemId.trim() === '') {
-    console.error("getMenuItemByIdFromGroup: Invalid itemId received:", itemId);
+  if (!itemIdValue || typeof itemIdValue !== 'string' || itemIdValue.trim() === '') {
+    console.error("getMenuItemByIdFromGroup: Invalid itemIdValue received:", itemIdValue);
     return null;
   }
 
   const itemsGroupRef = collectionGroup(db, 'menuItems');
-  
-  const q = query(itemsGroupRef, where(documentId(), "==", itemId), limit(1));
+  // Query on the 'itemIdString' field instead of documentId()
+  const q = query(itemsGroupRef, where("itemIdString", "==", itemIdValue), limit(1));
   
   const snapshot = await getDocs(q);
 
   if (snapshot.empty) {
-    console.log(`No menu item found with ID: ${itemId} in collection group 'menuItems'.`);
+    console.log(`No menu item found with itemIdString: ${itemIdValue} in collection group 'menuItems'.`);
     return null;
   }
+  
   const docSnap = snapshot.docs[0];
   const data = docSnap.data();
 
-  if (!data.restaurantId || !data.categoryId) {
+   if (!data.restaurantId || !data.categoryId) {
      console.error("MenuItem document is missing restaurantId or categoryId fields:", docSnap.id, data);
      return null;
-  }
-
+   }
+  
   return {
     menuItem: { id: docSnap.id, ...data } as MenuItem,
     restaurantId: data.restaurantId, 
@@ -202,21 +200,26 @@ export async function addMenuItem(
   restaurantId: string, 
   categoryId: string, 
   subcategoryId: string | null | undefined, 
-  itemData: Omit<MenuItem, 'id' | 'restaurantId' | 'categoryId' | 'subcategoryId' | 'createdAt' | 'updatedAt'>
+  itemData: Omit<MenuItem, 'id' | 'restaurantId' | 'categoryId' | 'subcategoryId' | 'createdAt' | 'updatedAt' | 'itemIdString'>
 ): Promise<MenuItem> {
   if (!db) throw new Error("Firestore is not initialized.");
   
-  let itemsColPath;
+  let itemsColRef;
   if (subcategoryId) {
-    itemsColPath = collection(db, 'restaurants', restaurantId, 'menuCategories', categoryId, 'menuSubcategories', subcategoryId, 'menuItems');
+    itemsColRef = collection(db, 'restaurants', restaurantId, 'menuCategories', categoryId, 'menuSubcategories', subcategoryId, 'menuItems');
   } else {
-    itemsColPath = collection(db, 'restaurants', restaurantId, 'menuCategories', categoryId, 'menuItems');
+    itemsColRef = collection(db, 'restaurants', restaurantId, 'menuCategories', categoryId, 'menuItems');
   }
+  
+  const newMenuItemDocRef = doc(itemsColRef); // Create a reference with a new auto-generated ID
+  const itemIdString = newMenuItemDocRef.id; // Get the auto-generated ID
+
   const createdAt = serverTimestamp();
   const updatedAt = serverTimestamp();
 
   const dataToSave: any = {
     ...itemData,
+    itemIdString, // Store the document's own ID as a field
     restaurantId,
     categoryId,
     subcategoryId: subcategoryId || null,
@@ -237,9 +240,11 @@ export async function addMenuItem(
   if (!itemData.variants || itemData.variants.length === 0) delete dataToSave.variants;
   if (!itemData.availabilitySchedule || itemData.availabilitySchedule.length === 0) delete dataToSave.availabilitySchedule;
 
-  const docRef = await addDoc(itemsColPath, dataToSave);
+  await setDoc(newMenuItemDocRef, dataToSave); // Use setDoc with the new reference
+
   return { 
-    id: docRef.id, 
+    id: itemIdString, 
+    itemIdString,
     restaurantId, 
     categoryId, 
     subcategoryId: subcategoryId || null, 
@@ -254,7 +259,7 @@ export async function updateMenuItem(
   categoryId: string, 
   subcategoryId: string | null | undefined, 
   itemId: string, 
-  data: Partial<Omit<MenuItem, 'id' | 'restaurantId' | 'categoryId' | 'subcategoryId' | 'createdAt'>>
+  data: Partial<Omit<MenuItem, 'id' | 'restaurantId' | 'categoryId' | 'subcategoryId' | 'createdAt' | 'itemIdString'>>
 ): Promise<void> {
   if (!db) throw new Error("Firestore is not initialized.");
   
@@ -278,16 +283,21 @@ export async function updateMenuItem(
       cleanedData[key] = null;
     }
     if (key === 'calories' && (cleanedData[key] === null || cleanedData[key] === undefined || isNaN(cleanedData[key]))) {
-       delete cleanedData[key]; // Remove if null, undefined, or NaN
+       delete cleanedData[key]; 
     } else if (key === 'calories') {
        cleanedData[key] = Number(cleanedData[key]);
     }
     if ((key === 'variants' || key === 'availabilitySchedule' || key === 'dietaryTags' || key === 'allergenInfo' || key === 'crossSellItems' || key === 'upsellItems') && (!cleanedData[key] || (Array.isArray(cleanedData[key]) && cleanedData[key].length === 0))) {
-      delete cleanedData[key]; // Remove if empty array or falsy
+      delete cleanedData[key]; 
     }
   });
   
   const dataToUpdate = { ...cleanedData, updatedAt: serverTimestamp() };
+  // Ensure itemIdString is not part of the update payload as it's immutable or set at creation
+  if (dataToUpdate.hasOwnProperty('itemIdString')) {
+    delete dataToUpdate.itemIdString;
+  }
+
 
   await updateDoc(itemRefPath, dataToUpdate);
 }

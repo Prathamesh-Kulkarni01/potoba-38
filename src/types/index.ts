@@ -78,7 +78,8 @@ export interface AvailabilityRule {
 }
 
 export interface MenuItem {
-  id: string;
+  id: string; // Firestore document ID
+  itemIdString: string; // Stores the document ID also as a field for querying
   restaurantId: string;
   categoryId: string;
   subcategoryId?: string | null; // Optional, if item is directly under a category
@@ -166,6 +167,7 @@ export interface ClientOrder extends Omit<Order, 'createdAt' | 'updatedAt' | 'ta
   tableId?: string | null;
   tableNumber?: string | null;
 }
+
 
 
 
