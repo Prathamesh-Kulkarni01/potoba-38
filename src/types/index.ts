@@ -29,6 +29,7 @@ export interface RestaurantProfile {
   subscriptionPlan?: string; // Example: 'basic', 'premium'
   stripeCustomerId?: string;
   subscriptionStatus?: 'active' | 'inactive' | 'trialing';
+  taxRate?: number; // e.g., 0.10 for 10%
 }
 
 export interface MenuCategory {
@@ -104,8 +105,8 @@ export interface Table {
   status: TableStatus;
   qrCodeValue: string; // String value to be encoded in QR (e.g., URL to /menu/table/{id})
   currentOrderIds?: string[]; // IDs of active orders associated with this table for a session
-  createdAt: string; // Changed from Timestamp to string
-  updatedAt: string; // Changed from Timestamp to string
+  createdAt: string; 
+  updatedAt: string; 
 }
 
 // Ordering System Types

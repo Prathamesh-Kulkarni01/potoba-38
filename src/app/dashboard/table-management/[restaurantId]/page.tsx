@@ -7,9 +7,9 @@ import Image from 'next/image';
 import { useAuth } from '@/lib/auth/context';
 import { getRestaurant } from '@/lib/firebase/firestore';
 import { addTable, getTables, updateTable, deleteTable } from '@/lib/firebase/tables';
-import { getOrdersByTable, updateOrderStatus, createOrder } from '@/lib/firebase/orders'; // Added createOrder
-import { getMenuItems as fetchMenuItemsFirebase } from '@/lib/firebase/menu';
-import type { RestaurantProfile, Table as FirebaseTableType, TableStatus, Order, OrderItem, MenuItem as MenuItemType } from '@/types';
+import { getOrdersByTable, updateOrderStatus, createOrder } from '@/lib/firebase/orders';
+import { getMenuItems as fetchMenuItemsFirebase, getMenuCategories, getMenuSubcategories } from '@/lib/firebase/menu'; // Added category/subcategory imports
+import type { RestaurantProfile, Table as FirebaseTableType, TableStatus, Order, OrderItem, MenuItem as MenuItemType, MenuCategory, MenuSubcategory } from '@/types'; // Added MenuCategory, MenuSubcategory
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import LoadingSpinner from '@/components/shared/loading-spinner';
 import { Button } from '@/components/ui/button';
@@ -17,14 +17,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogClose } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { PlusCircle, Edit3, Trash2, QrCode, Users, Circle, X, MinusCircle } from 'lucide-react'; // Added X, MinusCircle
+import { PlusCircle, Edit3, Trash2, QrCode, Users, Circle, X, MinusCircle, Utensils } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
-import { ScrollArea } from '@/components/ui/scroll-area'; // Added ScrollArea
+import { ScrollArea } from '@/components/ui/scroll-area';
+import MenuSelectionForBill from '@/components/table-management/menu-selection-for-bill'; // New component
 
 const tableFormSchema = z.object({
   tableNumber: z.string().min(1, "Table number is required."),
@@ -61,8 +62,11 @@ export default function TableManagementPage() {
   const [selectedTable, setSelectedTable] = useState<FirebaseTableType | null>(null);
   const [selectedTableOrders, setSelectedTableOrders] = useState<Order[]>([]);
   const [menuItems, setMenuItemsState] = useState<MenuItemType[]>([]);
+  const [categories, setCategoriesState] = useState<MenuCategory[]>([]); // For menu selection
+  const [subcategories, setSubcategoriesState] = useState<MenuSubcategory[]>([]); // For menu selection
   const [currentBillItems, setCurrentBillItems] = useState<OrderItem[]>([]);
   const [isBillPanelVisible, setIsBillPanelVisible] = useState(false);
+  const [isMenuSelectionPanelOpen, setIsMenuSelectionPanelOpen] = useState(false); // For new panel
 
   const form = useForm<TableFormValues>({
     resolver: zodResolver(tableFormSchema),
@@ -76,12 +80,17 @@ export default function TableManagementPage() {
       const restaurantData = await getRestaurant(restaurantId);
       if (restaurantData && restaurantData.ownerId === user.uid) {
         setRestaurant(restaurantData);
-        const [fetchedTables, fetchedMenuItems] = await Promise.all([
+        const [fetchedTables, fetchedMenuItems, fetchedCategories, fetchedSubcategories] = await Promise.all([
           getTables(restaurantId),
-          fetchMenuItemsFirebase(restaurantId)
+          fetchMenuItemsFirebase(restaurantId),
+          getMenuCategories(restaurantId),
+          getMenuSubcategories(restaurantId) 
         ]);
-        setTables(fetchedTables);
+        setTables(fetchedTables.sort((a, b) => a.tableNumber.localeCompare(b.tableNumber, undefined, { numeric: true })));
         setMenuItemsState(fetchedMenuItems);
+        setCategoriesState(fetchedCategories.sort((a,b) => a.order - b.order));
+        setSubcategoriesState(fetchedSubcategories.sort((a,b) => a.order - b.order));
+
       } else {
         toast({ variant: "destructive", title: "Access Denied", description: "Restaurant not found or you don't have permission." });
         router.replace('/dashboard');
@@ -110,13 +119,14 @@ export default function TableManagementPage() {
   const handleSelectTable = async (table: FirebaseTableType) => {
     setSelectedTable(table);
     setIsBillPanelVisible(true);
-    setFormSubmitting(true); // Use formSubmitting as a generic loading state for bill panel operations
+    setIsMenuSelectionPanelOpen(false); // Close menu selection when a new table is selected, or keep open based on UX pref
+    setFormSubmitting(true); 
     try {
-      const orders = await getOrdersByTable(restaurantId, table.id, ['pending_kitchen', 'preparing', 'served', 'payment_pending']);
+      const orders = await getOrdersByTable(restaurantId, table.id, ['pending_kitchen', 'confirmed_by_kitchen', 'preparing', 'ready_for_pickup', 'served', 'payment_pending']);
       setSelectedTableOrders(orders);
       const aggregatedBillItems: OrderItem[] = orders.reduce((acc, order) => {
         order.items.forEach(item => {
-          const existingItem = acc.find(bi => bi.menuItemId === item.menuItemId /* && check variants */);
+          const existingItem = acc.find(bi => bi.menuItemId === item.menuItemId);
           if (existingItem) {
             existingItem.quantity += item.quantity;
             existingItem.totalPrice += item.totalPrice;
@@ -136,22 +146,26 @@ export default function TableManagementPage() {
   };
 
   const handleAddItemToBill = (menuItem: MenuItemType, quantity: number = 1) => {
-    const existingItem = currentBillItems.find(bi => bi.menuItemId === menuItem.id);
-    if (existingItem) {
-      setCurrentBillItems(currentBillItems.map(bi => 
-        bi.menuItemId === menuItem.id 
-          ? { ...bi, quantity: bi.quantity + quantity, totalPrice: (bi.quantity + quantity) * bi.unitPrice } 
-          : bi
-      ));
-    } else {
-      setCurrentBillItems([...currentBillItems, {
-        menuItemId: menuItem.id,
-        menuItemName: menuItem.name,
-        quantity,
-        unitPrice: menuItem.price,
-        totalPrice: quantity * menuItem.price,
-      }]);
-    }
+    setCurrentBillItems(prevBillItems => {
+        const existingItem = prevBillItems.find(bi => bi.menuItemId === menuItem.id);
+        if (existingItem) {
+        return prevBillItems.map(bi => 
+            bi.menuItemId === menuItem.id 
+            ? { ...bi, quantity: bi.quantity + quantity, totalPrice: (bi.quantity + quantity) * bi.unitPrice } 
+            : bi
+        );
+        } else {
+        return [...prevBillItems, {
+            menuItemId: menuItem.id,
+            menuItemName: menuItem.name,
+            quantity,
+            unitPrice: menuItem.price,
+            totalPrice: quantity * menuItem.price,
+            // optional: copy other relevant details like variant info if applicable
+        }];
+        }
+    });
+    toast({ title: "Item Added", description: `${menuItem.name} added to bill.`});
   };
 
   const handleUpdateItemQuantityInBill = (menuItemId: string, newQuantity: number) => {
@@ -177,22 +191,16 @@ export default function TableManagementPage() {
     }
     setFormSubmitting(true);
     try {
-      // This is a simplified finalization. In a real POS, this would involve payment processing.
-      // For now, we can assume this creates/updates an order to 'payment_pending' or 'completed'.
-      // Let's simulate creating a new order with status 'payment_pending' if no active order or update one.
-      
       const activeOrder = selectedTableOrders.find(o => o.status === 'served' || o.status === 'payment_pending');
       const subtotal = currentBillItems.reduce((sum, item) => sum + item.totalPrice, 0);
-      const taxRate = 0.10; // Example 10% tax
+      const taxRate = restaurant?.taxRate ?? 0.10; // Use restaurant-specific tax rate or default
       const taxAmount = subtotal * taxRate;
       const totalAmount = subtotal + taxAmount;
 
       if (activeOrder) {
-        // Update existing order (simplified: replace items, update totals and status)
-        await updateTable(restaurantId, activeOrder.id, { items: currentBillItems, subtotal, taxAmount, totalAmount, status: 'payment_pending' } as any); // Cast to any for simplicity
+        await updateOrder(restaurantId, activeOrder.id, { items: currentBillItems, subtotal, taxAmount, totalAmount, status: 'payment_pending' });
         toast({ title: "Bill Updated", description: `Bill for table ${selectedTable.tableNumber} is pending payment.` });
       } else {
-        // Create new order
         const newOrderData = {
           tableId: selectedTable.id,
           tableNumber: selectedTable.tableNumber,
@@ -200,23 +208,16 @@ export default function TableManagementPage() {
           subtotal,
           taxAmount,
           totalAmount,
-          status: 'payment_pending' as TableStatus,
+          status: 'payment_pending' as OrderStatus, // Corrected type
         };
-        await createOrder(restaurantId, newOrderData as any); // Cast to any to match Omit<Order, ...>
+        await createOrder(restaurantId, newOrderData);
         toast({ title: "Bill Finalized", description: `Bill for table ${selectedTable.tableNumber} created and pending payment.` });
       }
-      // Optionally, update table status
-      if (selectedTable.status !== 'occupied' && selectedTable.status !== 'payment_pending') {
-         await updateTable(restaurantId, selectedTable.id, { status: 'occupied' });
+      if (selectedTable.status !== 'occupied' && selectedTable.status !== 'needs_cleaning') { // Assuming needs_cleaning means they paid but table not ready
+         await updateTable(restaurantId, selectedTable.id, { status: 'occupied' }); // Or 'needs_cleaning' post-payment
       }
       
-      // Refresh table orders and potentially table list
-      handleSelectTable(selectedTable); // Re-fetch orders for the table
-      // Or, if you want to clear the panel:
-      // setSelectedTable(null);
-      // setIsBillPanelVisible(false);
-      // setCurrentBillItems([]);
-
+      handleSelectTable(selectedTable); 
     } catch (error: any) {
       toast({ variant: "destructive", title: "Finalization Failed", description: error.message || "Could not finalize bill." });
     } finally {
@@ -255,6 +256,8 @@ export default function TableManagementPage() {
       fetchRestaurantAndTableData(); 
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message || "Failed to update status." });
+    } finally {
+      setFormSubmitting(false);
     }
   };
   
@@ -273,6 +276,7 @@ export default function TableManagementPage() {
        if (selectedTable?.id === deleteConfirmation.data.id) {
         setSelectedTable(null);
         setIsBillPanelVisible(false);
+        setIsMenuSelectionPanelOpen(false);
       }
     } catch (error: any) {
       toast({ variant: "destructive", title: "Deletion Failed", description: error.message || "Could not delete table." });
@@ -318,19 +322,33 @@ export default function TableManagementPage() {
     }
   };
 
+  const tableGridCols = () => {
+    if (selectedTable && isMenuSelectionPanelOpen) return 'md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-2'; // Tables | Menu | Bill
+    if (selectedTable && !isMenuSelectionPanelOpen) return 'md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3'; // Tables | Bill
+    return 'sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'; // Only Tables
+  };
+
 
   return (
-    <div className="flex h-[calc(100vh-theme(spacing.16))]"> {/* Adjust height based on your header */}
+    <div className="flex h-[calc(100vh-theme(spacing.16))] overflow-hidden"> {/* Adjust height based on your header */}
       {/* Left Panel: Table Grid */}
-      <div className={`w-full md:w-3/5 lg:w-2/3 p-4 overflow-y-auto transition-all duration-300 ease-in-out ${selectedTable && isBillPanelVisible ? 'hidden md:block' : 'block'}`}>
+       <div className={`p-4 overflow-y-auto transition-all duration-300 ease-in-out ${
+         selectedTable && isMenuSelectionPanelOpen ? 'w-full md:w-1/3' : 
+         selectedTable && !isMenuSelectionPanelOpen ? 'w-full md:w-3/5' : 
+         'w-full'
+        } ${selectedTable && !isBillPanelVisible ? 'w-full' : '' }
+        ${selectedTable && isBillPanelVisible && !isMenuSelectionPanelOpen ? 'md:block' : 'block'}
+        ${selectedTable && isBillPanelVisible && isMenuSelectionPanelOpen ? 'md:block' : 'block'}
+
+        `}>
         <Card className="shadow-xl h-full flex flex-col">
           <CardHeader>
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
               <div className="mb-4 md:mb-0">
                   <CardTitle className="text-2xl md:text-3xl flex items-center">
-                      <Users className="mr-3 h-7 w-7 text-primary" /> Table Management for {restaurant.name}
+                      <Users className="mr-3 h-7 w-7 text-primary" /> Table Management
                   </CardTitle>
-                  <CardDescription>Oversee and manage your restaurant's tables and their status.</CardDescription>
+                  <CardDescription>Oversee tables for {restaurant.name}.</CardDescription>
               </div>
               <Button onClick={openAddModal} className="bg-accent hover:bg-accent/90 text-accent-foreground">
                 <PlusCircle className="mr-2 h-4 w-4" /> Add New Table
@@ -339,16 +357,16 @@ export default function TableManagementPage() {
           </CardHeader>
           <CardContent className="flex-grow">
             {tables.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              <div className={`grid grid-cols-1 ${tableGridCols()} gap-4`}>
                 {tables.map(table => (
                   <Card 
                     key={table.id} 
-                    className={`flex flex-col shadow-md hover:shadow-lg transition-all cursor-pointer ${selectedTable?.id === table.id ? 'ring-2 ring-primary shadow-xl scale-105' : 'hover:scale-[1.02]'}`}
+                    className={`flex flex-col shadow-md hover:shadow-lg transition-all group ${selectedTable?.id === table.id ? 'ring-2 ring-primary shadow-xl scale-105' : 'hover:scale-[1.02]'}`}
                     onClick={() => handleSelectTable(table)}
                   >
                     <CardHeader className="pb-2">
                       <div className="flex justify-between items-center">
-                          <CardTitle className="text-lg">Table {table.tableNumber}</CardTitle>
+                          <CardTitle className="text-lg cursor-pointer">Table {table.tableNumber}</CardTitle>
                           <div className={`h-3 w-3 rounded-full ${statusColors[table.status]}`} title={table.status}></div>
                       </div>
                       <CardDescription>Capacity: {table.capacity} guests</CardDescription>
@@ -361,7 +379,7 @@ export default function TableManagementPage() {
                         </SelectContent>
                       </Select>
                     </CardContent>
-                    <CardFooter className="flex justify-between items-center pt-2 mt-auto">
+                    <CardFooter className="flex justify-between items-center pt-2 mt-auto opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => {e.stopPropagation(); setQrModalTable(table)}} title="Show QR Code"><QrCode className="h-4 w-4 text-muted-foreground hover:text-primary"/></Button>
                       <div className="space-x-1">
                           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => {e.stopPropagation(); openEditModal(table)}} title="Edit Table"><Edit3 className="h-3.5 w-3.5 text-muted-foreground hover:text-accent"/></Button>
@@ -385,19 +403,37 @@ export default function TableManagementPage() {
         </Card>
       </div>
 
+      {/* Middle Panel: Menu Item Selection (Collapsible) */}
+      {selectedTable && isBillPanelVisible && (
+        <div className={`transition-all duration-300 ease-in-out overflow-hidden flex flex-col border-l ${isMenuSelectionPanelOpen ? 'w-full md:w-1/3 p-4 bg-card' : 'w-0 p-0 border-none'}`}>
+          {isMenuSelectionPanelOpen && (
+            <MenuSelectionForBill
+                menuItems={menuItems}
+                categories={categories}
+                subcategories={subcategories}
+                onAddItemToBill={handleAddItemToBill}
+                onClosePanel={() => setIsMenuSelectionPanelOpen(false)}
+            />
+          )}
+        </div>
+      )}
+
+
       {/* Right Panel: Bill Management (POS-like) */}
        {selectedTable && isBillPanelVisible && (
-        <div className="w-full md:w-2/5 lg:w-1/3 p-4 border-l bg-card text-card-foreground overflow-y-auto flex flex-col transition-all duration-300 ease-in-out">
+        <div className={`p-4 border-l bg-card text-card-foreground overflow-y-auto flex flex-col transition-all duration-300 ease-in-out ${
+          isMenuSelectionPanelOpen ? 'w-full md:w-1/3' : 'w-full md:w-2/5'
+        }`}>
           <BillPanel
             selectedTable={selectedTable}
             billItems={currentBillItems}
             isLoading={formSubmitting}
-            menuItems={menuItems}
-            onAddItem={handleAddItemToBill}
             onUpdateItemQuantity={handleUpdateItemQuantityInBill}
             onRemoveItem={handleRemoveItemFromBill}
             onFinalizeBill={handleFinalizeBill}
-            onClose={() => { setSelectedTable(null); setIsBillPanelVisible(false); setCurrentBillItems([]); }}
+            onClose={() => { setSelectedTable(null); setIsBillPanelVisible(false); setIsMenuSelectionPanelOpen(false); setCurrentBillItems([]); }}
+            onToggleMenuSelection={() => setIsMenuSelectionPanelOpen(!isMenuSelectionPanelOpen)}
+            isMenuSelectionOpen={isMenuSelectionPanelOpen}
           />
         </div>
       )}
@@ -468,66 +504,40 @@ export default function TableManagementPage() {
 interface BillPanelProps {
   selectedTable: FirebaseTableType;
   billItems: OrderItem[];
-  menuItems: MenuItemType[];
   isLoading: boolean;
-  onAddItem: (item: MenuItemType, quantity?: number) => void;
   onUpdateItemQuantity: (menuItemId: string, newQuantity: number) => void;
   onRemoveItem: (menuItemId: string) => void;
   onFinalizeBill: () => void;
   onClose: () => void;
+  onToggleMenuSelection: () => void; // To open/close the MenuSelectionForBill panel
+  isMenuSelectionOpen: boolean;
 }
 
-const BillPanel = ({ selectedTable, billItems, menuItems, isLoading, onAddItem, onUpdateItemQuantity, onRemoveItem, onFinalizeBill, onClose }: BillPanelProps) => {
-  const [searchTerm, setSearchTerm] = useState('');
+const BillPanel = ({ selectedTable, billItems, isLoading, onUpdateItemQuantity, onRemoveItem, onFinalizeBill, onClose, onToggleMenuSelection, isMenuSelectionOpen }: BillPanelProps) => {
   const subtotal = billItems.reduce((sum, item) => sum + item.totalPrice, 0);
-  const taxRate = 0.10; // Example 10% tax
+  const taxRate = 0.10; // Example 10% tax - should come from restaurant settings
   const taxAmount = subtotal * taxRate;
   const totalAmount = subtotal + taxAmount;
-
-  const filteredMenuItems = menuItems.filter(item => 
-    item.name.toLowerCase().includes(searchTerm.toLowerCase()) && item.availability
-  );
 
   return (
     <div className="flex flex-col h-full">
       <div className="flex justify-between items-center mb-4 pb-2 border-b">
         <h2 className="text-xl font-semibold text-primary">Bill for Table {selectedTable.tableNumber}</h2>
-        <Button variant="ghost" size="icon" onClick={onClose} className="md:hidden">
-          <X className="h-5 w-5" />
-        </Button>
+        <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={onToggleMenuSelection} className="text-sm">
+              {isMenuSelectionOpen ? <X className="h-4 w-4 mr-1" /> : <Utensils className="h-4 w-4 mr-1" />}
+              {isMenuSelectionOpen ? 'Close Menu' : 'Add Items'}
+            </Button>
+            <Button variant="ghost" size="icon" onClick={onClose} className="md:hidden">
+                <X className="h-5 w-5" />
+            </Button>
+        </div>
       </div>
 
-      <Card className="mb-4 shadow-sm">
-        <CardHeader className="p-3">
-          <CardTitle className="text-base">Add Items to Bill</CardTitle>
-        </CardHeader>
-        <CardContent className="p-3">
-          <Input 
-            placeholder="Search menu items..." 
-            value={searchTerm} 
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="mb-2 h-9"
-          />
-          <ScrollArea className="h-36 border rounded-md">
-            {filteredMenuItems.length > 0 ? filteredMenuItems.map(item => (
-              <div key={item.id} className="flex justify-between items-center p-2 hover:bg-muted text-sm">
-                <div>
-                  <span className="font-medium">{item.name}</span>
-                  <span className="text-xs text-muted-foreground ml-1">(${item.price.toFixed(2)})</span>
-                </div>
-                <Button size="xs" variant="outline" onClick={() => onAddItem(item)} className="h-7 px-2 py-1 text-xs">
-                  <PlusCircle className="h-3 w-3 mr-1"/>Add
-                </Button>
-              </div>
-            )) : <p className="text-xs text-muted-foreground p-2 text-center">No items match your search or menu is empty.</p>}
-          </ScrollArea>
-        </CardContent>
-      </Card>
-
       <h3 className="text-lg font-medium mb-2 mt-2">Current Bill Items</h3>
-      <ScrollArea className="flex-grow mb-4 border rounded-md p-1">
+      <ScrollArea className="flex-grow mb-4 border rounded-md p-1 bg-muted/20">
         {billItems.length > 0 ? billItems.map(item => (
-          <Card key={item.menuItemId} className="mb-1 p-2 shadow-none border-b last:border-b-0 rounded-none">
+          <Card key={item.menuItemId} className="mb-1 p-2 shadow-none border-b last:border-b-0 rounded-none bg-background">
             <div className="flex justify-between items-center">
               <div>
                 <p className="font-medium text-sm">{item.menuItemName}</p>
@@ -550,10 +560,9 @@ const BillPanel = ({ selectedTable, billItems, menuItems, isLoading, onAddItem, 
         <div className="flex justify-between text-sm text-muted-foreground"><span>Tax ({ (taxRate * 100).toFixed(0) }%):</span><span>${taxAmount.toFixed(2)}</span></div>
         <div className="flex justify-between text-xl font-bold text-primary"><span>Total:</span><span>${totalAmount.toFixed(2)}</span></div>
         <Button className="w-full mt-3 bg-primary hover:bg-primary/90 text-primary-foreground" onClick={onFinalizeBill} disabled={isLoading || billItems.length === 0}>
-          {isLoading ? <LoadingSpinner className="mr-2 h-4 w-4"/> : 'Finalize Bill'}
+          {isLoading ? <LoadingSpinner className="mr-2 h-4 w-4"/> : 'Finalize Bill & Pay'}
         </Button>
       </div>
     </div>
   );
 };
-
