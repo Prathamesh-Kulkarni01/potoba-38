@@ -54,8 +54,8 @@ const possibleNextStatuses: Record<OrderStatusType, OrderStatusType[]> = {
 };
 
 interface ClientOrder extends Omit<Order, 'createdAt' | 'updatedAt'> {
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: string; // Changed from Date to string (ISO format)
+  updatedAt: string; // Changed from Date to string (ISO format)
 }
 
 function DollarSign(props: React.SVGProps<SVGSVGElement>) {
@@ -109,21 +109,35 @@ export default function OrderManagementPage() {
           fetchedOrdersRaw = fetchedOrdersRaw.filter(order => order.tableId === filterTableId);
         }
 
-        const convertTimestampToDate = (ts: any): Date => {
-          if (ts && typeof ts.seconds === 'number' && typeof ts.nanoseconds === 'number') {
-            return new Date(ts.seconds * 1000 + ts.nanoseconds / 1000000);
+        const convertTimestampToString = (ts: any): string => {
+          if (ts instanceof Timestamp) {
+            return ts.toDate().toISOString();
           }
-          if (ts instanceof Timestamp) return ts.toDate();
-          if (typeof ts === 'string') return new Date(ts);
-          if (ts instanceof Date) return ts;
-          return new Date(); 
+          if (ts instanceof Date) { // Should ideally not happen if source is Firestore Timestamp
+            return ts.toISOString();
+          }
+           if (typeof ts === 'string') { // If it's already a string, assume it's valid ISO
+             try {
+               new Date(ts); // Check if it's a valid date string
+               return ts;
+             } catch (e) {
+               console.warn("Invalid date string encountered during conversion:", ts);
+               return new Date().toISOString(); // Fallback
+             }
+           }
+          // Fallback for Firestore Timestamp structure if not instance of Timestamp (e.g. after serialization)
+          if (ts && typeof ts.seconds === 'number' && typeof ts.nanoseconds === 'number') {
+            return new Date(ts.seconds * 1000 + ts.nanoseconds / 1000000).toISOString();
+          }
+          console.warn("Unexpected timestamp format during conversion:", ts, "Returning current date as ISO string.");
+          return new Date().toISOString(); 
         };
-
+        
         const fetchedOrdersClient: ClientOrder[] = fetchedOrdersRaw.map(o => ({
           ...o,
-          createdAt: convertTimestampToDate(o.createdAt),
-          updatedAt: convertTimestampToDate(o.updatedAt),
-        })).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()); 
+          createdAt: convertTimestampToString(o.createdAt),
+          updatedAt: convertTimestampToString(o.updatedAt),
+        })).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()); 
 
         setOrders(fetchedOrdersClient);
       } else {
@@ -188,10 +202,14 @@ export default function OrderManagementPage() {
   
   const statusTabs: { value: OrderStatusType | 'all'; label: string }[] = [
     { value: 'all', label: 'All Active' },
-    ...Object.entries(orderStatusConfig).map(([statusKey, { shortLabel, label }]) => ({
-      value: statusKey as OrderStatusType,
-      label: shortLabel || label,
+    ...Object.entries(orderStatusConfig)
+     .filter(([statusKey]) => !['completed', 'cancelled_by_customer', 'cancelled_by_restaurant'].includes(statusKey)) // Exclude completed/cancelled from main tabs
+     .map(([statusKey, { shortLabel, label }]) => ({
+        value: statusKey as OrderStatusType,
+        label: shortLabel || label,
     })),
+    { value: 'completed', label: orderStatusConfig.completed.shortLabel || orderStatusConfig.completed.label },
+    { value: 'cancelled_by_restaurant', label: orderStatusConfig.cancelled_by_restaurant.shortLabel || orderStatusConfig.cancelled_by_restaurant.label }
   ];
 
 
@@ -241,7 +259,7 @@ export default function OrderManagementPage() {
                         <TableRow key={order.id} className="hover:bg-muted/50">
                           <TableCell className="font-medium text-xs">#{order.id.substring(0, 6)}...</TableCell>
                           <TableCell>{order.tableNumber || 'N/A'}</TableCell>
-                          <TableCell className="text-xs">{format(order.createdAt, 'MMM d, p')}</TableCell>
+                          <TableCell className="text-xs">{format(new Date(order.createdAt), 'MMM d, p')}</TableCell>
                           <TableCell className="text-xs">{getItemsSummary(order.items)}</TableCell>
                           <TableCell className="text-right font-medium">${order.totalAmount.toFixed(2)}</TableCell>
                           <TableCell>
