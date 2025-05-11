@@ -201,9 +201,17 @@ export default function CheckoutPage() {
   const handleSubmitOrderFlow = async (e: React.FormEvent) => {
     e.preventDefault();
     if (user?.isAnonymous) {
-        if (!isOtpSent) { await handleSendOtp(); } 
-        else { await handleVerifyOtpAndPlaceOrder(); }
-    } else { await placeOrderAfterVerification(); }
+        // if (!isOtpSent && customerPhoneNumberState) { 
+        //     await handleSendOtp(); 
+        // } else if (isOtpSent && otp) { 
+        //     await handleVerifyOtpAndPlaceOrder(); 
+        // } else {
+            // Skip verification if no phone number provided
+            await placeOrderAfterVerification();
+        // }
+    } else { 
+        await placeOrderAfterVerification(); 
+    }
   };
 
   const canPlaceGroupOrder = groupId && activeGroup && user && activeGroup.creatorUid === user.uid;
@@ -263,18 +271,18 @@ export default function CheckoutPage() {
                                 {user?.isAnonymous && (
                                     <>
                                         <div>
-                                            <Label htmlFor="customerPhoneNumberState">Phone Number for Verification</Label>
+                                            <Label htmlFor="customerPhoneNumberState">Phone Number (Optional)</Label>
                                             <div className="flex gap-2">
-                                                <Input id="customerPhoneNumberState" type="tel" value={customerPhoneNumberState} onChange={e => setCustomerPhoneNumberState(e.target.value)} required placeholder="+1 123 456 7890" disabled={isOtpSent || isVerifyingOtp}/>
-                                                {!isOtpSent && (
-                                                    <Button type="button" onClick={handleSendOtp} disabled={isVerifyingOtp || !customerPhoneNumberState} className="bg-accent hover:bg-accent/90 text-accent-foreground">
+                                                <Input id="customerPhoneNumberState" type="tel" value={customerPhoneNumberState} onChange={e => setCustomerPhoneNumberState(e.target.value)} placeholder="+1 123 456 7890" disabled={isOtpSent || isVerifyingOtp}/>
+                                                {!isOtpSent && customerPhoneNumberState && (
+                                                    <Button type="button" onClick={handleSendOtp} disabled={isVerifyingOtp} className="bg-accent hover:bg-accent/90 text-accent-foreground">
                                                         {isVerifyingOtp ? <LoadingSpinner className="h-4 w-4"/> : <ShieldCheck className="mr-2 h-4 w-4"/>} Send OTP
                                                     </Button>
                                                 )}
                                             </div>
                                         </div>
                                         {isOtpSent && (
-                                        <div><Label htmlFor="otp">Enter OTP</Label><Input id="otp" type="text" value={otp} onChange={e => setOtp(e.target.value)} required placeholder="123456" disabled={isVerifyingOtp}/></div>
+                                        <div><Label htmlFor="otp">Enter OTP</Label><Input id="otp" type="text" value={otp} onChange={e => setOtp(e.target.value)} placeholder="123456" disabled={isVerifyingOtp}/></div>
                                         )}
                                     </>
                                 )}
@@ -357,7 +365,6 @@ export default function CheckoutPage() {
                                 disabled={
                                     isProcessingOrder || 
                                     isVerifyingOtp || 
-                                    (user?.isAnonymous && !isOtpSent && !verificationId) || 
                                     (user?.isAnonymous && isOtpSent && !otp) || 
                                     cartToUse.length === 0 ||
                                     (groupId && activeGroup && user && activeGroup.creatorUid !== user.uid) // Disable if group order and not host
@@ -365,13 +372,13 @@ export default function CheckoutPage() {
                                 title={ (groupId && activeGroup && user && activeGroup.creatorUid !== user.uid) ? "Only the group host can place the order" : ""}
                                >
                                  {(isProcessingOrder || isVerifyingOtp) ? <LoadingSpinner className="mr-2 h-5 w-5" /> : 
-                                 (user?.isAnonymous && !isOtpSent ? <ShieldCheck className="mr-2 h-5 w-5" /> : 
+                                 (user?.isAnonymous && !isOtpSent && customerPhoneNumberState ? <ShieldCheck className="mr-2 h-5 w-5" /> : 
                                  (user?.isAnonymous && isOtpSent ? <MessageCircle className="mr-2 h-5 w-5" /> :
                                  (groupId ? <Users className="mr-2 h-5 w-5" /> : <CreditCard className="mr-2 h-5 w-5" /> )))}
                                  
                                  {isProcessingOrder ? 'Processing Order...' : 
                                  (isVerifyingOtp ? 'Verifying...' : 
-                                 (user?.isAnonymous && !isOtpSent ? 'Verify Phone & Place Order' : 
+                                 (user?.isAnonymous && !isOtpSent && customerPhoneNumberState ? 'Verify Phone & Place Order' : 
                                  (user?.isAnonymous && isOtpSent ? 'Confirm OTP & Place Order' : 
                                  (groupId ? 'Place Group Order' : 'Place Order'))))}
                                </Button>

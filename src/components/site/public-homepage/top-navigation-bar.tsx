@@ -33,7 +33,7 @@ const NavLinks = ({ onLinkClick, restaurantId, tableContext, isUserAnonymous, us
   
   let checkoutLink = `/site/${restaurantId}/checkout`;
   if (tableContext) {
-    checkoutLink += `?tableId=${tableContext.tableDocId}&tableNumber=${encodeURIComponent(tableContext.tableNumber)}`;
+    checkoutLink += `?tableId=${activeGroup?.tableId||tableContext.id||tableContext.tableDocId||tableContext.docId}&tableNumber=${encodeURIComponent(tableContext.tableNumber)}`;
     if (activeGroup) {
       checkoutLink += `&groupId=${activeGroup.id}`;
     }
@@ -94,7 +94,7 @@ export default function TopNavigationBar({
       checkoutLink += `&groupId=${activeGroup.id}`;
     }
   }
-  
+  console.log('tableContext', {tableContext}, {activeGroup},{checkoutLink});
   const ordersLink = `/site/${restaurantId}/orders${tableContext ? `?tableId=${tableContext.tableDocId}${activeGroup ? `&groupId=${activeGroup.id}`:''}`: ''}`;
 
 
