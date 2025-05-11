@@ -1,3 +1,4 @@
+
 // src/lib/firebase/orders.ts
 'use server';
 
@@ -63,21 +64,21 @@ export async function createOrder(restaurantId: string, orderData: Omit<Order, '
   const dataToSave = {
     ...orderData,
     restaurantId,
-    userId: orderData.userId || undefined, // Ensure userId is passed or undefined
+    userId: orderData.userId || undefined, 
     createdAt,
     updatedAt,
     tableId: orderData.tableId || null,
     tableNumber: orderData.tableNumber || null,
     customerName: orderData.customerName || undefined,
-    customerPhoneNumber: orderData.customerPhoneNumber || undefined, // Save phone number
-    customerWhatsapp: orderData.customerWhatsapp || undefined,
+    customerPhoneNumber: orderData.customerPhoneNumber || undefined,
+    customerWhatsapp: orderData.customerWhatsapp || null, // Changed from undefined to null
   };
 
   const docRef = await addDoc(ordersCol, dataToSave);
   
   return {
     id: docRef.id,
-    ...orderData, // This includes userId if it was in orderData
+    ...orderData, 
     createdAt: Timestamp.now(), 
     updatedAt: Timestamp.now(), 
   } as Order; 
@@ -184,3 +185,4 @@ export async function cancelOrder(restaurantId: string, orderId: string, cancell
   }
   await updateDoc(orderRef, updateData);
 }
+
