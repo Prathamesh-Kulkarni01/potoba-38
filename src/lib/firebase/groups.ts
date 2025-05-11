@@ -37,10 +37,12 @@ export async function createTableGroup(
   restaurantId: string,
   tableId: string,
   tableNumber: string,
-  creator: AuthUser
+  creatorName: string,
+  creatorPhone: string,
+  creatorUid?: string
 ): Promise<ClientTableGroup | null> {
   if (!db) throw new Error("Firestore is not initialized.");
-  if (!creator || !creator.uid) throw new Error("Creator UID is required.");
+  if (!creatorName || !creatorPhone) throw new Error("Creator name and phone are required.");
 
   let groupCode = '';
   let unique = false;
@@ -62,13 +64,14 @@ export async function createTableGroup(
   const nowServer = serverTimestamp(); 
   const nowClient = Timestamp.now();   
 
-  const newGroupDataForFirestore: Omit<TableGroup, 'id' | 'createdAt' | 'updatedAt'> & { createdAt: any, updatedAt: any } = {
+  const newGroupDataForFirestore: Omit<TableGroup, 'id' | 'createdAt' | 'updatedAt'> & { createdAt: any, updatedAt: any, creatorUid?: string } = {
     restaurantId,
     tableId,
     tableNumber,
-    creatorUid: creator.uid,
-    creatorName: creator.displayName || creator.email?.split('@')[0] || 'Group Host',
-    members: [{ uid: creator.uid, name: creator.displayName || creator.email?.split('@')[0] || 'Group Host' }],
+    creatorName,
+    creatorPhone,
+    creatorUid: creatorUid || null,
+    members: [{ name: creatorName, phone: creatorPhone, uid: creatorUid || null }],
     status: 'active',
     cartItems: [],
     createdAt: nowServer,
@@ -82,8 +85,9 @@ export async function createTableGroup(
     restaurantId: newGroupDataForFirestore.restaurantId,
     tableId: newGroupDataForFirestore.tableId,
     tableNumber: newGroupDataForFirestore.tableNumber,
-    creatorUid: newGroupDataForFirestore.creatorUid,
     creatorName: newGroupDataForFirestore.creatorName,
+    creatorPhone: newGroupDataForFirestore.creatorPhone,
+    creatorUid: newGroupDataForFirestore.creatorUid,
     members: newGroupDataForFirestore.members,
     status: newGroupDataForFirestore.status,
     cartItems: newGroupDataForFirestore.cartItems,

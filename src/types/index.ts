@@ -8,7 +8,7 @@ export interface AuthUser extends FirebaseUser {
   restaurantId: string | null;
   onboardingComplete: boolean;
   isAnonymous: boolean; // Added for anonymous auth
-  phoneNumber?: string | null; // Added for phone verified users
+  phoneNumber: string | null; // Fixed: not optional
 }
 
 export interface UserProfile {
@@ -18,7 +18,7 @@ export interface UserProfile {
   restaurantId: string | null; 
   onboardingComplete: boolean; 
   createdAt: Timestamp;
-  phoneNumber?: string | null; // Added
+  phoneNumber: string | null; // Fixed: not optional
   isAnonymous?: boolean; // Could be useful to track origin
 }
 
@@ -176,9 +176,9 @@ export interface TableGroup {
   restaurantId: string;
   tableId: string;
   tableNumber: string; // For convenience
-  creatorUid: string;
-  creatorName?: string; // Optional
-  members: { uid: string; name?: string }[];
+  creatorName: string;
+  creatorPhone: string;
+  members: { name: string; phone: string }[];
   status: 'active' | 'ordering' | 'locked' | 'ordered' | 'closed';
   cartItems: GroupCartItem[];
   createdAt: Timestamp;

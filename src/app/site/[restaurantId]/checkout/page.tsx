@@ -315,23 +315,34 @@ export default function CheckoutPage() {
                         <Card className="border-border/70">
                             <CardHeader><CardTitle className="text-lg">Order Summary {activeGroup && <span className="text-sm text-accent">(Group Cart)</span>}</CardTitle></CardHeader>
                             <CardContent className="space-y-3 max-h-96 overflow-y-auto">
-                                {cartToUse.map(item => (
-                                <div key={item.menuItemId + JSON.stringify(item.variantChoices) + ((item as GroupCartItem).addedByUid || '')} className="flex justify-between items-start text-sm py-2 border-b last:border-b-0">
-                                    <div className="flex items-start">
-                                        {item.imageUrl && <Image src={item.imageUrl} alt={item.menuItemName} width={40} height={40} className="rounded mr-3 object-cover" data-ai-hint="cart item image"/>}
-                                        <div className="flex-1">
-                                            <p className="font-medium">{item.menuItemName}</p>
-                                            <p className="text-xs text-muted-foreground">Qty: {item.quantity} &times; ${item.unitPrice.toFixed(2)}</p>
-                                            {(item as GroupCartItem).addedByName && <p className="text-xs text-blue-500">Added by: {(item as GroupCartItem).addedByName}</p>}
+                                {cartToUse.map((item, idx) => {
+                                  const groupItem = item as GroupCartItem;
+                                  let displayName = groupItem.addedByName && groupItem.addedByName.trim() ? groupItem.addedByName : '';
+                                  if (!displayName) {
+                                    // Fallback: assign Guest N based on first appearance of addedByUid in cart
+                                    const guestIndex = cartToUse
+                                      .filter(ci => (ci as GroupCartItem).addedByUid)
+                                      .findIndex(ci => (ci as GroupCartItem).addedByUid === groupItem.addedByUid);
+                                    displayName = `Guest ${guestIndex + 1}`;
+                                  }
+                                  return (
+                                    <div key={item.menuItemId + JSON.stringify(item.variantChoices) + (groupItem.addedByUid || '')} className="flex justify-between items-start text-sm py-2 border-b last:border-b-0">
+                                        <div className="flex items-start">
+                                            {item.imageUrl && <Image src={item.imageUrl} alt={item.menuItemName} width={40} height={40} className="rounded mr-3 object-cover" data-ai-hint="cart item image"/>}
+                                            <div className="flex-1">
+                                                <p className="font-medium">{item.menuItemName}</p>
+                                                <p className="text-xs text-muted-foreground">Qty: {item.quantity} &times; ${item.unitPrice.toFixed(2)}</p>
+                                                <p className="text-xs text-blue-500">Added by: {displayName}</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-medium min-w-[50px] text-right">${item.totalPrice.toFixed(2)}</span>
+                                            {!groupId && <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => updateLocalQuantity(item.menuItemId, 0)}><Trash2 className="h-4 w-4"/></Button>}
+                                            {/* For group orders, item removal/quantity update might be restricted or handled differently (e.g. only by person who added or host) */}
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="font-medium min-w-[50px] text-right">${item.totalPrice.toFixed(2)}</span>
-                                        {!groupId && <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => updateLocalQuantity(item.menuItemId, 0)}><Trash2 className="h-4 w-4"/></Button>}
-                                        {/* For group orders, item removal/quantity update might be restricted or handled differently (e.g. only by person who added or host) */}
-                                    </div>
-                                </div>
-                                ))}
+                                  );
+                                })}
                             </CardContent>
                              <CardFooter className="flex-col space-y-2 border-t pt-4">
                                 <div className="w-full flex justify-between text-sm"><p>Subtotal</p><p>${subtotal.toFixed(2)}</p></div>

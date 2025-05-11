@@ -22,18 +22,18 @@ interface TopNavigationBarProps {
   cartItemCount: number;
   showShadow: boolean;
   restaurantId: string; 
-  tableContext?: Pick<Table, 'id' | 'number' | 'docId'>; 
+  tableContext?: Pick<Table, 'tableDocId' | 'tableNumber'>; 
   isUserAnonymous?: boolean;
   userDisplayName?: string;
   activeGroup?: ClientTableGroup; // Added activeGroup
 }
 
-const NavLinks = ({ onLinkClick, restaurantId, tableContext, isUserAnonymous, userDisplayName, activeGroup }: { onLinkClick?: () => void, restaurantId: string, tableContext?: Pick<Table, 'id' | 'number' | 'docId'>, isUserAnonymous?: boolean, userDisplayName?: string, activeGroup?: ClientTableGroup }) => {
-  const menuLink = tableContext ? `/menu/table/${tableContext.docId}${activeGroup ? `?joinGroup=${activeGroup.id}` : ''}` : `/site/${restaurantId}#menu`;
+const NavLinks = ({ onLinkClick, restaurantId, tableContext, isUserAnonymous, userDisplayName, activeGroup }: { onLinkClick?: () => void, restaurantId: string, tableContext?: Pick<Table, 'tableDocId' | 'tableNumber'>, isUserAnonymous?: boolean, userDisplayName?: string, activeGroup?: ClientTableGroup }) => {
+  const menuLink = tableContext ? `/menu/table/${tableContext.tableDocId}${activeGroup ? `?joinGroup=${activeGroup.id}` : ''}` : `/site/${restaurantId}#menu`;
   
   let checkoutLink = `/site/${restaurantId}/checkout`;
   if (tableContext) {
-    checkoutLink += `?tableId=${tableContext.docId}&tableNumber=${encodeURIComponent(tableContext.number)}`;
+    checkoutLink += `?tableId=${tableContext.tableDocId}&tableNumber=${encodeURIComponent(tableContext.tableNumber)}`;
     if (activeGroup) {
       checkoutLink += `&groupId=${activeGroup.id}`;
     }
@@ -85,17 +85,17 @@ export default function TopNavigationBar({
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const displayRestaurantName = restaurantName;
-  const homeLink = tableContext ? `/menu/table/${tableContext.docId}${activeGroup ? `?joinGroup=${activeGroup.id}` : ''}` : `/site/${restaurantId}`;
+  const homeLink = tableContext ? `/menu/table/${tableContext.tableDocId}${activeGroup ? `?joinGroup=${activeGroup.id}` : ''}` : `/site/${restaurantId}`;
   
   let checkoutLink = `/site/${restaurantId}/checkout`;
   if (tableContext) {
-    checkoutLink += `?tableId=${tableContext.docId}&tableNumber=${encodeURIComponent(tableContext.number)}`;
+    checkoutLink += `?tableId=${tableContext.tableDocId}&tableNumber=${encodeURIComponent(tableContext.tableNumber)}`;
     if (activeGroup) {
       checkoutLink += `&groupId=${activeGroup.id}`;
     }
   }
   
-  const ordersLink = `/site/${restaurantId}/orders${tableContext ? `?tableId=${tableContext.docId}${activeGroup ? `&groupId=${activeGroup.id}`:''}`: ''}`;
+  const ordersLink = `/site/${restaurantId}/orders${tableContext ? `?tableId=${tableContext.tableDocId}${activeGroup ? `&groupId=${activeGroup.id}`:''}`: ''}`;
 
 
   return (

@@ -1,4 +1,3 @@
-
 // src/app/menu/table/[tableId]/page.tsx
 import { getRestaurant } from '@/lib/firebase/firestore';
 import { getTableByDocIdFromGroup } from '@/lib/firebase/tables';
@@ -42,12 +41,10 @@ export async function generateMetadata({ params }: ScanOrderPageProps) {
 }
 
 export default async function ScanOrderPage({ params }: ScanOrderPageProps) {
-  const tableDocId = params.tableId;
-
-  const tableResult = await getTableByDocIdFromGroup(tableDocId);
+  const tableResult = await getTableByDocIdFromGroup(params.tableId);
 
   if (!tableResult || !tableResult.table || !tableResult.restaurantId) {
-    console.error(`ScanOrderPage: Invalid tableDocId "${tableDocId}" or missing restaurantId.`);
+    console.error(`ScanOrderPage: Invalid tableDocId "${params.tableId}" or missing restaurantId.`);
     notFound();
   }
   
@@ -92,9 +89,9 @@ export default async function ScanOrderPage({ params }: ScanOrderPageProps) {
   };
   
   const tableContext = {
-    id: tableInfo.id, // This is the table's Firestore document ID
-    number: tableInfo.tableNumber,
-    docId: tableInfo.tableDocId, // The ID scanned from QR, should match tableInfo.id
+    id: tableInfo.id,
+    tableDocId: tableInfo.tableDocId,
+    tableNumber: tableInfo.tableNumber
   };
 
   return (
