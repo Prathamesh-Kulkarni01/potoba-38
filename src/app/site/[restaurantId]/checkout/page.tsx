@@ -17,9 +17,9 @@ import { useCart } from '@/components/site/public-homepage/cart-store';
 import { getRestaurant } from '@/lib/firebase/firestore';
 import type { RestaurantProfile, OrderItem, Order, OrderStatus } from '@/types';
 import { createOrder } from '@/lib/firebase/orders';
+// Ensure these components exist at these paths
 import TopNavigationBar from '@/components/site/public-homepage/top-navigation-bar';
-// Changed import path for SiteFooter to relative
-import SiteFooter from '../../../../components/site/public-homepage/site-footer';
+import SiteFooter from '@/components/site/public-homepage/site-footer';
 import { AlertCircle, CreditCard, ShoppingBag, Truck, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
