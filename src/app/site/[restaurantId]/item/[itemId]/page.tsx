@@ -1,4 +1,4 @@
-
+// src/app/site/[restaurantId]/item/[itemId]/page.tsx
 import { getRestaurant } from '@/lib/firebase/firestore';
 import { getMenuItemByIdFromGroup, getMenuItems } from '@/lib/firebase/menu';
 import type { RestaurantProfile, MenuItem } from '@/types';
@@ -28,7 +28,8 @@ const stringifyItemTimestamps = <T extends { createdAt?: any, updatedAt?: any }>
 
 
 export async function generateMetadata({ params }: ItemPageProps) {
-  if (!params.itemId || typeof params.itemId !== 'string' || params.itemId.trim() === '') {
+  if (!params.itemId || typeof params.itemId !== 'string' || params.itemId.trim() === '' || !params.restaurantId || typeof params.restaurantId !== 'string' || params.restaurantId.trim() === '') {
+    console.error(`generateMetadata: Invalid itemId ("${params.itemId}") or restaurantId ("${params.restaurantId}") received.`);
     return { title: 'Invalid Item Request' };
   }
   const itemResult = await getMenuItemByIdFromGroup(params.itemId);
@@ -46,39 +47,46 @@ export async function generateMetadata({ params }: ItemPageProps) {
 
 export default async function ItemPage({ params }: ItemPageProps) {
   const { restaurantId, itemId } = params;
+  console.log(`ItemPage: Attempting to load item. Restaurant ID: ${restaurantId}, Item ID: ${itemId}`);
 
-  if (!itemId || typeof itemId !== 'string' || itemId.trim() === '') {
-    console.error(`ItemPage: Invalid itemId received from params: "${itemId}" for restaurant "${restaurantId}".`);
+
+  if (!itemId || typeof itemId !== 'string' || itemId.trim() === '' || !restaurantId || typeof restaurantId !== 'string' || restaurantId.trim() === '') {
+    console.error(`ItemPage: Invalid itemId ("${itemId}") or restaurantId ("${restaurantId}") received from params. Triggering notFound().`);
     notFound();
   }
 
+  console.log(`ItemPage: Fetching restaurant data for ID: ${restaurantId}`);
   const restaurantDataResult = await getRestaurant(restaurantId);
   if (!restaurantDataResult) {
-    console.error(`ItemPage: Restaurant not found for restaurantId "${restaurantId}".`);
+    console.error(`ItemPage: Restaurant not found for restaurantId "${restaurantId}". Triggering notFound().`);
     notFound();
   }
+  console.log(`ItemPage: Restaurant data fetched successfully for ${restaurantDataResult.name}`);
   const restaurant = stringifyItemTimestamps(restaurantDataResult) as RestaurantProfile & { createdAt: string; updatedAt: string };
 
+  console.log(`ItemPage: Fetching menu item by itemIdString: ${itemId}`);
   const itemResult = await getMenuItemByIdFromGroup(itemId);
 
   if (!itemResult) {
-    console.error(`ItemPage: No item found for itemId "${itemId}" in restaurant "${restaurantId}" using getMenuItemByIdFromGroup. This often indicates a missing Firestore index on the 'menuItems' collection group for the 'itemIdString' field, or the item genuinely does not exist with this ID.`);
+    console.error(`ItemPage: No item found for itemIdString "${itemId}". This often indicates a missing Firestore index on the 'menuItems' collection group for the 'itemIdString' field, or the item genuinely does not exist with this ID. Triggering notFound().`);
     notFound();
   }
+  console.log(`ItemPage: Item found: ${itemResult.menuItem.name}. Item's restaurantId: ${itemResult.restaurantId}, Current restaurantId: ${restaurantId}`);
 
-  // This check is crucial: an item might be found by its ID (itemIdString), but we must ensure it belongs to the *current* restaurant context.
   if (itemResult.restaurantId !== restaurantId) {
-    console.error(`ItemPage: Item found for itemId "${itemId}", but its restaurantId "${itemResult.restaurantId}" does not match the current restaurantId "${restaurantId}". Access denied or item belongs to a different restaurant.`);
+    console.error(`ItemPage: Item's restaurantId "${itemResult.restaurantId}" does not match current restaurantId "${restaurantId}". Triggering notFound().`);
     notFound();
   }
   const menuItem = stringifyItemTimestamps(itemResult.menuItem) as MenuItem & { createdAt: string; updatedAt: string };
+  console.log(`ItemPage: Menu item processed: ${menuItem.name}`);
 
-  // Fetch a few other items for "Frequently Bought Together"
+  console.log(`ItemPage: Fetching all menu items for restaurant ID: ${restaurantId} for cross-sell.`);
   const allRestaurantItemsData = await getMenuItems(restaurantId);
   const allRestaurantItems = allRestaurantItemsData
     .map(item => stringifyItemTimestamps(item) as MenuItem & { createdAt: string; updatedAt: string })
-    .filter(item => item.id !== menuItem.id && item.availability) // Exclude current item and unavailable items
-    .slice(0, 5); // Take up to 5 items
+    .filter(item => item.id !== menuItem.id && item.availability)
+    .slice(0, 5);
+  console.log(`ItemPage: Found ${allRestaurantItems.length} items for cross-sell.`);
 
   // Mock reviews for now
   const reviews = [
@@ -88,7 +96,7 @@ export default async function ItemPage({ params }: ItemPageProps) {
   ];
   const averageRating = reviews.length > 0 ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length : 0;
 
-
+  console.log(`ItemPage: Rendering ItemDetailClient for item: ${menuItem.name}`);
   return (
     <ItemDetailClient
       restaurant={restaurant}
