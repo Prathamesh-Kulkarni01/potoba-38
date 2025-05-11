@@ -21,6 +21,7 @@ import { db } from '@/lib/firebase/config';
 import { getOrdersCollectionPath, convertFirebaseTimestampToString } from '@/lib/firebase/utils';
 import { format, parseISO, startOfDay, endOfDay } from 'date-fns';
 import { generateOrderEta } from '@/ai/flows/generate-order-eta-flow';
+import { useAuth } from '@/lib/auth/context'; // Import useAuth
 
 const orderStatusConfig: Record<OrderStatusType, { label: string; icon: React.ElementType; color: string; progress?: number }> = {
   pending_customer_confirmation: { label: 'Pending Your OK', icon: Hourglass, color: 'text-gray-500', progress: 10 },
@@ -42,16 +43,17 @@ function MyOrdersContent() {
   const searchParams = useSearchParams();
   const restaurantId = params.restaurantId as string;
   const highlightedOrderId = searchParams.get('highlight');
-  const tableContextId = searchParams.get('tableId'); // For filtering by table orders
+  const tableContextId = searchParams.get('tableId'); 
 
   const { toast } = useToast();
   const { cart } = useCart();
+  const { user, loading: authLoading } = useAuth(); // Get user from AuthContext
 
   const [restaurant, setRestaurant] = useState<RestaurantProfile | null>(null);
   const [orders, setOrders] = useState<ClientOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [showNavShadow, setShowNavShadow] = useState(false);
-  const [etas, setEtas] = useState<Record<string, string>>({}); // { orderId: etaString }
+  const [etas, setEtas] = useState<Record<string, string>>({});
 
   const cartItemCount = useMemo(() => cart.reduce((sum, item) => sum + item.quantity, 0), [cart]);
 
@@ -76,7 +78,7 @@ function MyOrdersContent() {
   }, [restaurantId, router]);
 
   useEffect(() => {
-    if (!restaurantId || !db) return;
+    if (!restaurantId || !db || authLoading) return; // Wait for auth to finish loading
 
     setLoading(true);
     const ordersColRef = collection(db, getOrdersCollectionPath(restaurantId));
@@ -88,16 +90,22 @@ function MyOrdersContent() {
     queryConstraints.push(where('createdAt', '>=', Timestamp.fromDate(todayStart)));
     queryConstraints.push(where('createdAt', '<=', Timestamp.fromDate(todayEnd)));
 
-    // If tableContextId is present (e.g., from a table order confirmation redirect),
-    // filter orders for that specific table.
+    // Filter by current user ID if available
+    if (user?.uid) {
+      queryConstraints.push(where('userId', '==', user.uid));
+    } else {
+      // If no user and no table context, we might not want to show any orders,
+      // or handle differently (e.g. prompt for login/phone for past orders).
+      // For now, if no user.uid, it implies no orders can be tied to this client yet.
+      // This scenario should ideally be handled by anonymous auth being active.
+      console.warn("MyOrdersPage: No user UID available to filter orders. This might happen if anonymous auth hasn't initialized or failed.");
+      setOrders([]);
+      setLoading(false);
+      return;
+    }
+    
     if (tableContextId) {
       queryConstraints.push(where('tableId', '==', tableContextId));
-    } else {
-      // NOTE: Without user authentication on the public site, we cannot reliably filter
-      // to "only orders of logged-in customer" when no table context is provided.
-      // This will currently show all of today's orders for the restaurant.
-      // For true "my orders" across sessions, user login or localStorage order ID tracking is needed.
-      // console.log("Displaying all of today's orders for the restaurant as no specific table or user context is available.");
     }
     
     queryConstraints.push(orderBy('createdAt', 'desc')); 
@@ -125,7 +133,7 @@ function MyOrdersContent() {
     });
 
     return () => unsubscribe();
-  }, [restaurantId, tableContextId, toast]);
+  }, [restaurantId, tableContextId, toast, user, authLoading]); // Add user and authLoading to dependencies
 
 
   const fetchEta = async (order: ClientOrder) => {
@@ -143,7 +151,7 @@ function MyOrdersContent() {
     }
   };
 
-  if (loading && !restaurant) { 
+  if ((loading && !restaurant) || authLoading) { 
     return <div className="flex h-screen items-center justify-center"><LoadingSpinner className="h-10 w-10 text-primary" /></div>;
   }
 
@@ -163,12 +171,14 @@ function MyOrdersContent() {
         showShadow={showNavShadow}
         restaurantId={restaurant.id}
         tableContext={tableContextId && tableNumberForHeader ? { id: tableContextId, number: tableNumberForHeader, docId: tableContextId } : undefined}
+        isUserAnonymous={user?.isAnonymous}
+        userDisplayName={user?.displayName || user?.email || (user?.isAnonymous ? "Guest" : "")}
       />
       <main className="container mx-auto px-4 py-8 flex-grow">
         <div className="flex items-center justify-between mb-6">
             <h1 className="text-2xl md:text-3xl font-bold text-primary flex items-center">
                 <ShoppingBag className="mr-3 h-7 w-7" /> 
-                {tableContextId ? `Today's Orders for Table ${tableNumberForHeader || tableContextId.substring(0,4)}` : "Today's Orders"}
+                {tableContextId ? `Today's Orders for Table ${tableNumberForHeader || tableContextId.substring(0,4)}` : (user ? "My Recent Orders" : "Today's Orders")}
             </h1>
             <Button variant="outline" size="sm" onClick={() => router.push(tableContextId ? `/menu/table/${tableContextId}` : `/site/${restaurantId}`)}>
                 <ArrowLeft className="mr-2 h-4 w-4" /> New Order
@@ -182,7 +192,7 @@ function MyOrdersContent() {
             <CardHeader>
                 <ShoppingBag className="mx-auto h-16 w-16 text-muted-foreground opacity-50 mb-4" />
                 <CardTitle className="text-2xl">No Orders Yet Today</CardTitle>
-                <CardDescription>No orders found for {tableContextId ? `table ${tableNumberForHeader || tableContextId.substring(0,4)}` : restaurant.name} today.</CardDescription>
+                <CardDescription>No orders found for {tableContextId ? `table ${tableNumberForHeader || tableContextId.substring(0,4)}` : (user ? "you at this restaurant" : restaurant.name)} today.</CardDescription>
             </CardHeader>
             <CardContent>
                  <Image 
@@ -263,3 +273,4 @@ export default function MyOrdersPage() {
     </Suspense>
   );
 }
+
