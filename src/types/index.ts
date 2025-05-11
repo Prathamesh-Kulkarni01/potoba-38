@@ -1,4 +1,3 @@
-
 import type { User as FirebaseUser } from 'firebase/auth';
 import type { Timestamp } from 'firebase/firestore';
 
@@ -150,9 +149,9 @@ export interface Order {
   discountAmount?: number;
   totalAmount: number; 
   status: OrderStatus;
-  customerName?: string; 
-  customerPhoneNumber?: string; // Store verified phone number here
-  customerWhatsapp?: string; 
+  customerName?: string | null; 
+  customerPhoneNumber?: string | null; // Store verified phone number here
+  customerWhatsapp?: string | null; 
   customerNotes?: string; 
   kitchenNotes?: string; 
   paymentMethod?: string;
@@ -165,3 +164,29 @@ export interface ClientOrder extends Omit<Order, 'createdAt' | 'updatedAt'> {
   createdAt: string; 
   updatedAt: string; 
 }
+
+// For Group Orders
+export interface GroupCartItem extends OrderItem {
+  addedByUid: string;
+  addedByName?: string; // Optional: display name of user who added
+}
+
+export interface TableGroup {
+  id: string; // This will be the 4-digit code
+  restaurantId: string;
+  tableId: string;
+  tableNumber: string; // For convenience
+  creatorUid: string;
+  creatorName?: string; // Optional
+  members: { uid: string; name?: string }[];
+  status: 'active' | 'ordering' | 'locked' | 'ordered' | 'closed';
+  cartItems: GroupCartItem[];
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+export interface ClientTableGroup extends Omit<TableGroup, 'createdAt' | 'updatedAt'> {
+  createdAt: string;
+  updatedAt: string;
+}
+

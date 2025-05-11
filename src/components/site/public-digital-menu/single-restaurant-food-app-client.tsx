@@ -1,20 +1,27 @@
-
 'use client';
 
-import type { RestaurantProfile, MenuCategory, MenuItem as MenuItemType, Table } from '@/types';
+import type { RestaurantProfile, MenuCategory, MenuItem as MenuItemType, Table, TableGroup, ClientTableGroup } from '@/types';
 import { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Search, MapPin, Clock, Star, ChevronDown, Filter, TrendingUp, Tag, Heart, Menu, User, ShoppingBag, Home, Bell, ShoppingCart as CartIconLucide, X } from 'lucide-react'; 
+import { Search, MapPin, Clock, Star, ChevronDown, Filter, TrendingUp, Tag, Heart, Menu, User, ShoppingBag, Home, Bell, ShoppingCart as CartIconLucide, X, Users, ClipboardCopy, LinkIcon } from 'lucide-react'; 
 import { Button } from '@/components/ui/button';
 import { useCart, type CartItem } from '../public-homepage/cart-store';
 import { useToast } from '@/hooks/use-toast';
 import LoadingSpinner from '@/components/shared/loading-spinner';
 import { Sheet, SheetContent, SheetTrigger, SheetClose } from '@/components/ui/sheet';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import DishCard from '@/components/site/shared/dish-card';
 import TopNavigationBar from '../public-homepage/top-navigation-bar';
-import { useAuth } from '@/lib/auth/context'; // Import useAuth
+import { useAuth } from '@/lib/auth/context';
+import { createTableGroup, joinTableGroup, getTableGroup, addItemToGroupCart } from '@/lib/firebase/groups'; // Import group functions
+import { collection, onSnapshot, doc } from 'firebase/firestore';
+import { db } from '@/lib/firebase/config';
+import { convertFirebaseTimestampToString } from '@/lib/firebase/utils';
+
 
 interface RestaurantDisplayInfo {
   name: string;
@@ -53,56 +60,188 @@ export default function SingleRestaurantFoodAppClient({
   offersData,
   tableContext
 }: SingleRestaurantFoodAppClientProps) {
-  const { cart, addToCart } = useCart();
+  const { cart: localCart, addToCart: addLocalCartItem, clearCart: clearLocalCart } = useCart(); // Renamed to localCart
   const { toast } = useToast();
-  const { user, loading: authLoading, signInAnonymouslyHandler } = useAuth(); // Get user and signInAnonymouslyHandler
+  const { user, loading: authLoading, signInAnonymouslyHandler } = useAuth();
 
   const [activeTab, setActiveTab] = useState('menu');
   const [searchQuery, setSearchQuery] = useState('');
-  const [isLoading, setIsLoading] = useState(true); // General page loading
+  const [isLoading, setIsLoading] = useState(true);
   const [favorites, setFavorites] = useState<Record<string, boolean>>({}); 
   const [showNavShadow, setShowNavShadow] = useState(false);
 
-  const cartTotalItems = useMemo(() => cart.reduce((sum, item) => sum + item.quantity, 0), [cart]);
-  const cartTotalPrice = useMemo(() => cart.reduce((sum, item) => sum + item.totalPrice, 0), [cart]);
+  // Group Order State
+  const [activeGroup, setActiveGroup] = useState<ClientTableGroup | null>(null);
+  const [isCreatingGroup, setIsCreatingGroup] = useState(false);
+  const [isJoiningGroup, setIsJoiningGroup] = useState(false);
+  const [joinGroupCode, setJoinGroupCode] = useState('');
+  const [showJoinGroupModal, setShowJoinGroupModal] = useState(false);
+  const [showGroupInfoModal, setShowGroupInfoModal] = useState(false);
+
+  // Determine current cart (local or group)
+  const currentCart = useMemo(() => activeGroup ? activeGroup.cartItems : localCart, [activeGroup, localCart]);
+  const cartTotalItems = useMemo(() => currentCart.reduce((sum, item) => sum + item.quantity, 0), [currentCart]);
+  const cartTotalPrice = useMemo(() => currentCart.reduce((sum, item) => sum + item.totalPrice, 0), [currentCart]);
 
   useEffect(() => {
-    // Perform anonymous sign-in if table context exists and no user is logged in (and auth isn't already loading)
     if (tableContext && !user && !authLoading) {
       signInAnonymouslyHandler().then(anonUser => {
         if (anonUser) {
           toast({ title: "Welcome!", description: "You're ordering for your table." });
+          // Check local storage for an active group for this table/restaurant
+          const storedGroupId = localStorage.getItem(`activeGroup_${restaurantData.id}_${tableContext.id}`);
+          if (storedGroupId) {
+            fetchAndSetActiveGroup(storedGroupId);
+          }
         } else {
           toast({ variant: "destructive", title: "Error", description: "Could not start table order session." });
         }
       });
+    } else if (user && tableContext) {
+      // If user is already logged in (e.g. permanent user or returning anonymous)
+      const storedGroupId = localStorage.getItem(`activeGroup_${restaurantData.id}_${tableContext.id}`);
+      if (storedGroupId) {
+         fetchAndSetActiveGroup(storedGroupId);
+      }
     }
-  }, [tableContext, user, authLoading, signInAnonymouslyHandler, toast]);
+    setIsLoading(false);
+  }, [tableContext, user, authLoading, signInAnonymouslyHandler, toast, restaurantData.id]);
+
+   const fetchAndSetActiveGroup = async (groupId: string) => {
+    if (!tableContext) return;
+    setIsLoading(true);
+    const groupData = await getTableGroup(restaurantData.id, groupId);
+    if (groupData) {
+      setActiveGroup(groupData);
+      setShowGroupInfoModal(true); // Show group info when successfully joined/rejoined
+    } else {
+      localStorage.removeItem(`activeGroup_${restaurantData.id}_${tableContext.id}`); // Clear invalid stored group
+    }
+    setIsLoading(false);
+  };
+
+  // Real-time listener for active group
+  useEffect(() => {
+    if (activeGroup?.id && db) {
+      const groupRef = doc(db, `restaurants/${restaurantData.id}/tableGroups`, activeGroup.id);
+      const unsubscribe = onSnapshot(groupRef, (docSnap) => {
+        if (docSnap.exists()) {
+          const groupData = docSnap.data() as TableGroup;
+          setActiveGroup({
+             id: docSnap.id,
+             ...groupData,
+             createdAt: convertFirebaseTimestampToString(groupData.createdAt),
+             updatedAt: convertFirebaseTimestampToString(groupData.updatedAt),
+          });
+        } else {
+          // Group was deleted or became invalid
+          toast({variant: 'destructive', title: 'Group Ended', description: 'The group order session is no longer active.'});
+          setActiveGroup(null);
+          if (tableContext) localStorage.removeItem(`activeGroup_${restaurantData.id}_${tableContext.id}`);
+        }
+      });
+      return () => unsubscribe();
+    }
+  }, [activeGroup?.id, restaurantData.id]);
+
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsLoading(false); // General UI loading
-    }, 500); 
     const handleScroll = () => setShowNavShadow(window.scrollY > 10);
     window.addEventListener('scroll', handleScroll);
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener('scroll', handleScroll);
-    };
+    return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const handleAddToCart = (item: MenuItemType) => {
-    const cartItem: CartItem = {
-      menuItemId: item.id,
-      menuItemName: item.name,
-      quantity: 1,
-      unitPrice: item.price,
-      totalPrice: item.price,
-      imageUrl: item.imageUrl || undefined,
-    };
-    addToCart(cartItem);
-    toast({ title: `${item.name} Added`, description: "Item added to your cart." });
+  const handleStartGroupOrder = async () => {
+    if (!user || !tableContext) {
+      toast({ variant: 'destructive', title: 'Error', description: 'User or table context is missing.' });
+      return;
+    }
+    setIsCreatingGroup(true);
+    try {
+      const group = await createTableGroup(restaurantData.id, tableContext.id, tableContext.number, user);
+      if (group) {
+        setActiveGroup(group);
+        localStorage.setItem(`activeGroup_${restaurantData.id}_${tableContext.id}`, group.id);
+        toast({ title: 'Group Created!', description: `Share code ${group.id} with others at your table.` });
+        setShowGroupInfoModal(true);
+        clearLocalCart(); // Clear local cart as group cart is now active
+      } else {
+        toast({ variant: 'destructive', title: 'Failed', description: 'Could not create group. Please try again.' });
+      }
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Error', description: error.message || 'Failed to create group.' });
+    } finally {
+      setIsCreatingGroup(false);
+    }
   };
+
+  const handleJoinGroupOrder = async () => {
+    if (!user || !tableContext || !joinGroupCode) {
+      toast({ variant: 'destructive', title: 'Error', description: 'Missing user, table, or group code.' });
+      return;
+    }
+    setIsJoiningGroup(true);
+    try {
+      const result = await joinTableGroup(restaurantData.id, joinGroupCode, user);
+      if (result && 'id' in result) { // Check if it's TableGroup
+        setActiveGroup(result);
+        localStorage.setItem(`activeGroup_${restaurantData.id}_${tableContext.id}`, result.id);
+        toast({ title: 'Joined Group!', description: `You are now part of group ${result.id}.` });
+        setShowJoinGroupModal(false);
+        setJoinGroupCode('');
+        setShowGroupInfoModal(true);
+        clearLocalCart();
+      } else if (result && 'error' in result) {
+        toast({ variant: 'destructive', title: 'Join Failed', description: result.error });
+      } else {
+        toast({ variant: 'destructive', title: 'Join Failed', description: 'Could not join group. Invalid code or group is full/inactive.' });
+      }
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Error', description: error.message || 'Failed to join group.' });
+    } finally {
+      setIsJoiningGroup(false);
+    }
+  };
+  
+  const handleLeaveGroup = () => {
+    // Basic leave - just clear local state. More complex logic (updating members in Firestore) could be added.
+    if (tableContext) localStorage.removeItem(`activeGroup_${restaurantData.id}_${tableContext.id}`);
+    setActiveGroup(null);
+    setShowGroupInfoModal(false);
+    toast({title: "Left Group", description: "You have left the group order."});
+  };
+
+  const handleAddToCart = async (item: MenuItemType) => {
+    if (activeGroup && user) {
+      try {
+        await addItemToGroupCart(restaurantData.id, activeGroup.id, item, 1, user /*, selectedVariants */);
+        toast({ title: `${item.name} Added`, description: "Item added to group cart." });
+      } catch (error: any) {
+        toast({ variant: 'destructive', title: 'Error', description: `Could not add to group cart: ${error.message}` });
+      }
+    } else {
+      // Add to local cart if not in a group
+      const cartItem: CartItem = {
+        menuItemId: item.id,
+        menuItemName: item.name,
+        quantity: 1,
+        unitPrice: item.price,
+        totalPrice: item.price,
+        imageUrl: item.imageUrl || undefined,
+      };
+      addLocalCartItem(cartItem);
+      toast({ title: `${item.name} Added`, description: "Item added to your cart." });
+    }
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      toast({title: "Copied!", description: "Group code copied to clipboard."});
+    }).catch(err => {
+      toast({variant: 'destructive', title: "Copy Failed", description: "Could not copy code."});
+    });
+  };
+
 
   const toggleFavorite = (itemId: string) => {
     setFavorites(prev => ({ ...prev, [itemId]: !prev[itemId] }));
@@ -131,16 +270,19 @@ export default function SingleRestaurantFoodAppClient({
     let base = `/site/${restaurantData.id}/checkout`;
     if (tableContext) {
       base += `?tableId=${tableContext.docId}&tableNumber=${encodeURIComponent(tableContext.number)}`;
+      if (activeGroup) {
+        base += `&groupId=${activeGroup.id}`;
+      }
     }
     return base;
-  }, [restaurantData.id, tableContext]);
+  }, [restaurantData.id, tableContext, activeGroup]);
 
   const headerRestaurantName = tableContext 
     ? `${restaurantDisplayInfo.name} - Table ${tableContext.number}` 
     : restaurantDisplayInfo.name;
 
 
-  if (isLoading || authLoading) { // Consider authLoading as well
+  if (isLoading || authLoading) {
     return (
       <div className="flex items-center justify-center h-screen bg-background">
         <LoadingSpinner className="h-12 w-12 text-primary" />
@@ -203,6 +345,25 @@ export default function SingleRestaurantFoodAppClient({
               <span className="text-xs text-muted-foreground mt-1">500+ ratings (mock)</span>
             </div>
           </div>
+          {/* Group Order Buttons */}
+          {tableContext && user && (
+            <div className="mt-4 flex flex-col sm:flex-row gap-2">
+              {!activeGroup ? (
+                <>
+                  <Button onClick={handleStartGroupOrder} disabled={isCreatingGroup} className="flex-1 bg-accent hover:bg-accent/90 text-accent-foreground">
+                    {isCreatingGroup ? <LoadingSpinner className="mr-2 h-4 w-4" /> : <Users className="mr-2 h-4 w-4" />} Start Group Order
+                  </Button>
+                  <Button variant="outline" onClick={() => setShowJoinGroupModal(true)} className="flex-1">
+                    <LinkIcon className="mr-2 h-4 w-4" /> Join Group Order
+                  </Button>
+                </>
+              ) : (
+                <Button variant="outline" onClick={() => setShowGroupInfoModal(true)} className="w-full">
+                  <Users className="mr-2 h-4 w-4" /> View Group (Code: {activeGroup.id})
+                </Button>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="bg-card px-4 py-3 sticky top-[64px] md:top-[76px] z-20 shadow-sm container mx-auto"> 
@@ -318,7 +479,7 @@ export default function SingleRestaurantFoodAppClient({
         <div className="container mx-auto flex justify-around">
           <Link href={tableContext ? `/menu/table/${tableContext.docId}` : `/site/${restaurantData.id}`} className="flex flex-col items-center text-primary"> <Home size={20} /> <span className="text-xs mt-1 font-medium">Home</span> </Link>
           <button className="flex flex-col items-center text-muted-foreground"> <Search size={20} /> <span className="text-xs mt-1">Search</span> </button>
-          <Link href={`/site/${restaurantData.id}/orders${tableContext ? `?tableId=${tableContext.docId}`: ''}`} className="flex flex-col items-center text-muted-foreground"> <ShoppingBag size={20} /> <span className="text-xs mt-1">Orders</span> </Link>
+          <Link href={`/site/${restaurantData.id}/orders${tableContext ? `?tableId=${tableContext.docId}${activeGroup ? `&groupId=${activeGroup.id}`:''}`: ''}`} className="flex flex-col items-center text-muted-foreground"> <ShoppingBag size={20} /> <span className="text-xs mt-1">Orders</span> </Link>
           <Link href={`/site/${restaurantData.id}/profile`} className="flex flex-col items-center text-muted-foreground"> <User size={20} /> <span className="text-xs mt-1">Account</span> </Link>
         </div>
 
@@ -338,6 +499,61 @@ export default function SingleRestaurantFoodAppClient({
           </Link>
         )}
       </div>
+      {/* Join Group Modal */}
+      <Dialog open={showJoinGroupModal} onOpenChange={setShowJoinGroupModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Join Group Order</DialogTitle>
+            <DialogDescription>Enter the 4-digit code shared by the group host.</DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Label htmlFor="groupCode">Group Code</Label>
+            <Input 
+              id="groupCode" 
+              value={joinGroupCode} 
+              onChange={(e) => setJoinGroupCode(e.target.value.toUpperCase())} 
+              maxLength={4}
+              className="uppercase tracking-widest text-center text-lg"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowJoinGroupModal(false)}>Cancel</Button>
+            <Button onClick={handleJoinGroupOrder} disabled={isJoiningGroup || joinGroupCode.length !== 4} className="bg-primary hover:bg-primary/90">
+              {isJoiningGroup ? <LoadingSpinner className="mr-2 h-4 w-4" /> : "Join Group"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Group Info Modal */}
+      {activeGroup && (
+      <Dialog open={showGroupInfoModal} onOpenChange={setShowGroupInfoModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center"><Users className="mr-2 h-5 w-5 text-primary"/> Group Order Active</DialogTitle>
+            <DialogDescription>You are part of group <strong className="text-primary">{activeGroup.id}</strong> for Table {activeGroup.tableNumber}.</DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-lg font-semibold">Group Code: <span className="text-accent tracking-wider">{activeGroup.id}</span></p>
+              <Button variant="ghost" size="icon" onClick={() => copyToClipboard(activeGroup.id)}><ClipboardCopy className="h-4 w-4"/></Button>
+            </div>
+            <div>
+              <h4 className="font-medium mb-1">Members ({activeGroup.members.length}):</h4>
+              <ul className="list-disc list-inside text-sm text-muted-foreground">
+                {activeGroup.members.map(member => <li key={member.uid}>{member.name || member.uid.substring(0,6)} {member.uid === activeGroup.creatorUid && '(Host)'}</li>)}
+              </ul>
+            </div>
+             <p className="text-xs text-muted-foreground">Share this code with others at your table to add items to a shared cart.</p>
+          </div>
+          <DialogFooter className="sm:justify-between">
+            <Button variant="outline" onClick={handleLeaveGroup}>Leave Group</Button>
+            <Button onClick={() => setShowGroupInfoModal(false)} className="bg-primary hover:bg-primary/90">Continue Ordering</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      )}
     </div>
   );
 }
+
