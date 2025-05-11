@@ -5,14 +5,14 @@ import type { RestaurantProfile, MenuCategory, MenuItem as MenuItemType } from '
 import { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Search, MapPin, Clock, Star, ChevronDown, Filter, TrendingUp, Tag, Heart, Menu, User, ShoppingBag, Home, Bell, ShoppingCart as CartIconLucide } from 'lucide-react'; 
+import { Search, MapPin, Clock, Star, ChevronDown, Filter, TrendingUp, Tag, Heart, Menu, User, ShoppingBag, Home, Bell, ShoppingCart as CartIconLucide, X } from 'lucide-react'; 
 import { Button } from '@/components/ui/button';
 import { useCart, type CartItem } from '../public-homepage/cart-store';
 import { useToast } from '@/hooks/use-toast';
 import LoadingSpinner from '@/components/shared/loading-spinner';
 import { Sheet, SheetContent, SheetTrigger, SheetClose } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
-import DishCard from '@/components/site/shared/dish-card'; // Import the new DishCard
+import DishCard from '@/components/site/shared/dish-card';
 
 interface RestaurantDisplayInfo {
   name: string;
@@ -32,6 +32,12 @@ interface Offer {
   color: string;
 }
 
+interface TableContext {
+  id: string; // Table's Firestore document ID
+  number: string; // Table number for display
+  docId: string; // The ID scanned from QR, usually same as id
+}
+
 interface SingleRestaurantFoodAppClientProps {
   restaurantData: RestaurantProfile & { createdAt: string; updatedAt: string };
   restaurantDisplayInfo: RestaurantDisplayInfo;
@@ -39,6 +45,7 @@ interface SingleRestaurantFoodAppClientProps {
   allMenuItemsData: (MenuItemType & { createdAt: string; updatedAt: string })[];
   popularItemsData: (MenuItemType & { createdAt: string; updatedAt: string })[];
   offersData: Offer[];
+  tableContext?: TableContext; // Optional table context
 }
 
 export default function SingleRestaurantFoodAppClient({
@@ -47,7 +54,8 @@ export default function SingleRestaurantFoodAppClient({
   menuCategoriesData,
   allMenuItemsData,
   popularItemsData,
-  offersData
+  offersData,
+  tableContext
 }: SingleRestaurantFoodAppClientProps) {
   const { cart, addToCart } = useCart();
   const { toast } = useToast();
@@ -104,10 +112,18 @@ export default function SingleRestaurantFoodAppClient({
     }));
   }, [menuCategoriesData, allMenuItemsData]);
 
+  const checkoutUrl = useMemo(() => {
+    let base = `/site/${restaurantData.id}/checkout`;
+    if (tableContext) {
+      base += `?tableId=${tableContext.id}&tableNumber=${encodeURIComponent(tableContext.number)}`;
+    }
+    return base;
+  }, [restaurantData.id, tableContext]);
+
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-gray-50">
+      <div className="flex items-center justify-center h-screen bg-background">
         <LoadingSpinner className="h-12 w-12 text-primary" />
       </div>
     );
@@ -116,17 +132,17 @@ export default function SingleRestaurantFoodAppClient({
   const NavLinks = ({ onLinkClick, restaurantId }: { onLinkClick?: () => void, restaurantId: string }) => (
     <>
       <SheetClose asChild>
-        <Link href={`/site/${restaurantId}#menu-section`} onClick={onLinkClick} className="text-sm font-medium text-gray-100 transition-colors hover:text-yellow-300">Menu</Link>
+        <Link href={`/site/${restaurantId}#menu-section`} onClick={onLinkClick} className="block py-2 px-3 text-foreground hover:bg-muted rounded-md">Menu</Link>
       </SheetClose>
       <SheetClose asChild>
-        <Link href={`/site/${restaurantId}#offers-section`} onClick={onLinkClick} className="text-sm font-medium text-gray-100 transition-colors hover:text-yellow-300">Offers</Link>
+        <Link href={`/site/${restaurantId}#offers-section`} onClick={onLinkClick} className="block py-2 px-3 text-foreground hover:bg-muted rounded-md">Offers</Link>
       </SheetClose>
       <SheetClose asChild>
-        <Link href={`/site/${restaurantId}#info-section`} onClick={onLinkClick} className="text-sm font-medium text-gray-100 transition-colors hover:text-yellow-300">Info</Link>
+        <Link href={`/site/${restaurantId}#info-section`} onClick={onLinkClick} className="block py-2 px-3 text-foreground hover:bg-muted rounded-md">Info</Link>
       </SheetClose>
       <SheetClose asChild>
-        <Button asChild variant="ghost" className="text-yellow-300 hover:bg-red-700" onClick={onLinkClick}>
-          <Link href={`/site/${restaurantId}/checkout`}>Order Now</Link>
+        <Button asChild variant="default" className="w-full mt-3 bg-primary hover:bg-primary/80 text-primary-foreground" onClick={onLinkClick}>
+          <Link href={checkoutUrl}>Order Now</Link>
         </Button>
       </SheetClose>
     </>
@@ -134,10 +150,10 @@ export default function SingleRestaurantFoodAppClient({
 
 
   return (
-    <div className="flex flex-col h-screen">
+    <div className="flex flex-col h-screen bg-background">
       {/* Header */}
       <header className="sticky top-0 z-30">
-        <div className="bg-primary text-primary-foreground p-4 shadow-md">
+        <div className="bg-primary text-primary-foreground p-3 sm:p-4 shadow-md">
           <div className="container mx-auto flex items-center justify-between">
             <div className="flex items-center">
               <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
@@ -163,18 +179,21 @@ export default function SingleRestaurantFoodAppClient({
                   </div>
                   <div className="space-y-1 p-4">
                     <NavLinks restaurantId={restaurantData.id} onLinkClick={() => setIsMobileMenuOpen(false)} />
-                    <SheetClose asChild><Link href={`/site/${restaurantData.id}/profile`} className="flex items-center p-3 hover:bg-muted rounded text-card-foreground"><User size={18} className="mr-3 text-muted-foreground" /> My Profile</Link></SheetClose>
-                    <SheetClose asChild><Link href={`/site/${restaurantData.id}/orders`} className="flex items-center p-3 hover:bg-muted rounded text-card-foreground"><ShoppingBag size={18} className="mr-3 text-muted-foreground" /> My Orders</Link></SheetClose>
-                    <SheetClose asChild><Link href={`/site/${restaurantData.id}/favorites`} className="flex items-center p-3 hover:bg-muted rounded text-card-foreground"><Heart size={18} className="mr-3 text-muted-foreground" /> Favorites</Link></SheetClose>
+                    {/* Add other mobile nav items here if needed */}
+                     <SheetClose asChild><Link href={`/site/${restaurantData.id}/profile`} className="flex items-center py-2 px-3 hover:bg-muted rounded text-card-foreground"><User size={18} className="mr-3 text-muted-foreground" /> My Profile</Link></SheetClose>
+                    <SheetClose asChild><Link href={`/site/${restaurantData.id}/orders`} className="flex items-center py-2 px-3 hover:bg-muted rounded text-card-foreground"><ShoppingBag size={18} className="mr-3 text-muted-foreground" /> My Orders</Link></SheetClose>
+                    <SheetClose asChild><Link href={`/site/${restaurantData.id}/favorites`} className="flex items-center py-2 px-3 hover:bg-muted rounded text-card-foreground"><Heart size={18} className="mr-3 text-muted-foreground" /> Favorites</Link></SheetClose>
                   </div>
                   <div className="absolute bottom-0 left-0 right-0 p-4 border-t">
-                    <Button className="w-full bg-primary hover:bg-primary/80 text-primary-foreground">Sign Out (Mock)</Button>
+                    <Button className="w-full bg-destructive hover:bg-destructive/80 text-destructive-foreground">Sign Out (Mock)</Button>
                   </div>
                 </SheetContent>
               </Sheet>
               <Link href={`/site/${restaurantData.id}`}>
-                <h1 className="font-bold text-lg cursor-pointer">{restaurantDisplayInfo.name}</h1>
-                <p className="text-xs text-primary-foreground/80 hidden sm:block">{restaurantDisplayInfo.cuisine}</p>
+                <div className="cursor-pointer">
+                  <h1 className="font-bold text-lg leading-tight">{restaurantDisplayInfo.name}</h1>
+                  <p className="text-xs text-primary-foreground/80 hidden sm:block">{restaurantDisplayInfo.cuisine} {tableContext && `- Table ${tableContext.number}`}</p>
+                </div>
               </Link>
             </div>
             {/* Desktop Navigation Links */}
@@ -183,7 +202,7 @@ export default function SingleRestaurantFoodAppClient({
                <Link href={`/site/${restaurantData.id}#offers-section`}  className="text-sm font-medium text-primary-foreground transition-colors hover:text-yellow-300">Offers</Link>
                <Link href={`/site/${restaurantData.id}#info-section`} className="text-sm font-medium text-primary-foreground transition-colors hover:text-yellow-300">Info</Link>
                <Button asChild variant="ghost" className="text-yellow-300 hover:bg-primary/80">
-                <Link href={`/site/${restaurantData.id}/checkout`}>Order Now</Link>
+                <Link href={checkoutUrl}>Order Now</Link>
                </Button>
             </nav>
             <div className="flex items-center space-x-3 sm:space-x-4">
@@ -192,7 +211,7 @@ export default function SingleRestaurantFoodAppClient({
                 <span className="absolute -top-1 -right-1 bg-yellow-400 text-xs rounded-full w-4 h-4 flex items-center justify-center text-primary font-bold">2</span>
               </Button>
               <Button asChild variant="ghost" size="icon" className="relative text-primary-foreground hover:bg-primary/80">
-                <Link href={`/site/${restaurantData.id}/checkout`}>
+                <Link href={checkoutUrl}>
                   <CartIconLucide size={22} />
                   {cartTotalItems > 0 && (
                     <span className="absolute -top-1 -right-1 bg-yellow-400 text-xs rounded-full w-4 h-4 flex items-center justify-center text-primary font-bold">{cartTotalItems}</span>
@@ -233,7 +252,7 @@ export default function SingleRestaurantFoodAppClient({
           <div className="flex justify-between items-start">
             <div>
               <h2 className="font-bold text-xl md:text-2xl text-card-foreground">{restaurantDisplayInfo.name}</h2>
-              <p className="text-sm text-muted-foreground">{restaurantDisplayInfo.cuisine}</p>
+              <p className="text-sm text-muted-foreground">{restaurantDisplayInfo.cuisine} {tableContext && <span className="text-primary font-semibold">(Ordering for Table {tableContext.number})</span>}</p>
               <div className="flex items-center mt-1 text-xs text-muted-foreground">
                 <Clock size={12} className="mr-1 text-muted-foreground/80" />
                 <span className="mr-2">{restaurantDisplayInfo.deliveryTime}</span>
@@ -252,13 +271,13 @@ export default function SingleRestaurantFoodAppClient({
         </div>
 
         {/* Search Bar */}
-        <div className="bg-card px-4 py-3 sticky top-[0px] z-20 shadow-sm container mx-auto"> {/* Adjusted top for header */}
+        <div className="bg-card px-4 py-3 sticky top-[0px] md:top-[64px] z-20 shadow-sm container mx-auto"> {/* Adjust top for header height */}
           <div className="flex items-center bg-muted rounded-full px-4 py-2.5">
             <Search size={18} className="text-muted-foreground mr-2" />
             <input
               type="text"
               placeholder="Search for dishes..."
-              className="bg-transparent w-full text-sm focus:outline-none text-card-foreground"
+              className="bg-transparent w-full text-sm focus:outline-none text-card-foreground placeholder:text-muted-foreground"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
@@ -281,8 +300,8 @@ export default function SingleRestaurantFoodAppClient({
           </div>
         </div>
 
-        {/* Main Content Scrollable Area */}
-        <div className="flex-1 container mx-auto pb-24">
+        {/* Main Content for Selected Tab */}
+        <div className="flex-1 container mx-auto pb-24"> {/* Added pb-24 for bottom nav space */}
           {activeTab === 'menu' && (
             <>
               {/* Offers Carousel */}
@@ -307,14 +326,14 @@ export default function SingleRestaurantFoodAppClient({
 
               {/* Menu Categories Display */}
               {menuCategoriesWithCounts.length > 0 && (
-                <div className="bg-card py-4 mt-2 sticky top-[10px] z-10 shadow-sm scrollbar-thin " id="menu-section"> {/* Adjusted sticky top */}
+                <div className="bg-card py-4 mt-2 sticky top-[64px] md:top-[128px] z-10 shadow-sm scrollbar-thin " id="menu-section"> {/* Adjusted sticky top */}
                   <h3 className="px-4 mb-3 text-lg font-semibold text-card-foreground">Menu Categories</h3>
                   <div className="flex overflow-x-auto px-4 pb-2 no-scrollbar">
                     <div className="flex space-x-3">
                       {menuCategoriesWithCounts.map((category) => (
                         category.count > 0 && 
                         <div key={category.id} className="bg-muted rounded-xl p-3 min-w-[120px] text-center cursor-pointer hover:bg-muted/80 transition">
-                          <p className="font-medium text-sm text-muted-foreground">{category.name}</p>
+                          <p className="font-medium text-sm text-card-foreground">{category.name}</p>
                           <p className="text-xs text-muted-foreground/70">{category.count} items</p>
                         </div>
                       ))}
@@ -364,11 +383,10 @@ export default function SingleRestaurantFoodAppClient({
               <p className="text-muted-foreground mt-2">More details about {restaurantDisplayInfo.name} coming soon!</p>
             </div>
           )}
-
         </div>
       </div>
       {/* Bottom Navigation with Cart View Button */}
-      <div className={cn("fixed bottom-0 left-0 right-0 bg-card border-t border-border p-2 transition-transform duration-300", cartTotalItems > 0 ? 'pb-[76px]' : '')}>
+      <div className={cn("fixed bottom-0 left-0 right-0 bg-card border-t border-border p-2 transition-transform duration-300 z-40", cartTotalItems > 0 ? 'pb-[70px]' : '')}>
         <div className="container mx-auto flex justify-around">
           <Link href={`/site/${restaurantData.id}`} className="flex flex-col items-center text-primary"> <Home size={20} /> <span className="text-xs mt-1 font-medium">Home</span> </Link>
           <button className="flex flex-col items-center text-muted-foreground"> <Search size={20} /> <span className="text-xs mt-1">Search</span> </button>
@@ -377,8 +395,8 @@ export default function SingleRestaurantFoodAppClient({
         </div>
 
         {cartTotalItems > 0 && (
-          <Link href={`/site/${restaurantData.id}/checkout`} className="fixed bottom-0 left-0 right-0 md:max-w-screen-sm md:mx-auto md:bottom-2 md:left-1/2 md:-translate-x-1/2">
-            <div className="bg-primary text-primary-foreground rounded-lg mx-4 my-2 p-3 flex items-center justify-between shadow-lg hover:bg-primary/80 transition cursor-pointer">
+          <Link href={checkoutUrl} className="fixed bottom-0 left-0 right-0 md:max-w-screen-sm md:mx-auto md:bottom-2 md:left-1/2 md:-translate-x-1/2 z-50">
+            <div className="bg-primary text-primary-foreground rounded-lg mx-4 mb-2 p-3 flex items-center justify-between shadow-lg hover:bg-primary/80 transition cursor-pointer">
               <div>
                 <span className="font-bold">{cartTotalItems} item{cartTotalItems > 1 ? 's' : ''}</span>
                 <span className="mx-2">|</span>
@@ -395,4 +413,3 @@ export default function SingleRestaurantFoodAppClient({
     </div>
   );
 }
-

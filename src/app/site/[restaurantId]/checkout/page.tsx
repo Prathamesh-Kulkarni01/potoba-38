@@ -2,22 +2,21 @@
 // src/app/site/[restaurantId]/checkout/page.tsx
 'use client';
 
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation'; // Added useSearchParams
 import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Button } from '@/components/ui/button'; // Added
+import { Button } from '@/components/ui/button'; 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Separator } from '@/components/ui/separator'; // Added
+import { Separator } from '@/components/ui/separator'; 
 import LoadingSpinner from '@/components/shared/loading-spinner';
 import { useCart } from '@/components/site/public-homepage/cart-store';
 import { getRestaurant } from '@/lib/firebase/firestore';
 import type { RestaurantProfile, OrderItem, Order, OrderStatus } from '@/types';
 import { createOrder } from '@/lib/firebase/orders';
-// Ensure these components exist at these paths
 import TopNavigationBar from '@/components/site/public-homepage/top-navigation-bar';
 import SiteFooter from '@/components/site/public-homepage/site-footer';
 import { AlertCircle, CreditCard, ShoppingBag, Truck, Trash2 } from 'lucide-react';
@@ -27,6 +26,7 @@ import { useToast } from '@/hooks/use-toast';
 export default function CheckoutPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams(); // Get query parameters
   const restaurantId = params.restaurantId as string;
   const { cart, clearCart, removeFromCart, updateQuantity } = useCart();
   const { toast } = useToast();
@@ -43,12 +43,16 @@ export default function CheckoutPage() {
   const [paymentMethod, setPaymentMethod] = useState<'cod' | 'card'>('card');
   const [isProcessing, setIsProcessing] = useState(false);
 
+  // Table context from query params
+  const tableId = searchParams.get('tableId');
+  const tableNumber = searchParams.get('tableNumber');
+
   useEffect(() => {
     if (restaurantId) {
       getRestaurant(restaurantId)
         .then(data => {
             if (data) {
-                setRestaurant(data as RestaurantProfile); // Assert type after fetching
+                setRestaurant(data as RestaurantProfile); 
             } else {
                 toast({variant: "destructive", title: "Error", description: "Restaurant not found."});
                 router.push('/');
@@ -67,9 +71,9 @@ export default function CheckoutPage() {
   }, [restaurantId, toast, router]);
 
   const subtotal = useMemo(() => cart.reduce((sum, item) => sum + item.totalPrice, 0), [cart]);
-  const taxRate = useMemo(() => restaurant?.taxRate || 0.08, [restaurant]); // Default 8% tax
+  const taxRate = useMemo(() => restaurant?.taxRate || 0.08, [restaurant]); 
   const tax = useMemo(() => subtotal * taxRate, [subtotal, taxRate]);
-  const deliveryFee = 5.00; // Example delivery fee, make dynamic if needed
+  const deliveryFee = tableId ? 0 : 5.00; // No delivery fee for table orders
   const total = useMemo(() => subtotal + tax + deliveryFee, [subtotal, tax, deliveryFee]);
 
   const handlePlaceOrder = async (e: React.FormEvent) => {
@@ -86,29 +90,35 @@ export default function CheckoutPage() {
         quantity: ci.quantity,
         unitPrice: ci.unitPrice,
         totalPrice: ci.totalPrice,
-        variantChoices: ci.variantChoices, // Assuming CartItem has this
+        variantChoices: ci.variantChoices, 
     }));
 
     const orderData: Omit<Order, 'id' | 'createdAt' | 'updatedAt'> = {
         restaurantId: restaurant.id,
-        // tableId: null, // For delivery orders, tableId might be null
-        // tableNumber: null,
+        tableId: tableId || null,
+        tableNumber: tableNumber || null,
         items: orderItems,
         subtotal,
         taxAmount: tax,
         totalAmount: total,
-        status: 'pending_kitchen' as OrderStatus, // Or 'pending_customer_confirmation' if you add a step
+        status: 'pending_kitchen' as OrderStatus,
         customerNotes: customerNotes || undefined,
         paymentMethod: paymentMethod,
-        // Add other customer details like name, email, phone, address if storing on order
+        // Include delivery address if it's not a table order
+        // deliveryAddress: tableId ? undefined : { name, email, phone, address },
     };
 
     try {
-      await createOrder(restaurant.id, orderData);
+      const newOrder = await createOrder(restaurant.id, orderData);
       toast({ title: "Order Placed Successfully!", description: "Thank you for your order. We'll process it shortly."});
       clearCart();
-      // Redirect to an order confirmation page
-      router.push(`/site/${restaurantId}/order-confirmation?mock_order_id=${Date.now()}`); 
+      
+      // If table order, maybe go to a simpler confirmation. If delivery, more details.
+      if (tableId) {
+        router.push(`/site/${restaurantId}/order-confirmation?orderId=${newOrder.id}&tableOrder=true`); 
+      } else {
+        router.push(`/site/${restaurantId}/order-confirmation?orderId=${newOrder.id}`); 
+      }
     } catch (error: any) {
       console.error("Order placement error:", error);
       toast({ variant: "destructive", title: "Order Failed", description: error.message || "Could not place your order. Please try again."});
@@ -122,12 +132,10 @@ export default function CheckoutPage() {
   }
 
   if (!restaurant) {
-    // This state should ideally be prevented by the useEffect redirect, but as a fallback:
     return <div className="flex h-screen items-center justify-center text-destructive p-8 text-center">Restaurant data could not be loaded. Please try returning to the homepage.</div>;
   }
   
   const cartItemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
-
 
   return (
      <div className="flex min-h-screen flex-col bg-gradient-to-br from-background via-muted/5 to-background">
@@ -143,7 +151,7 @@ export default function CheckoutPage() {
             <CardHeader className="text-center">
                 <ShoppingBag className="mx-auto h-12 w-12 text-primary mb-2" />
                 <CardTitle className="text-3xl font-bold">Checkout</CardTitle>
-                <CardDescription>Finalize your order from {restaurant.name}.</CardDescription>
+                <CardDescription>Finalize your order from {restaurant.name} {tableNumber ? `for Table ${tableNumber}` : ''}.</CardDescription>
             </CardHeader>
             <CardContent>
                 {cart.length === 0 && !isProcessing ? (
@@ -151,19 +159,23 @@ export default function CheckoutPage() {
                         <AlertCircle className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
                         <p className="text-lg text-muted-foreground">Your cart is empty.</p>
                         <Button asChild variant="link" className="mt-2 text-primary">
-                            <Link href={`/site/${restaurantId}`}>Return to Menu</Link>
+                            <Link href={tableId ? `/menu/table/${tableId}` : `/site/${restaurantId}`}>Return to Menu</Link>
                         </Button>
                     </div>
                 ) : (
                 <form onSubmit={handlePlaceOrder} className="grid md:grid-cols-2 gap-8">
                     <div className="space-y-6">
                         <Card className="border-border/70">
-                            <CardHeader><CardTitle className="text-lg">Your Details</CardTitle></CardHeader>
+                            <CardHeader><CardTitle className="text-lg">{tableId ? 'Table Order Notes' : 'Your Details'}</CardTitle></CardHeader>
                             <CardContent className="space-y-4">
-                                <div><Label htmlFor="name">Full Name</Label><Input id="name" value={name} onChange={e => setName(e.target.value)} required placeholder="John Doe" /></div>
-                                <div><Label htmlFor="email">Email</Label><Input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="you@example.com"/></div>
-                                <div><Label htmlFor="phone">Phone Number</Label><Input id="phone" type="tel" value={phone} onChange={e => setPhone(e.target.value)} required placeholder="123-456-7890"/></div>
-                                <div><Label htmlFor="address">Delivery Address</Label><Input id="address" value={address} onChange={e => setAddress(e.target.value)} required placeholder="123 Main St, Anytown"/></div>
+                                {!tableId && (
+                                  <>
+                                    <div><Label htmlFor="name">Full Name</Label><Input id="name" value={name} onChange={e => setName(e.target.value)} required placeholder="John Doe" /></div>
+                                    <div><Label htmlFor="email">Email</Label><Input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="you@example.com"/></div>
+                                    <div><Label htmlFor="phone">Phone Number</Label><Input id="phone" type="tel" value={phone} onChange={e => setPhone(e.target.value)} required placeholder="123-456-7890"/></div>
+                                    <div><Label htmlFor="address">Delivery Address</Label><Input id="address" value={address} onChange={e => setAddress(e.target.value)} required placeholder="123 Main St, Anytown"/></div>
+                                  </>
+                                )}
                                 <div><Label htmlFor="customerNotes">Order Notes (Optional)</Label><Textarea id="customerNotes" value={customerNotes} onChange={e => setCustomerNotes(e.target.value)} placeholder="Any special instructions for your order?"/></div>
                             </CardContent>
                         </Card>
@@ -174,7 +186,7 @@ export default function CheckoutPage() {
                                     <CreditCard className="mr-3 h-5 w-5"/> Pay with Card (Demo)
                                 </Button>
                                 <Button type="button" variant={paymentMethod === 'cod' ? 'default' : 'outline'} onClick={() => setPaymentMethod('cod')} className="w-full justify-start text-left h-12">
-                                    <Truck className="mr-3 h-5 w-5"/> Cash on Delivery (Demo)
+                                    <Truck className="mr-3 h-5 w-5"/> {tableId ? 'Pay at Table (Demo)' : 'Cash on Delivery (Demo)'}
                                 </Button>
                                 {paymentMethod === 'card' && (
                                     <div className="space-y-2 pt-3 border-t mt-4">
@@ -212,7 +224,7 @@ export default function CheckoutPage() {
                              <CardFooter className="flex-col space-y-2 border-t pt-4">
                                 <div className="w-full flex justify-between text-sm"><p>Subtotal</p><p>${subtotal.toFixed(2)}</p></div>
                                 <div className="w-full flex justify-between text-sm text-muted-foreground"><p>Tax ({(taxRate * 100).toFixed(0)}%)</p><p>${tax.toFixed(2)}</p></div>
-                                <div className="w-full flex justify-between text-sm text-muted-foreground"><p>Delivery Fee</p><p>${deliveryFee.toFixed(2)}</p></div>
+                                {!tableId && <div className="w-full flex justify-between text-sm text-muted-foreground"><p>Delivery Fee</p><p>${deliveryFee.toFixed(2)}</p></div>}
                                 <Separator className="my-2"/>
                                 <div className="w-full flex justify-between text-lg font-bold text-primary"><p>Total</p><p>${total.toFixed(2)}</p></div>
                                
@@ -232,4 +244,3 @@ export default function CheckoutPage() {
     </div>
   );
 }
-
