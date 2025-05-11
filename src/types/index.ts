@@ -1,5 +1,4 @@
 
-
 import type { User as FirebaseUser } from 'firebase/auth';
 import type { Timestamp } from 'firebase/firestore';
 
@@ -152,6 +151,8 @@ export interface Order {
   discountAmount?: number;
   totalAmount: number; // subtotal + tax + serviceCharge - discount
   status: OrderStatus;
+  customerName?: string; // Added
+  customerWhatsapp?: string; // Added
   customerNotes?: string; // General notes for the entire order
   kitchenNotes?: string; // Notes from staff to kitchen or vice-versa
   paymentMethod?: string;
@@ -165,4 +166,5 @@ export interface ClientOrder extends Omit<Order, 'createdAt' | 'updatedAt'> {
   createdAt: string; // ISO string
   updatedAt: string; // ISO string
   // tableId and tableNumber are already optional in Order, so they remain optional here.
+  // customerName and customerWhatsapp are inherited as optional from Order.
 }

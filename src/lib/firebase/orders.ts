@@ -20,8 +20,8 @@ import { db } from './config';
 import type { Order, OrderStatus, OrderItem, ClientOrder } from '@/types';
 import { convertFirebaseTimestampToString, getOrdersCollectionPath } from './utils'; // Import the utility
 
-const safeString = (value: any): string | undefined => typeof value === 'string' ? value : undefined;
-const safeNumber = (value: any): number | undefined => typeof value === 'number' && !isNaN(value) ? value : undefined;
+const safeString = (value: any): string | undefined => typeof value === 'string' ? value : undefined : undefined;
+const safeNumber = (value: any): number | undefined => typeof value === 'number' && !isNaN(value) ? value : undefined : undefined;
 
 const toClientOrder = (docId: string, data: any): ClientOrder => {
     const orderBase: Omit<ClientOrder, 'id' | 'createdAt' | 'updatedAt'> = {
@@ -32,6 +32,8 @@ const toClientOrder = (docId: string, data: any): ClientOrder => {
         subtotal: data.subtotal,
         totalAmount: data.totalAmount,
         status: data.status as OrderStatus,
+        customerName: safeString(data.customerName),
+        customerWhatsapp: safeString(data.customerWhatsapp),
         taxAmount: safeNumber(data.taxAmount),
         serviceCharge: safeNumber(data.serviceCharge),
         discountAmount: safeNumber(data.discountAmount),
@@ -63,6 +65,8 @@ export async function createOrder(restaurantId: string, orderData: Omit<Order, '
     updatedAt,
     tableId: orderData.tableId || null,
     tableNumber: orderData.tableNumber || null,
+    customerName: orderData.customerName || undefined,
+    customerWhatsapp: orderData.customerWhatsapp || undefined,
   };
 
   const docRef = await addDoc(ordersCol, dataToSave);

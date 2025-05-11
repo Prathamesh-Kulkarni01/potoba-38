@@ -16,11 +16,11 @@ import SiteFooter from '@/components/site/public-homepage/site-footer';
 import { useToast } from '@/hooks/use-toast';
 import { useCart } from '@/components/site/public-homepage/cart-store';
 import { ShoppingBag, ArrowLeft, RefreshCw, Clock, Utensils, CheckCircle, XCircle, Hourglass } from 'lucide-react';
-import { collection, query, where, orderBy, onSnapshot, Timestamp } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot, Timestamp, QueryConstraint } from 'firebase/firestore';
 import { db } from '@/lib/firebase/config';
 import { getOrdersCollectionPath, convertFirebaseTimestampToString } from '@/lib/firebase/utils';
-import { format, parseISO } from 'date-fns';
-import { generateOrderEta } from '@/ai/flows/generate-order-eta-flow'; // Assuming this will be created
+import { format, parseISO, startOfDay, endOfDay } from 'date-fns';
+import { generateOrderEta } from '@/ai/flows/generate-order-eta-flow';
 
 const orderStatusConfig: Record<OrderStatusType, { label: string; icon: React.ElementType; color: string; progress?: number }> = {
   pending_customer_confirmation: { label: 'Pending Your OK', icon: Hourglass, color: 'text-gray-500', progress: 10 },
@@ -42,6 +42,8 @@ function MyOrdersContent() {
   const searchParams = useSearchParams();
   const restaurantId = params.restaurantId as string;
   const highlightedOrderId = searchParams.get('highlight');
+  const tableContextId = searchParams.get('tableId'); // For filtering by table orders
+
   const { toast } = useToast();
   const { cart } = useCart();
 
@@ -55,7 +57,7 @@ function MyOrdersContent() {
 
   useEffect(() => {
     if (!restaurantId) {
-      router.push('/'); // Or an error page
+      router.push('/'); 
       return;
     }
     getRestaurant(restaurantId)
@@ -77,13 +79,30 @@ function MyOrdersContent() {
     if (!restaurantId || !db) return;
 
     setLoading(true);
-    // For now, fetching all orders. In a real app, this should be user-specific.
-    // This demo fetches orders for the restaurant, not filtered by current user.
     const ordersColRef = collection(db, getOrdersCollectionPath(restaurantId));
-    // Fetching recent orders, e.g., last 10 or last 24 hours.
-    const q = query(ordersColRef, orderBy('createdAt', 'desc'), where('createdAt', '>', Timestamp.fromDate(new Date(Date.now() - 24 * 60 * 60 * 1000)))); 
+    const queryConstraints: QueryConstraint[] = [];
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    // Filter for today's orders
+    const todayStart = startOfDay(new Date());
+    const todayEnd = endOfDay(new Date());
+    queryConstraints.push(where('createdAt', '>=', Timestamp.fromDate(todayStart)));
+    queryConstraints.push(where('createdAt', '<=', Timestamp.fromDate(todayEnd)));
+
+    // If tableContextId is present (e.g., from a table order confirmation redirect),
+    // filter orders for that specific table.
+    if (tableContextId) {
+      queryConstraints.push(where('tableId', '==', tableContextId));
+    } else {
+      // NOTE: Without user authentication on the public site, we cannot reliably filter
+      // to "only orders of logged-in customer" when no table context is provided.
+      // This will currently show all of today's orders for the restaurant.
+      // For true "my orders" across sessions, user login or localStorage order ID tracking is needed.
+      // console.log("Displaying all of today's orders for the restaurant as no specific table or user context is available.");
+    }
+    
+    queryConstraints.push(orderBy('createdAt', 'desc')); 
+
+    const unsubscribe = onSnapshot(query(ordersColRef, ...queryConstraints), (snapshot) => {
       const fetchedOrders = snapshot.docs.map(docSnap => ({
         id: docSnap.id,
         ...docSnap.data(),
@@ -93,7 +112,6 @@ function MyOrdersContent() {
       setOrders(fetchedOrders);
       setLoading(false);
 
-      // Fetch ETAs for relevant orders
       fetchedOrders.forEach(order => {
         if ((order.status === 'preparing' || order.status === 'confirmed_by_kitchen') && !etas[order.id]) {
           fetchEta(order);
@@ -107,12 +125,11 @@ function MyOrdersContent() {
     });
 
     return () => unsubscribe();
-  }, [restaurantId, toast]);
+  }, [restaurantId, tableContextId, toast]);
 
 
   const fetchEta = async (order: ClientOrder) => {
     try {
-      // Basic restaurant load for now
       const load = orders.length > 5 ? 'high' : orders.length > 2 ? 'medium' : 'low';
       const etaResult = await generateOrderEta({ 
         orderId: order.id, 
@@ -122,33 +139,38 @@ function MyOrdersContent() {
       setEtas(prev => ({ ...prev, [order.id]: etaResult.eta }));
     } catch (error) {
       console.error(`Failed to fetch ETA for order ${order.id}:`, error);
-      setEtas(prev => ({ ...prev, [order.id]: "Soon" })); // Fallback ETA
+      setEtas(prev => ({ ...prev, [order.id]: "Soon" })); 
     }
   };
 
-  if (loading && !restaurant) { // Show full page loader only on initial load
+  if (loading && !restaurant) { 
     return <div className="flex h-screen items-center justify-center"><LoadingSpinner className="h-10 w-10 text-primary" /></div>;
   }
 
   if (!restaurant) {
     return <div className="flex h-screen items-center justify-center text-destructive p-8 text-center">Restaurant data could not be loaded.</div>;
   }
+  
+  const tableNumberForHeader = orders.find(o => o.tableId === tableContextId)?.tableNumber;
+
 
   return (
     <div className="flex min-h-screen flex-col bg-gradient-to-br from-background via-muted/5 to-background">
       <TopNavigationBar
-        restaurantName={restaurant.name}
+        restaurantName={tableContextId && tableNumberForHeader ? `${restaurant.name} - Table ${tableNumberForHeader}` : restaurant.name}
         restaurantLogoUrl={`https://picsum.photos/seed/${restaurant.id}logo/40/40`}
         cartItemCount={cartItemCount}
         showShadow={showNavShadow}
         restaurantId={restaurant.id}
+        tableContext={tableContextId && tableNumberForHeader ? { id: tableContextId, number: tableNumberForHeader, docId: tableContextId } : undefined}
       />
       <main className="container mx-auto px-4 py-8 flex-grow">
         <div className="flex items-center justify-between mb-6">
             <h1 className="text-2xl md:text-3xl font-bold text-primary flex items-center">
-                <ShoppingBag className="mr-3 h-7 w-7" /> My Orders
+                <ShoppingBag className="mr-3 h-7 w-7" /> 
+                {tableContextId ? `Today's Orders for Table ${tableNumberForHeader || tableContextId.substring(0,4)}` : "Today's Orders"}
             </h1>
-            <Button variant="outline" size="sm" onClick={() => router.push(`/site/${restaurantId}`)}>
+            <Button variant="outline" size="sm" onClick={() => router.push(tableContextId ? `/menu/table/${tableContextId}` : `/site/${restaurantId}`)}>
                 <ArrowLeft className="mr-2 h-4 w-4" /> New Order
             </Button>
         </div>
@@ -159,8 +181,8 @@ function MyOrdersContent() {
           <Card className="text-center py-12 shadow-lg border-primary/20">
             <CardHeader>
                 <ShoppingBag className="mx-auto h-16 w-16 text-muted-foreground opacity-50 mb-4" />
-                <CardTitle className="text-2xl">No Orders Yet</CardTitle>
-                <CardDescription>You haven&apos;t placed any orders with {restaurant.name} recently.</CardDescription>
+                <CardTitle className="text-2xl">No Orders Yet Today</CardTitle>
+                <CardDescription>No orders found for {tableContextId ? `table ${tableNumberForHeader || tableContextId.substring(0,4)}` : restaurant.name} today.</CardDescription>
             </CardHeader>
             <CardContent>
                  <Image 
@@ -171,7 +193,7 @@ function MyOrdersContent() {
                     data-ai-hint="empty shopping bag"
                  />
                 <Button asChild className="mt-6 bg-primary hover:bg-primary/90 text-primary-foreground">
-                    <Link href={`/site/${restaurantId}`}>Start Your Order</Link>
+                    <Link href={tableContextId ? `/menu/table/${tableContextId}` : `/site/${restaurantId}`}>Start Your Order</Link>
                 </Button>
             </CardContent>
           </Card>
@@ -187,8 +209,9 @@ function MyOrdersContent() {
                       <div>
                         <CardTitle className="text-lg md:text-xl">Order ID: <span className="font-mono text-primary">{order.id.substring(0, 8)}...</span></CardTitle>
                         <CardDescription>
-                          Placed on: {format(parseISO(order.createdAt), 'MMM d, yyyy, h:mm a')}
+                          Placed: {format(parseISO(order.createdAt), 'MMM d, h:mm a')}
                           {order.tableNumber && <span className="ml-2 font-medium text-foreground">(Table: {order.tableNumber})</span>}
+                           {order.customerName && <span className="ml-2 font-medium text-foreground">(Customer: {order.customerName})</span>}
                         </CardDescription>
                       </div>
                       <div className={`mt-2 sm:mt-0 text-sm font-semibold flex items-center px-3 py-1 rounded-full bg-muted ${statusInfo.color}`}>
@@ -200,7 +223,7 @@ function MyOrdersContent() {
                   <CardContent>
                     <ul className="space-y-1 text-sm mb-3">
                       {order.items.map(item => (
-                        <li key={item.menuItemId} className="flex justify-between">
+                        <li key={item.menuItemId + (item.variantChoices ? JSON.stringify(item.variantChoices) : '')} className="flex justify-between">
                           <span>{item.menuItemName} <span className="text-muted-foreground">x{item.quantity}</span></span>
                           <span>${item.totalPrice.toFixed(2)}</span>
                         </li>
@@ -220,7 +243,7 @@ function MyOrdersContent() {
                     )}
                   </CardContent>
                   <CardFooter className="flex justify-end">
-                    <Button variant="outline" size="sm">View Details (Soon)</Button>
+                    <Button variant="outline" size="sm" disabled>View Details (Soon)</Button>
                   </CardFooter>
                 </Card>
               );

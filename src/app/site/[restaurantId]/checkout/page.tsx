@@ -2,7 +2,7 @@
 // src/app/site/[restaurantId]/checkout/page.tsx
 'use client';
 
-import { useParams, useRouter, useSearchParams } from 'next/navigation'; // Added useSearchParams
+import { useParams, useRouter, useSearchParams } from 'next/navigation'; 
 import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -19,7 +19,7 @@ import type { RestaurantProfile, OrderItem, Order, OrderStatus } from '@/types';
 import { createOrder } from '@/lib/firebase/orders';
 import TopNavigationBar from '@/components/site/public-homepage/top-navigation-bar';
 import SiteFooter from '@/components/site/public-homepage/site-footer';
-import { AlertCircle, CreditCard, ShoppingBag, Truck, Trash2 } from 'lucide-react';
+import { AlertCircle, CreditCard, ShoppingBag, Truck, Trash2, User, Phone } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 
@@ -36,9 +36,10 @@ export default function CheckoutPage() {
   
   // Form state
   const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [address, setAddress] = useState('');
+  const [email, setEmail] = useState(''); // Kept for potential future use (e.g., email receipts)
+  const [phone, setPhone] = useState(''); // Can be general phone or specific field
+  const [whatsappNumber, setWhatsappNumber] = useState(''); // New field
+  const [address, setAddress] = useState(''); // For delivery
   const [customerNotes, setCustomerNotes] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'cod' | 'card'>('card');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -99,17 +100,19 @@ export default function CheckoutPage() {
 
     const orderData: Omit<Order, 'id' | 'createdAt' | 'updatedAt'> = {
         restaurantId: restaurant.id,
-        tableId: tableId || null, // Include tableId if present
-        tableNumber: tableNumber || null, // Include tableNumber if present
+        tableId: tableId || null, 
+        tableNumber: tableNumber || null, 
         items: orderItems,
         subtotal,
         taxAmount: tax,
         totalAmount: total,
-        status: 'pending_kitchen' as OrderStatus, // Default status
+        status: 'pending_kitchen' as OrderStatus, 
+        customerName: name || undefined, // Add name
+        customerWhatsapp: whatsappNumber || undefined, // Add WhatsApp number
         customerNotes: customerNotes || undefined,
         paymentMethod: paymentMethod,
-        // Include delivery address if it's not a table order and fields are filled
-        // deliveryAddress: !tableId && name && email && phone && address ? { name, email, phone, address } : undefined,
+        // Example: deliveryAddress could be an object if not a table order
+        // deliveryAddress: !tableId && address ? { street: address, contactName: name, contactPhone: phone } : undefined,
     };
 
     try {
@@ -117,11 +120,13 @@ export default function CheckoutPage() {
       toast({ title: "Order Placed Successfully!", description: "Thank you for your order. We'll process it shortly."});
       clearCart();
       
+      let confirmationUrl = `/site/${restaurantId}/order-confirmation?orderId=${newOrder.id}`;
       if (tableId) {
-        router.push(`/site/${restaurantId}/order-confirmation?orderId=${newOrder.id}&tableOrder=true&tableNumber=${encodeURIComponent(tableNumber || '')}`); 
-      } else {
-        router.push(`/site/${restaurantId}/order-confirmation?orderId=${newOrder.id}`); 
+        confirmationUrl += `&tableOrder=true`;
+        if(tableNumber) confirmationUrl += `&tableNumber=${encodeURIComponent(tableNumber)}`;
       }
+      router.push(confirmationUrl); 
+      
     } catch (error: any) {
       console.error("Order placement error:", error);
       toast({ variant: "destructive", title: "Order Failed", description: error.message || "Could not place your order. Please try again."});
@@ -170,13 +175,15 @@ export default function CheckoutPage() {
                 <form onSubmit={handlePlaceOrder} className="grid md:grid-cols-2 gap-8">
                     <div className="space-y-6">
                         <Card className="border-border/70">
-                            <CardHeader><CardTitle className="text-lg">{tableId ? 'Table Order Notes' : 'Your Details'}</CardTitle></CardHeader>
+                            <CardHeader><CardTitle className="text-lg">{tableId ? 'Order Details' : 'Your Contact & Delivery Details'}</CardTitle></CardHeader>
                             <CardContent className="space-y-4">
-                                {!tableId && (
+                                <div><Label htmlFor="name">Full Name</Label><Input id="name" value={name} onChange={e => setName(e.target.value)} required={!tableId} placeholder="John Doe" /></div>
+                                <div><Label htmlFor="whatsappNumber">WhatsApp Number</Label><Input id="whatsappNumber" type="tel" value={whatsappNumber} onChange={e => setWhatsappNumber(e.target.value)} required={!tableId} placeholder="+1 123 456 7890"/></div>
+                                
+                                {!tableId && ( // Only show email and address if not a table order
                                   <>
-                                    <div><Label htmlFor="name">Full Name</Label><Input id="name" value={name} onChange={e => setName(e.target.value)} required placeholder="John Doe" /></div>
-                                    <div><Label htmlFor="email">Email</Label><Input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="you@example.com"/></div>
-                                    <div><Label htmlFor="phone">Phone Number</Label><Input id="phone" type="tel" value={phone} onChange={e => setPhone(e.target.value)} required placeholder="123-456-7890"/></div>
+                                    <div><Label htmlFor="email">Email (Optional)</Label><Input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com"/></div>
+                                    <div><Label htmlFor="phone">Phone Number (Optional)</Label><Input id="phone" type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="123-456-7890"/></div>
                                     <div><Label htmlFor="address">Delivery Address</Label><Input id="address" value={address} onChange={e => setAddress(e.target.value)} required placeholder="123 Main St, Anytown"/></div>
                                   </>
                                 )}
@@ -248,4 +255,3 @@ export default function CheckoutPage() {
     </div>
   );
 }
-
