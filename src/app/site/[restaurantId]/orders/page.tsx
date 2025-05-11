@@ -1,4 +1,3 @@
-
 // src/app/site/[restaurantId]/orders/page.tsx
 'use client';
 
@@ -10,18 +9,18 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import LoadingSpinner from '@/components/shared/loading-spinner';
 import { getRestaurant } from '@/lib/firebase/firestore';
-import type { RestaurantProfile, ClientOrder, OrderItem, OrderStatus as OrderStatusType } from '@/types';
+import type { RestaurantProfile, ClientOrder, OrderItem, OrderStatus as OrderStatusType, ClientTableGroup, TableGroup } from '@/types';
 import TopNavigationBar from '@/components/site/public-homepage/top-navigation-bar';
 import SiteFooter from '@/components/site/public-homepage/site-footer';
 import { useToast } from '@/hooks/use-toast';
 import { useCart } from '@/components/site/public-homepage/cart-store';
-import { ShoppingBag, ArrowLeft, RefreshCw, Clock, Utensils, CheckCircle, XCircle, Hourglass } from 'lucide-react';
-import { collection, query, where, orderBy, onSnapshot, Timestamp, QueryConstraint } from 'firebase/firestore';
+import { ShoppingBag, ArrowLeft, RefreshCw, Clock, Utensils, CheckCircle, XCircle, Hourglass, Users } from 'lucide-react';
+import { collection, query, where, orderBy, onSnapshot, Timestamp, QueryConstraint, doc } from 'firebase/firestore';
 import { db } from '@/lib/firebase/config';
 import { getOrdersCollectionPath, convertFirebaseTimestampToString } from '@/lib/firebase/utils';
 import { format, parseISO, startOfDay, endOfDay } from 'date-fns';
 import { generateOrderEta } from '@/ai/flows/generate-order-eta-flow';
-import { useAuth } from '@/lib/auth/context'; // Import useAuth
+import { useAuth } from '@/lib/auth/context'; 
 
 const orderStatusConfig: Record<OrderStatusType, { label: string; icon: React.ElementType; color: string; progress?: number }> = {
   pending_customer_confirmation: { label: 'Pending Your OK', icon: Hourglass, color: 'text-gray-500', progress: 10 },
@@ -44,16 +43,18 @@ function MyOrdersContent() {
   const restaurantId = params.restaurantId as string;
   const highlightedOrderId = searchParams.get('highlight');
   const tableContextId = searchParams.get('tableId'); 
+  const groupIdFromUrl = searchParams.get('groupId'); // Get groupId from URL
 
   const { toast } = useToast();
   const { cart } = useCart();
-  const { user, loading: authLoading } = useAuth(); // Get user from AuthContext
+  const { user, loading: authLoading } = useAuth(); 
 
   const [restaurant, setRestaurant] = useState<RestaurantProfile | null>(null);
   const [orders, setOrders] = useState<ClientOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [showNavShadow, setShowNavShadow] = useState(false);
   const [etas, setEtas] = useState<Record<string, string>>({});
+  const [activeGroup, setActiveGroup] = useState<ClientTableGroup | null>(null); // State for active group
 
   const cartItemCount = useMemo(() => cart.reduce((sum, item) => sum + item.quantity, 0), [cart]);
 
@@ -77,34 +78,56 @@ function MyOrdersContent() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, [restaurantId, router]);
 
+  // Listener for active group if groupIdFromUrl is present
   useEffect(() => {
-    if (!restaurantId || !db || authLoading) return; // Wait for auth to finish loading
+    if (groupIdFromUrl && restaurantId && db) {
+      const groupRef = doc(db, `restaurants/${restaurantId}/tableGroups`, groupIdFromUrl);
+      const unsubscribe = onSnapshot(groupRef, (docSnap) => {
+        if (docSnap.exists()) {
+          const groupData = docSnap.data() as TableGroup;
+          setActiveGroup({
+             id: docSnap.id,
+             ...groupData,
+             createdAt: convertFirebaseTimestampToString(groupData.createdAt),
+             updatedAt: convertFirebaseTimestampToString(groupData.updatedAt),
+          });
+        } else {
+          setActiveGroup(null);
+          // toast({variant: 'destructive', title: 'Group Ended', description: 'The group order session is no longer active.'});
+        }
+      });
+      return () => unsubscribe();
+    } else {
+        setActiveGroup(null);
+    }
+  }, [groupIdFromUrl, restaurantId]);
+
+  useEffect(() => {
+    if (!restaurantId || !db || authLoading) return; 
 
     setLoading(true);
     const ordersColRef = collection(db, getOrdersCollectionPath(restaurantId));
     const queryConstraints: QueryConstraint[] = [];
 
-    // Filter for today's orders
     const todayStart = startOfDay(new Date());
     const todayEnd = endOfDay(new Date());
     queryConstraints.push(where('createdAt', '>=', Timestamp.fromDate(todayStart)));
     queryConstraints.push(where('createdAt', '<=', Timestamp.fromDate(todayEnd)));
 
-    // Filter by current user ID if available
-    if (user?.uid) {
+    if (groupIdFromUrl) { // If it's a group order context, fetch all orders for that group
+        queryConstraints.push(where('groupId', '==', groupIdFromUrl));
+    } else if (user?.uid) { // Otherwise, filter by user ID
       queryConstraints.push(where('userId', '==', user.uid));
     } else {
-      // If no user and no table context, we might not want to show any orders,
-      // or handle differently (e.g. prompt for login/phone for past orders).
-      // For now, if no user.uid, it implies no orders can be tied to this client yet.
-      // This scenario should ideally be handled by anonymous auth being active.
-      console.warn("MyOrdersPage: No user UID available to filter orders. This might happen if anonymous auth hasn't initialized or failed.");
+      console.warn("MyOrdersPage: No user UID or groupId available to filter orders.");
       setOrders([]);
       setLoading(false);
       return;
     }
     
-    if (tableContextId) {
+    // If tableContextId is present AND it's NOT a group order view (groupIdFromUrl is null), then filter by tableId.
+    // This allows viewing individual orders for a table if not in a specific group context.
+    if (tableContextId && !groupIdFromUrl) {
       queryConstraints.push(where('tableId', '==', tableContextId));
     }
     
@@ -133,7 +156,7 @@ function MyOrdersContent() {
     });
 
     return () => unsubscribe();
-  }, [restaurantId, tableContextId, toast, user, authLoading]); // Add user and authLoading to dependencies
+  }, [restaurantId, tableContextId, groupIdFromUrl, toast, user, authLoading]);
 
 
   const fetchEta = async (order: ClientOrder) => {
@@ -173,14 +196,15 @@ function MyOrdersContent() {
         tableContext={tableContextId && tableNumberForHeader ? { id: tableContextId, number: tableNumberForHeader, docId: tableContextId } : undefined}
         isUserAnonymous={user?.isAnonymous}
         userDisplayName={user?.displayName || user?.email || (user?.isAnonymous ? "Guest" : "")}
+        activeGroup={activeGroup || undefined}
       />
       <main className="container mx-auto px-4 py-8 flex-grow">
         <div className="flex items-center justify-between mb-6">
             <h1 className="text-2xl md:text-3xl font-bold text-primary flex items-center">
                 <ShoppingBag className="mr-3 h-7 w-7" /> 
-                {tableContextId ? `Today's Orders for Table ${tableNumberForHeader || tableContextId.substring(0,4)}` : (user ? "My Recent Orders" : "Today's Orders")}
+                {groupIdFromUrl && activeGroup ? `Group Order: ${activeGroup.id}` : (tableContextId ? `Today's Orders for Table ${tableNumberForHeader || tableContextId.substring(0,4)}` : (user ? "My Recent Orders" : "Today's Orders"))}
             </h1>
-            <Button variant="outline" size="sm" onClick={() => router.push(tableContextId ? `/menu/table/${tableContextId}` : `/site/${restaurantId}`)}>
+            <Button variant="outline" size="sm" onClick={() => router.push(tableContextId ? `/menu/table/${tableContextId}${activeGroup ? `?joinGroup=${activeGroup.id}`:''}` : `/site/${restaurantId}`)}>
                 <ArrowLeft className="mr-2 h-4 w-4" /> New Order
             </Button>
         </div>
@@ -192,7 +216,7 @@ function MyOrdersContent() {
             <CardHeader>
                 <ShoppingBag className="mx-auto h-16 w-16 text-muted-foreground opacity-50 mb-4" />
                 <CardTitle className="text-2xl">No Orders Yet Today</CardTitle>
-                <CardDescription>No orders found for {tableContextId ? `table ${tableNumberForHeader || tableContextId.substring(0,4)}` : (user ? "you at this restaurant" : restaurant.name)} today.</CardDescription>
+                <CardDescription>No orders found for {groupIdFromUrl && activeGroup ? `group ${activeGroup.id}` : (tableContextId ? `table ${tableNumberForHeader || tableContextId.substring(0,4)}` : (user ? "you at this restaurant" : restaurant.name))} today.</CardDescription>
             </CardHeader>
             <CardContent>
                  <Image 
@@ -203,7 +227,7 @@ function MyOrdersContent() {
                     data-ai-hint="empty shopping bag"
                  />
                 <Button asChild className="mt-6 bg-primary hover:bg-primary/90 text-primary-foreground">
-                    <Link href={tableContextId ? `/menu/table/${tableContextId}` : `/site/${restaurantId}`}>Start Your Order</Link>
+                    <Link href={tableContextId ? `/menu/table/${tableContextId}${activeGroup ? `?joinGroup=${activeGroup.id}`:''}` : `/site/${restaurantId}`}>Start Your Order</Link>
                 </Button>
             </CardContent>
           </Card>
@@ -212,6 +236,8 @@ function MyOrdersContent() {
             {orders.map(order => {
               const statusInfo = orderStatusConfig[order.status];
               const IconComponent = statusInfo.icon;
+              const orderPlacedBy = (groupIdFromUrl && activeGroup && activeGroup.members.find(m => m.uid === order.userId)?.name) || order.customerName || (user?.uid === order.userId ? (user.displayName || 'You') : 'A customer');
+
               return (
                 <Card key={order.id} className={`shadow-lg border-l-4 ${highlightedOrderId === order.id ? 'border-accent ring-2 ring-accent' : statusInfo.color.replace('text-','border-') }`}>
                   <CardHeader>
@@ -221,7 +247,7 @@ function MyOrdersContent() {
                         <CardDescription>
                           Placed: {format(parseISO(order.createdAt), 'MMM d, h:mm a')}
                           {order.tableNumber && <span className="ml-2 font-medium text-foreground">(Table: {order.tableNumber})</span>}
-                           {order.customerName && <span className="ml-2 font-medium text-foreground">(Customer: {order.customerName})</span>}
+                          {orderPlacedBy && <span className="ml-2 font-medium text-foreground">(By: {orderPlacedBy})</span>}
                         </CardDescription>
                       </div>
                       <div className={`mt-2 sm:mt-0 text-sm font-semibold flex items-center px-3 py-1 rounded-full bg-muted ${statusInfo.color}`}>

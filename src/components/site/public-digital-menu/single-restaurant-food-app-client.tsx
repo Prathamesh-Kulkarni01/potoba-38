@@ -1,10 +1,11 @@
 'use client';
 
 import type { RestaurantProfile, MenuCategory, MenuItem as MenuItemType, Table, TableGroup, ClientTableGroup } from '@/types';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, Suspense } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Search, MapPin, Clock, Star, ChevronDown, Filter, TrendingUp, Tag, Heart, Menu, User, ShoppingBag, Home, Bell, ShoppingCart as CartIconLucide, X, Users, ClipboardCopy, LinkIcon } from 'lucide-react'; 
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Search, MapPin, Clock, Star, ChevronDown, Filter, TrendingUp, Tag, Heart, Menu, User, ShoppingBag, Home, Bell, ShoppingCart as CartIconLucide, X, Users, ClipboardCopy, LinkIcon, QrCode as QrCodeIcon } from 'lucide-react'; 
 import { Button } from '@/components/ui/button';
 import { useCart, type CartItem } from '../public-homepage/cart-store';
 import { useToast } from '@/hooks/use-toast';
@@ -17,7 +18,7 @@ import { cn } from '@/lib/utils';
 import DishCard from '@/components/site/shared/dish-card';
 import TopNavigationBar from '../public-homepage/top-navigation-bar';
 import { useAuth } from '@/lib/auth/context';
-import { createTableGroup, joinTableGroup, getTableGroup, addItemToGroupCart } from '@/lib/firebase/groups'; // Import group functions
+import { createTableGroup, joinTableGroup, getTableGroup, addItemToGroupCart } from '@/lib/firebase/groups';
 import { collection, onSnapshot, doc } from 'firebase/firestore';
 import { db } from '@/lib/firebase/config';
 import { convertFirebaseTimestampToString } from '@/lib/firebase/utils';
@@ -60,9 +61,11 @@ export default function SingleRestaurantFoodAppClient({
   offersData,
   tableContext
 }: SingleRestaurantFoodAppClientProps) {
-  const { cart: localCart, addToCart: addLocalCartItem, clearCart: clearLocalCart } = useCart(); // Renamed to localCart
+  const { cart: localCart, addToCart: addLocalCartItem, clearCart: clearLocalCart } = useCart();
   const { toast } = useToast();
   const { user, loading: authLoading, signInAnonymouslyHandler } = useAuth();
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [activeTab, setActiveTab] = useState('menu');
   const [searchQuery, setSearchQuery] = useState('');
@@ -70,42 +73,79 @@ export default function SingleRestaurantFoodAppClient({
   const [favorites, setFavorites] = useState<Record<string, boolean>>({}); 
   const [showNavShadow, setShowNavShadow] = useState(false);
 
-  // Group Order State
   const [activeGroup, setActiveGroup] = useState<ClientTableGroup | null>(null);
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
   const [isJoiningGroup, setIsJoiningGroup] = useState(false);
   const [joinGroupCode, setJoinGroupCode] = useState('');
   const [showJoinGroupModal, setShowJoinGroupModal] = useState(false);
   const [showGroupInfoModal, setShowGroupInfoModal] = useState(false);
+  const [showGroupQRCodeModal, setShowGroupQRCodeModal] = useState(false);
 
-  // Determine current cart (local or group)
   const currentCart = useMemo(() => activeGroup ? activeGroup.cartItems : localCart, [activeGroup, localCart]);
   const cartTotalItems = useMemo(() => currentCart.reduce((sum, item) => sum + item.quantity, 0), [currentCart]);
   const cartTotalPrice = useMemo(() => currentCart.reduce((sum, item) => sum + item.totalPrice, 0), [currentCart]);
+
+  const joinGroupCodeFromUrl = searchParams.get('joinGroup');
 
   useEffect(() => {
     if (tableContext && !user && !authLoading) {
       signInAnonymouslyHandler().then(anonUser => {
         if (anonUser) {
           toast({ title: "Welcome!", description: "You're ordering for your table." });
-          // Check local storage for an active group for this table/restaurant
-          const storedGroupId = localStorage.getItem(`activeGroup_${restaurantData.id}_${tableContext.id}`);
-          if (storedGroupId) {
-            fetchAndSetActiveGroup(storedGroupId);
-          }
+          checkAndJoinGroupFromUrlOrStorage(anonUser);
         } else {
           toast({ variant: "destructive", title: "Error", description: "Could not start table order session." });
         }
+        setIsLoading(false);
       });
     } else if (user && tableContext) {
-      // If user is already logged in (e.g. permanent user or returning anonymous)
-      const storedGroupId = localStorage.getItem(`activeGroup_${restaurantData.id}_${tableContext.id}`);
-      if (storedGroupId) {
-         fetchAndSetActiveGroup(storedGroupId);
-      }
+      checkAndJoinGroupFromUrlOrStorage(user);
+      setIsLoading(false);
+    } else {
+      setIsLoading(false);
     }
-    setIsLoading(false);
-  }, [tableContext, user, authLoading, signInAnonymouslyHandler, toast, restaurantData.id]);
+    
+    const handleScroll = () => setShowNavShadow(window.scrollY > 10);
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+
+  }, [tableContext, user, authLoading, restaurantData.id, joinGroupCodeFromUrl]);
+
+
+  const checkAndJoinGroupFromUrlOrStorage = async (currentUser: NonNullable<typeof user>) => {
+    if (!tableContext) return;
+    if (joinGroupCodeFromUrl) {
+        const group = await attemptJoinGroup(joinGroupCodeFromUrl, currentUser);
+        if (group) {
+            // Clear URL param after successful join to prevent re-joining on refresh
+            router.replace(`/menu/table/${tableContext.docId}`, { scroll: false });
+        }
+    } else {
+        const storedGroupId = localStorage.getItem(`activeGroup_${restaurantData.id}_${tableContext.id}`);
+        if (storedGroupId) {
+            fetchAndSetActiveGroup(storedGroupId);
+        }
+    }
+  };
+  
+  const attemptJoinGroup = async (code: string, currentUser: NonNullable<typeof user>) => {
+    if (!tableContext) return null;
+    setIsJoiningGroup(true);
+    const result = await joinTableGroup(restaurantData.id, code, currentUser);
+    setIsJoiningGroup(false);
+    if (result && 'id' in result) {
+      setActiveGroup(result);
+      localStorage.setItem(`activeGroup_${restaurantData.id}_${tableContext.id}`, result.id);
+      toast({ title: 'Joined Group!', description: `You are now part of group ${result.id}.` });
+      clearLocalCart();
+      return result;
+    } else {
+      const errorMsg = (result && 'error' in result) ? result.error : 'Could not join group. Invalid code or group is inactive.';
+      toast({ variant: 'destructive', title: 'Join Failed', description: errorMsg });
+      return null;
+    }
+  };
+
 
    const fetchAndSetActiveGroup = async (groupId: string) => {
     if (!tableContext) return;
@@ -113,14 +153,13 @@ export default function SingleRestaurantFoodAppClient({
     const groupData = await getTableGroup(restaurantData.id, groupId);
     if (groupData) {
       setActiveGroup(groupData);
-      setShowGroupInfoModal(true); // Show group info when successfully joined/rejoined
+      // setShowGroupInfoModal(true); // Optionally show info modal on rejoin
     } else {
-      localStorage.removeItem(`activeGroup_${restaurantData.id}_${tableContext.id}`); // Clear invalid stored group
+      localStorage.removeItem(`activeGroup_${restaurantData.id}_${tableContext.id}`); 
     }
     setIsLoading(false);
   };
 
-  // Real-time listener for active group
   useEffect(() => {
     if (activeGroup?.id && db) {
       const groupRef = doc(db, `restaurants/${restaurantData.id}/tableGroups`, activeGroup.id);
@@ -134,7 +173,6 @@ export default function SingleRestaurantFoodAppClient({
              updatedAt: convertFirebaseTimestampToString(groupData.updatedAt),
           });
         } else {
-          // Group was deleted or became invalid
           toast({variant: 'destructive', title: 'Group Ended', description: 'The group order session is no longer active.'});
           setActiveGroup(null);
           if (tableContext) localStorage.removeItem(`activeGroup_${restaurantData.id}_${tableContext.id}`);
@@ -145,12 +183,6 @@ export default function SingleRestaurantFoodAppClient({
   }, [activeGroup?.id, restaurantData.id]);
 
 
-  useEffect(() => {
-    const handleScroll = () => setShowNavShadow(window.scrollY > 10);
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
   const handleStartGroupOrder = async () => {
     if (!user || !tableContext) {
       toast({ variant: 'destructive', title: 'Error', description: 'User or table context is missing.' });
@@ -158,13 +190,15 @@ export default function SingleRestaurantFoodAppClient({
     }
     setIsCreatingGroup(true);
     try {
+      // Note: OTP verification for group creation isn't implemented here, assuming anonymous user is sufficient for now
+      // or host will verify at final checkout.
       const group = await createTableGroup(restaurantData.id, tableContext.id, tableContext.number, user);
       if (group) {
         setActiveGroup(group);
         localStorage.setItem(`activeGroup_${restaurantData.id}_${tableContext.id}`, group.id);
         toast({ title: 'Group Created!', description: `Share code ${group.id} with others at your table.` });
         setShowGroupInfoModal(true);
-        clearLocalCart(); // Clear local cart as group cart is now active
+        clearLocalCart(); 
       } else {
         toast({ variant: 'destructive', title: 'Failed', description: 'Could not create group. Please try again.' });
       }
@@ -175,36 +209,14 @@ export default function SingleRestaurantFoodAppClient({
     }
   };
 
-  const handleJoinGroupOrder = async () => {
-    if (!user || !tableContext || !joinGroupCode) {
-      toast({ variant: 'destructive', title: 'Error', description: 'Missing user, table, or group code.' });
-      return;
-    }
-    setIsJoiningGroup(true);
-    try {
-      const result = await joinTableGroup(restaurantData.id, joinGroupCode, user);
-      if (result && 'id' in result) { // Check if it's TableGroup
-        setActiveGroup(result);
-        localStorage.setItem(`activeGroup_${restaurantData.id}_${tableContext.id}`, result.id);
-        toast({ title: 'Joined Group!', description: `You are now part of group ${result.id}.` });
-        setShowJoinGroupModal(false);
-        setJoinGroupCode('');
-        setShowGroupInfoModal(true);
-        clearLocalCart();
-      } else if (result && 'error' in result) {
-        toast({ variant: 'destructive', title: 'Join Failed', description: result.error });
-      } else {
-        toast({ variant: 'destructive', title: 'Join Failed', description: 'Could not join group. Invalid code or group is full/inactive.' });
-      }
-    } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Error', description: error.message || 'Failed to join group.' });
-    } finally {
-      setIsJoiningGroup(false);
-    }
+  const handleJoinGroupOrderSubmit = async () => {
+    if (!user) return;
+    await attemptJoinGroup(joinGroupCode, user);
+    setShowJoinGroupModal(false);
+    setJoinGroupCode('');
   };
   
   const handleLeaveGroup = () => {
-    // Basic leave - just clear local state. More complex logic (updating members in Firestore) could be added.
     if (tableContext) localStorage.removeItem(`activeGroup_${restaurantData.id}_${tableContext.id}`);
     setActiveGroup(null);
     setShowGroupInfoModal(false);
@@ -213,14 +225,16 @@ export default function SingleRestaurantFoodAppClient({
 
   const handleAddToCart = async (item: MenuItemType) => {
     if (activeGroup && user) {
+      setIsLoading(true); // Indicate activity
       try {
-        await addItemToGroupCart(restaurantData.id, activeGroup.id, item, 1, user /*, selectedVariants */);
+        await addItemToGroupCart(restaurantData.id, activeGroup.id, item, 1, user);
         toast({ title: `${item.name} Added`, description: "Item added to group cart." });
       } catch (error: any) {
         toast({ variant: 'destructive', title: 'Error', description: `Could not add to group cart: ${error.message}` });
+      } finally {
+        setIsLoading(false);
       }
-    } else {
-      // Add to local cart if not in a group
+    } else if (!tableContext) { // Only allow local cart if not a table order
       const cartItem: CartItem = {
         menuItemId: item.id,
         menuItemName: item.name,
@@ -231,6 +245,8 @@ export default function SingleRestaurantFoodAppClient({
       };
       addLocalCartItem(cartItem);
       toast({ title: `${item.name} Added`, description: "Item added to your cart." });
+    } else {
+        toast({ title: "Group Order", description: "Please create or join a group to add items for this table."});
     }
   };
 
@@ -240,6 +256,18 @@ export default function SingleRestaurantFoodAppClient({
     }).catch(err => {
       toast({variant: 'destructive', title: "Copy Failed", description: "Could not copy code."});
     });
+  };
+
+  const shareOnWhatsApp = (code: string) => {
+    if (!tableContext) return;
+    const message = `Join our food order group for Table ${tableContext.number} at ${restaurantDisplayInfo.name}! Group Code: ${code}. Or use this link: ${window.location.origin}/menu/table/${tableContext.docId}?joinGroup=${code}`;
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, '_blank');
+  };
+  
+  const getGroupJoinQrLink = () => {
+    if (!activeGroup || !tableContext) return '';
+    return `${window.location.origin}/menu/table/${tableContext.docId}?joinGroup=${activeGroup.id}`;
   };
 
 
@@ -281,11 +309,71 @@ export default function SingleRestaurantFoodAppClient({
     ? `${restaurantDisplayInfo.name} - Table ${tableContext.number}` 
     : restaurantDisplayInfo.name;
 
+  const canPlaceOrder = !activeGroup || (activeGroup && user && activeGroup.creatorUid === user.uid);
+
 
   if (isLoading || authLoading) {
     return (
       <div className="flex items-center justify-center h-screen bg-background">
         <LoadingSpinner className="h-12 w-12 text-primary" />
+      </div>
+    );
+  }
+  
+  // Mandatory group creation/joining UI for table orders
+  if (tableContext && !activeGroup && !isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen bg-gradient-to-br from-background via-muted/10 to-background p-4">
+        <TopNavigationBar
+            restaurantName={headerRestaurantName}
+            restaurantLogoUrl={restaurantDisplayInfo.logo}
+            cartItemCount={0} // No cart active yet
+            showShadow={false}
+            restaurantId={restaurantData.id}
+            tableContext={tableContext}
+            isUserAnonymous={user?.isAnonymous || false}
+            userDisplayName={user?.displayName || user?.email || (user?.isAnonymous ? "Guest" : "")}
+        />
+        <div className="text-center max-w-md">
+            <Users className="mx-auto h-16 w-16 text-primary mb-6" />
+            <h1 className="text-2xl font-bold text-foreground mb-2">Welcome to Table {tableContext.number} at {restaurantDisplayInfo.name}!</h1>
+            <p className="text-muted-foreground mb-8">
+                To start ordering, please create a new group or join an existing one for your table.
+            </p>
+            <div className="space-y-3 sm:space-y-0 sm:flex sm:gap-4 justify-center">
+                <Button onClick={handleStartGroupOrder} disabled={isCreatingGroup} className="w-full sm:w-auto bg-accent hover:bg-accent/90 text-accent-foreground px-6 py-3 text-lg">
+                    {isCreatingGroup ? <LoadingSpinner className="mr-2 h-5 w-5" /> : <Users className="mr-2 h-5 w-5" />} Create New Group
+                </Button>
+                <Button variant="outline" onClick={() => setShowJoinGroupModal(true)} className="w-full sm:w-auto px-6 py-3 text-lg">
+                    <LinkIcon className="mr-2 h-5 w-5" /> Join Existing Group
+                </Button>
+            </div>
+        </div>
+         {/* Join Group Modal - kept here for this initial state */}
+        <Dialog open={showJoinGroupModal} onOpenChange={setShowJoinGroupModal}>
+            <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Join Group Order</DialogTitle>
+                <DialogDescription>Enter the 4-digit code shared by the group host.</DialogDescription>
+            </DialogHeader>
+            <div className="py-4">
+                <Label htmlFor="groupCode">Group Code</Label>
+                <Input 
+                id="groupCode" 
+                value={joinGroupCode} 
+                onChange={(e) => setJoinGroupCode(e.target.value.toUpperCase())} 
+                maxLength={4}
+                className="uppercase tracking-widest text-center text-lg"
+                />
+            </div>
+            <DialogFooter>
+                <Button variant="outline" onClick={() => setShowJoinGroupModal(false)}>Cancel</Button>
+                <Button onClick={handleJoinGroupOrderSubmit} disabled={isJoiningGroup || joinGroupCode.length !== 4} className="bg-primary hover:bg-primary/90">
+                {isJoiningGroup ? <LoadingSpinner className="mr-2 h-4 w-4" /> : "Join Group"}
+                </Button>
+            </DialogFooter>
+            </DialogContent>
+        </Dialog>
       </div>
     );
   }
@@ -329,7 +417,10 @@ export default function SingleRestaurantFoodAppClient({
           <div className="flex justify-between items-start">
             <div>
               <h2 className="font-bold text-xl md:text-2xl text-card-foreground">{restaurantDisplayInfo.name}</h2>
-              <p className="text-sm text-muted-foreground">{restaurantDisplayInfo.cuisine} {tableContext && <span className="text-primary font-semibold">(Ordering for Table {tableContext.number})</span>}</p>
+              <p className="text-sm text-muted-foreground">{restaurantDisplayInfo.cuisine} 
+                {tableContext && <span className="text-primary font-semibold">(Table {tableContext.number})</span>}
+                {activeGroup && <span className="text-accent font-semibold ml-1">(Group: {activeGroup.id})</span>}
+              </p>
               <div className="flex items-center mt-1 text-xs text-muted-foreground">
                 <Clock size={12} className="mr-1 text-muted-foreground/80" />
                 <span className="mr-2">{restaurantDisplayInfo.deliveryTime}</span>
@@ -345,23 +436,11 @@ export default function SingleRestaurantFoodAppClient({
               <span className="text-xs text-muted-foreground mt-1">500+ ratings (mock)</span>
             </div>
           </div>
-          {/* Group Order Buttons */}
-          {tableContext && user && (
-            <div className="mt-4 flex flex-col sm:flex-row gap-2">
-              {!activeGroup ? (
-                <>
-                  <Button onClick={handleStartGroupOrder} disabled={isCreatingGroup} className="flex-1 bg-accent hover:bg-accent/90 text-accent-foreground">
-                    {isCreatingGroup ? <LoadingSpinner className="mr-2 h-4 w-4" /> : <Users className="mr-2 h-4 w-4" />} Start Group Order
-                  </Button>
-                  <Button variant="outline" onClick={() => setShowJoinGroupModal(true)} className="flex-1">
-                    <LinkIcon className="mr-2 h-4 w-4" /> Join Group Order
-                  </Button>
-                </>
-              ) : (
-                <Button variant="outline" onClick={() => setShowGroupInfoModal(true)} className="w-full">
-                  <Users className="mr-2 h-4 w-4" /> View Group (Code: {activeGroup.id})
+         {tableContext && user && activeGroup && (
+            <div className="mt-3">
+                <Button variant="outline" size="sm" onClick={() => setShowGroupInfoModal(true)} className="w-full sm:w-auto">
+                  <Users className="mr-2 h-4 w-4" /> View Group Details
                 </Button>
-              )}
             </div>
           )}
         </div>
@@ -484,7 +563,16 @@ export default function SingleRestaurantFoodAppClient({
         </div>
 
         {cartTotalItems > 0 && (
-          <Link href={checkoutUrl} className="fixed bottom-0 left-0 right-0 md:max-w-screen-sm md:mx-auto md:bottom-2 md:left-1/2 md:-translate-x-1/2 z-50">
+          <Link 
+            href={checkoutUrl} 
+            className={cn(
+                "fixed bottom-0 left-0 right-0 md:max-w-screen-sm md:mx-auto md:bottom-2 md:left-1/2 md:-translate-x-1/2 z-50",
+                !canPlaceOrder && "pointer-events-none opacity-70" // Disable if not host of group
+            )}
+            onClick={(e) => { if (!canPlaceOrder) e.preventDefault(); }}
+            aria-disabled={!canPlaceOrder}
+            title={!canPlaceOrder ? "Only the group host can proceed to checkout" : ""}
+          >
             <div className="bg-primary text-primary-foreground rounded-lg mx-4 mb-2 p-3 flex items-center justify-between shadow-lg hover:bg-primary/80 transition cursor-pointer">
               <div>
                 <span className="font-bold">{cartTotalItems} item{cartTotalItems > 1 ? 's' : ''}</span>
@@ -492,66 +580,102 @@ export default function SingleRestaurantFoodAppClient({
                 <span>${cartTotalPrice.toFixed(2)}</span>
               </div>
               <div className="flex items-center font-semibold">
-                <span>View Cart</span>
+                <span>{canPlaceOrder ? "View Cart" : "Group Cart"}</span>
                 <ChevronDown size={18} className="ml-1 transform rotate-[-90deg]" />
               </div>
             </div>
           </Link>
         )}
       </div>
-      {/* Join Group Modal */}
-      <Dialog open={showJoinGroupModal} onOpenChange={setShowJoinGroupModal}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Join Group Order</DialogTitle>
-            <DialogDescription>Enter the 4-digit code shared by the group host.</DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            <Label htmlFor="groupCode">Group Code</Label>
-            <Input 
-              id="groupCode" 
-              value={joinGroupCode} 
-              onChange={(e) => setJoinGroupCode(e.target.value.toUpperCase())} 
-              maxLength={4}
-              className="uppercase tracking-widest text-center text-lg"
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowJoinGroupModal(false)}>Cancel</Button>
-            <Button onClick={handleJoinGroupOrder} disabled={isJoiningGroup || joinGroupCode.length !== 4} className="bg-primary hover:bg-primary/90">
-              {isJoiningGroup ? <LoadingSpinner className="mr-2 h-4 w-4" /> : "Join Group"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Join Group Modal (used when "Join Existing Group" is clicked IF no group active) */}
+        <Dialog open={showJoinGroupModal} onOpenChange={setShowJoinGroupModal}>
+            <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Join Group Order</DialogTitle>
+                <DialogDescription>Enter the 4-digit code shared by the group host.</DialogDescription>
+            </DialogHeader>
+            <div className="py-4">
+                <Label htmlFor="groupCodeJoinModal">Group Code</Label>
+                <Input 
+                id="groupCodeJoinModal" 
+                value={joinGroupCode} 
+                onChange={(e) => setJoinGroupCode(e.target.value.toUpperCase())} 
+                maxLength={4}
+                className="uppercase tracking-widest text-center text-lg"
+                />
+            </div>
+            <DialogFooter>
+                <Button variant="outline" onClick={() => setShowJoinGroupModal(false)}>Cancel</Button>
+                <Button onClick={handleJoinGroupOrderSubmit} disabled={isJoiningGroup || joinGroupCode.length !== 4} className="bg-primary hover:bg-primary/90">
+                {isJoiningGroup ? <LoadingSpinner className="mr-2 h-4 w-4" /> : "Join Group"}
+                </Button>
+            </DialogFooter>
+            </DialogContent>
+        </Dialog>
 
-      {/* Group Info Modal */}
+      {/* Group Info Modal (shown when activeGroup is set and modal is triggered) */}
       {activeGroup && (
       <Dialog open={showGroupInfoModal} onOpenChange={setShowGroupInfoModal}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center"><Users className="mr-2 h-5 w-5 text-primary"/> Group Order Active</DialogTitle>
             <DialogDescription>You are part of group <strong className="text-primary">{activeGroup.id}</strong> for Table {activeGroup.tableNumber}.</DialogDescription>
           </DialogHeader>
           <div className="py-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <p className="text-lg font-semibold">Group Code: <span className="text-accent tracking-wider">{activeGroup.id}</span></p>
-              <Button variant="ghost" size="icon" onClick={() => copyToClipboard(activeGroup.id)}><ClipboardCopy className="h-4 w-4"/></Button>
+            <div className="flex items-center justify-between p-3 bg-muted rounded-md">
+              <p className="text-lg font-semibold">Code: <span className="text-accent tracking-wider font-mono">{activeGroup.id}</span></p>
+              <Button variant="outline" size="sm" onClick={() => copyToClipboard(activeGroup.id)}><ClipboardCopy className="mr-1.5 h-3.5 w-3.5"/>Copy</Button>
             </div>
+            <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => shareOnWhatsApp(activeGroup.id)} className="flex-1">
+                   <svg className="mr-2 h-4 w-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91C2.13 13.66 2.59 15.35 3.43 16.84L2.05 22L7.31 20.63C8.75 21.39 10.36 21.81 12.04 21.81C17.5 21.81 21.95 17.36 21.95 11.91C21.95 6.45 17.5 2 12.04 2M12.04 3.64C16.57 3.64 20.29 7.36 20.29 11.91C20.29 16.45 16.57 20.17 12.04 20.17C10.49 20.17 9.01 19.78 7.74 19.07L7.07 18.71L4.27 19.49L5.08 16.77L4.71 16.06C3.93 14.74 3.79 13.28 3.79 11.91C3.79 7.36 7.51 3.64 12.04 3.64M17.17 14.48C16.91 14.74 15.77 15.32 15.31 15.54C14.84 15.75 14.28 15.78 13.93 15.61C13.58 15.43 12.59 15.11 11.41 14.01C10.02 12.72 9.21 11.28 8.95 10.81C8.7 10.33 8.89 10.13 9.09 9.93C9.27 9.75 9.47 9.5 9.66 9.31C9.81 9.16 9.86 9.04 9.96 8.85C10.05 8.65 9.99 8.48 9.91 8.31C9.83 8.13 9.35 6.91 9.14 6.44C8.93 5.97 8.72 6.03 8.57 6.03C8.41 6.03 8.27 6.03 8.12 6.04C7.97 6.04 7.67 6.1 7.42 6.36C7.17 6.62 6.57 7.21 6.57 8.13C6.57 9.05 7.46 9.93 7.58 10.08C7.71 10.23 9.03 12.32 11.09 13.25C12.82 14.03 13.26 13.83 13.79 13.79C14.31 13.75 15.32 13.13 15.56 12.87C15.8 12.61 15.8 12.39 15.74 12.28C15.68 12.17 15.56 12.11 15.35 12.02C15.15 11.92 14.93 11.86 14.75 11.86C14.58 11.86 14.43 11.91 14.24 12.11C14.05 12.32 13.73 12.67 13.58 12.83C13.43 12.97 13.28 13.01 13.07 12.92C12.86 12.84 12.05 12.56 11.07 11.7C10.29 11.02 9.73 10.21 9.59 9.97C9.45 9.73 9.32 9.34 9.32 9.01C9.32 8.68 9.21 8.41 9.09 8.21C8.97 8.01 8.75 7.82 8.51 7.82C8.27 7.82 8.04 8.01 7.92 8.21C7.81 8.41 7.69 8.68 7.69 9.01C7.69 9.34 7.82 9.73 7.96 9.97C8.1 10.21 8.67 11.02 9.44 11.7C10.23 12.56 11.25 13.01 11.47 13.01C11.69 13.01 11.86 12.96 12.04 12.81C12.22 12.67 12.87 11.99 13.07 11.7C13.28 11.41 13.43 11.36 13.58 11.36C13.73 11.36 14.05 11.53 14.24 11.74C14.43 11.95 14.58 12.01 14.75 12.01C14.93 12.01 15.15 11.94 15.35 11.84C15.56 11.75 15.68 11.69 15.74 11.58C15.8 11.47 15.8 11.25 15.56 10.99C15.32 10.73 14.31 10.11 13.79 10.07C13.26 10.03 12.82 10.23 11.09 9.3C9.03 8.37 7.71 6.28 7.58 6.13C7.46 5.98 6.57 5.1 6.57 4.18C6.57 3.26 7.17 2.67 7.42 2.41C7.67 2.15 7.97 2.09 8.12 2.09C8.27 2.09 8.41 2.09 8.57 2.09C8.72 2.09 8.93 2.15 9.14 2.62C9.35 3.09 9.83 4.31 9.91 4.48C9.99 4.65 10.05 4.82 9.96 5.02C9.86 5.21 9.81 5.33 9.66 5.48C9.47 5.67 9.27 5.91 9.09 6.09C8.89 6.29 8.7 6.49 8.95 6.96C9.21 7.43 10.02 8.87 11.41 10.16C12.59 11.26 13.58 11.58 13.93 11.76C14.28 11.94 14.84 11.97 15.31 11.75C15.77 11.53 16.91 10.95 17.17 10.69Z"></path></svg>
+                    WhatsApp
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setShowGroupQRCodeModal(true)} className="flex-1">
+                    <QrCodeIcon className="mr-1.5 h-4 w-4"/>Show QR to Join
+                </Button>
+            </div>
+            
             <div>
-              <h4 className="font-medium mb-1">Members ({activeGroup.members.length}):</h4>
-              <ul className="list-disc list-inside text-sm text-muted-foreground">
-                {activeGroup.members.map(member => <li key={member.uid}>{member.name || member.uid.substring(0,6)} {member.uid === activeGroup.creatorUid && '(Host)'}</li>)}
-              </ul>
+              <h4 className="font-medium mb-1 text-sm">Members ({activeGroup.members.length}):</h4>
+              <ScrollArea className="h-24 border rounded-md p-2 bg-muted/30">
+                <ul className="list-disc list-inside text-xs text-muted-foreground space-y-1">
+                    {activeGroup.members.map(member => <li key={member.uid}>{member.name || member.uid.substring(0,6)} {member.uid === activeGroup.creatorUid && <span className="text-primary text-xs">(Host)</span>}</li>)}
+                </ul>
+              </ScrollArea>
             </div>
-             <p className="text-xs text-muted-foreground">Share this code with others at your table to add items to a shared cart.</p>
+             <p className="text-xs text-muted-foreground">Share the code or QR with others at your table to add items to a shared cart.</p>
           </div>
-          <DialogFooter className="sm:justify-between">
-            <Button variant="outline" onClick={handleLeaveGroup}>Leave Group</Button>
-            <Button onClick={() => setShowGroupInfoModal(false)} className="bg-primary hover:bg-primary/90">Continue Ordering</Button>
+          <DialogFooter className="sm:justify-between mt-4">
+            <Button variant="destructive" size="sm" onClick={handleLeaveGroup}>Leave Group</Button>
+            <Button onClick={() => setShowGroupInfoModal(false)} className="bg-primary hover:bg-primary/90 text-primary-foreground" size="sm">Continue Ordering</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      )}
+      {/* QR Code Modal for Joining Group */}
+      {activeGroup && tableContext && (
+          <Dialog open={showGroupQRCodeModal} onOpenChange={setShowGroupQRCodeModal}>
+            <DialogContent className="sm:max-w-xs">
+                <DialogHeader>
+                    <DialogTitle className="text-center">Scan to Join Group <strong className="text-primary">{activeGroup.id}</strong></DialogTitle>
+                </DialogHeader>
+                <div className="flex flex-col items-center justify-center p-4 space-y-2">
+                    <Image 
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(getGroupJoinQrLink())}`} 
+                        alt={`QR Code to join group ${activeGroup.id}`} 
+                        width={180} 
+                        height={180}
+                        className="border rounded-md shadow-md"
+                        data-ai-hint="group join qr"
+                    />
+                    <p className="text-xs text-muted-foreground text-center">Others at Table {tableContext.number} can scan this to join.</p>
+                </div>
+                 <DialogFooter>
+                    <Button variant="outline" onClick={() => setShowGroupQRCodeModal(false)} className="w-full">Close</Button>
+                </DialogFooter>
+            </DialogContent>
+          </Dialog>
       )}
     </div>
   );

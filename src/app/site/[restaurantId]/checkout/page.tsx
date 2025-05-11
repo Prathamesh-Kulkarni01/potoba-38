@@ -2,7 +2,7 @@
 'use client';
 
 import { useParams, useRouter, useSearchParams } from 'next/navigation'; 
-import React, { useEffect, useState, useMemo, useRef } from 'react'; // Added React
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button'; 
@@ -14,16 +14,16 @@ import { Separator } from '@/components/ui/separator';
 import LoadingSpinner from '@/components/shared/loading-spinner';
 import { useCart } from '@/components/site/public-homepage/cart-store';
 import { getRestaurant } from '@/lib/firebase/firestore';
-import type { RestaurantProfile, OrderItem, Order, OrderStatus, TableGroup, GroupCartItem } from '@/types';
+import type { RestaurantProfile, OrderItem, Order, OrderStatus, TableGroup, GroupCartItem, ClientTableGroup } from '@/types';
 import { createOrder } from '@/lib/firebase/orders';
 import TopNavigationBar from '@/components/site/public-homepage/top-navigation-bar';
 import SiteFooter from '@/components/site/public-homepage/site-footer';
-import { AlertCircle, CreditCard, ShoppingBag, Truck, Trash2, Phone, ShieldCheck, MessageCircle } from 'lucide-react'; // Added Phone, ShieldCheck, MessageCircle
+import { AlertCircle, CreditCard, ShoppingBag, Truck, Trash2, Phone, ShieldCheck, MessageCircle, Users } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/lib/auth/context'; // Import useAuth
-import { RecaptchaVerifier } from 'firebase/auth'; // Import RecaptchaVerifier
-import { auth, db } from '@/lib/firebase/config'; // Import auth for Recaptcha and db
-import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore'; // For group order finalization
+import { useAuth } from '@/lib/auth/context'; 
+import { RecaptchaVerifier } from 'firebase/auth';
+import { auth, db } from '@/lib/firebase/config';
+import { doc, getDoc, updateDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import { convertFirebaseTimestampToString } from '@/lib/firebase/utils';
 
 export default function CheckoutPage() {
@@ -31,15 +31,14 @@ export default function CheckoutPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const restaurantId = params.restaurantId as string;
-  const { cart: localCart, clearCart: clearLocalCart, removeFromCart, updateQuantity } = useCart(); // Local cart
+  const { cart: localCart, clearCart: clearLocalCart, removeFromCart, updateQuantity: updateLocalQuantity } = useCart();
   const { toast } = useToast();
-  const { user, loading: authLoading, linkAnonymousWithPhoneNumber, confirmPhoneNumberVerification } = useAuth(); // Get auth state and functions
+  const { user, loading: authLoading, linkAnonymousWithPhoneNumber, confirmPhoneNumberVerification } = useAuth();
 
   const [restaurant, setRestaurant] = useState<RestaurantProfile | null>(null);
-  const [loading, setLoading] = useState(true); // General page loading
+  const [loading, setLoading] = useState(true);
   const [showNavShadow, setShowNavShadow] = useState(false);
   
-  // Form state
   const [customerName, setCustomerName] = useState(''); 
   const [customerPhoneNumberState, setCustomerPhoneNumberState] = useState(''); 
   const [otp, setOtp] = useState('');
@@ -58,91 +57,73 @@ export default function CheckoutPage() {
 
   const tableId = useMemo(() => searchParams.get('tableId'), [searchParams]);
   const tableNumber = useMemo(() => searchParams.get('tableNumber'), [searchParams]);
-  const groupId = useMemo(() => searchParams.get('groupId'), [searchParams]); // For group orders
+  const groupId = useMemo(() => searchParams.get('groupId'), [searchParams]);
 
-  const [groupCartItems, setGroupCartItems] = useState<GroupCartItem[]>([]); // For group order summary
+  const [activeGroup, setActiveGroup] = useState<ClientTableGroup | null>(null);
 
-  // Determine current cart based on whether it's a group order
-  const cartToUse = useMemo(() => groupId ? groupCartItems : localCart, [groupId, groupCartItems, localCart]);
+  const cartToUse = useMemo(() => groupId && activeGroup ? activeGroup.cartItems : localCart, [groupId, activeGroup, localCart]);
 
 
-  // Fetch group cart if groupId is present
   useEffect(() => {
-    if (groupId && restaurantId) {
+    if (groupId && restaurantId && db) {
       setLoading(true);
       const groupRef = doc(db, `restaurants/${restaurantId}/tableGroups`, groupId);
-      getDoc(groupRef).then(docSnap => {
+      const unsubscribe = onSnapshot(groupRef, (docSnap) => {
         if (docSnap.exists()) {
           const groupData = docSnap.data() as TableGroup;
-          setGroupCartItems(groupData.cartItems || []);
+           setActiveGroup({
+            id: docSnap.id,
+            ...groupData,
+            createdAt: convertFirebaseTimestampToString(groupData.createdAt),
+            updatedAt: convertFirebaseTimestampToString(groupData.updatedAt),
+          });
         } else {
-          toast({ variant: "destructive", title: "Error", description: "Group order details not found."});
-          // Potentially redirect or clear groupId from URL
+          toast({ variant: "destructive", title: "Error", description: "Group order details not found or ended."});
+          router.push(tableId ? `/menu/table/${tableId}` : `/site/${restaurantId}`);
         }
         setLoading(false);
-      }).catch(err => {
-        console.error("Error fetching group cart:", err);
+      }, (error) => {
+        console.error("Error fetching group cart:", error);
         toast({ variant: "destructive", title: "Error", description: "Could not load group order details."});
         setLoading(false);
       });
+      return () => unsubscribe();
+    } else {
+        setActiveGroup(null); // Clear group if no groupId
     }
-  }, [groupId, restaurantId, toast]);
+  }, [groupId, restaurantId, toast, router, tableId]);
 
 
-  // Initialize reCAPTCHA verifier
   useEffect(() => {
     if (!auth || appVerifierRef.current || !recaptchaContainerRef.current) return;
     try {
       appVerifierRef.current = new RecaptchaVerifier(auth, recaptchaContainerRef.current, {
-        'size': 'invisible',
-        'callback': (response: any) => {
-          console.log("reCAPTCHA solved:", response);
-        },
-        'expired-callback': () => {
-          console.warn("reCAPTCHA expired. Please try again.");
+        'size': 'invisible', 'callback': (response: any) => {}, 'expired-callback': () => {
           appVerifierRef.current?.clear();
-          if (recaptchaContainerRef.current) { 
-            appVerifierRef.current = new RecaptchaVerifier(auth, recaptchaContainerRef.current, { size: 'invisible' });
-          }
+          if (recaptchaContainerRef.current) { appVerifierRef.current = new RecaptchaVerifier(auth, recaptchaContainerRef.current, { size: 'invisible' }); }
         }
       });
     } catch (error) {
       console.error("Error initializing RecaptchaVerifier:", error);
-      toast({variant: "destructive", title: "Verification Error", description: "Could not initialize phone verification system."});
+      toast({variant: "destructive", title: "Verification Error", description: "Could not initialize phone verification."});
     }
-    return () => {
-        appVerifierRef.current?.clear(); 
-    }
+    return () => { appVerifierRef.current?.clear(); }
   }, [auth, toast]); 
 
   useEffect(() => {
-    if (restaurantId && !groupId) { // Don't setLoading(false) if group data is still fetching
+    if (restaurantId) {
       getRestaurant(restaurantId)
         .then(data => {
-            if (data) {
-                setRestaurant(data as RestaurantProfile); 
-            } else {
-                toast({variant: "destructive", title: "Error", description: "Restaurant not found."});
-                router.push('/');
-            }
+            if (data) setRestaurant(data as RestaurantProfile); 
+            else { router.push('/'); }
         })
-        .catch(err => {
-            console.error("Failed to fetch restaurant", err);
-            toast({variant: "destructive", title: "Error", description: "Could not load restaurant details."});
-            router.push('/');
-        })
+        .catch(err => { router.push('/'); })
         .finally(() => { if (!groupId) setLoading(false); }); 
-    } else if (restaurantId && groupId) { // If group order, restaurant data can be fetched after group
-         getRestaurant(restaurantId)
-        .then(data => {
-            if (data) setRestaurant(data as RestaurantProfile);
-            else { /* handle error if needed, though group fetch might handle redirect */ }
-        });
     }
      const handleScroll = () => setShowNavShadow(window.scrollY > 10);
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
-  }, [restaurantId, groupId, toast, router]);
+  }, [restaurantId, groupId, router]);
 
   const subtotal = useMemo(() => cartToUse.reduce((sum, item) => sum + item.totalPrice, 0), [cartToUse]);
   const taxRate = useMemo(() => restaurant?.taxRate || 0.08, [restaurant]); 
@@ -151,78 +132,46 @@ export default function CheckoutPage() {
   const total = useMemo(() => subtotal + tax + deliveryFee, [subtotal, tax, deliveryFee]);
 
   const handleSendOtp = async () => {
-    if (!customerPhoneNumberState) {
-        toast({ variant: "destructive", title: "Input Error", description: "Please enter your phone number." });
-        return;
-    }
-    if (!appVerifierRef.current) {
-        toast({ variant: "destructive", title: "Verification Error", description: "Phone verification system not ready. Please refresh." });
-        return;
-    }
+    if (!customerPhoneNumberState) { toast({ variant: "destructive", title: "Input Error", description: "Please enter phone number." }); return; }
+    if (!appVerifierRef.current) { toast({ variant: "destructive", title: "Verification Error", description: "Phone verification not ready." }); return; }
     setIsVerifyingOtp(true); 
     const result = await linkAnonymousWithPhoneNumber(customerPhoneNumberState, appVerifierRef.current);
     if (result.verificationId) {
-        setVerificationId(result.verificationId);
-        setIsOtpSent(true);
-        toast({ title: "OTP Sent", description: "Please check your phone for the verification code." });
-    } else {
-        toast({ variant: "destructive", title: "OTP Error", description: result.error?.message || "Could not send OTP. Please try again." });
-    }
+        setVerificationId(result.verificationId); setIsOtpSent(true);
+        toast({ title: "OTP Sent", description: "Check your phone for verification code." });
+    } else { toast({ variant: "destructive", title: "OTP Error", description: result.error?.message || "Could not send OTP." });}
     setIsVerifyingOtp(false);
   };
 
   const handleVerifyOtpAndPlaceOrder = async () => {
-    if (!verificationId || !otp) {
-      toast({ variant: "destructive", title: "Input Error", description: "Please enter the OTP." });
-      return;
-    }
+    if (!verificationId || !otp) { toast({ variant: "destructive", title: "Input Error", description: "Please enter OTP." }); return; }
     setIsVerifyingOtp(true);
     const result = await confirmPhoneNumberVerification(verificationId, otp, customerPhoneNumberState);
     if (result.success) {
-        toast({ title: "Phone Verified!", description: "Your phone number has been verified." });
+        toast({ title: "Phone Verified!", description: "Phone number verified." });
         await placeOrderAfterVerification();
-    } else {
-        toast({ variant: "destructive", title: "OTP Verification Failed", description: result.error?.message || "Invalid OTP or an error occurred." });
-    }
+    } else { toast({ variant: "destructive", title: "OTP Verification Failed", description: result.error?.message || "Invalid OTP." });}
     setIsVerifyingOtp(false);
   };
 
   const placeOrderAfterVerification = async () => {
-    if (!restaurant) {
-        toast({ variant: "destructive", title: "Error", description: "Restaurant data is not loaded." });
-        return;
-    }
-    if (cartToUse.length === 0) {
-        toast({ variant: "destructive", title: "Empty Cart", description: "Please add items to your cart." });
-        return;
-    }
+    if (!restaurant) { toast({ variant: "destructive", title: "Error", description: "Restaurant data not loaded." }); return; }
+    if (cartToUse.length === 0) { toast({ variant: "destructive", title: "Empty Cart", description: "Add items to cart." }); return; }
     setIsProcessingOrder(true);
     
     const orderItems: OrderItem[] = cartToUse.map(ci => ({
-        menuItemId: ci.menuItemId,
-        menuItemName: ci.menuItemName,
-        quantity: ci.quantity,
-        unitPrice: ci.unitPrice,
-        totalPrice: ci.totalPrice,
-        variantChoices: ci.variantChoices, 
+        menuItemId: ci.menuItemId, menuItemName: ci.menuItemName, quantity: ci.quantity,
+        unitPrice: ci.unitPrice, totalPrice: ci.totalPrice, variantChoices: ci.variantChoices, 
     }));
 
     const orderData: Omit<Order, 'id' | 'createdAt' | 'updatedAt'> = {
-        restaurantId: restaurant.id,
-        userId: user?.uid, 
-        tableId: tableId || null, 
-        tableNumber: tableNumber || null, 
-        items: orderItems,
-        subtotal,
-        taxAmount: tax,
-        totalAmount: total,
-        status: 'pending_kitchen' as OrderStatus, 
-        customerName: customerName || null, 
+        restaurantId: restaurant.id, userId: user?.uid, tableId: tableId || null, 
+        tableNumber: tableNumber || null, items: orderItems, subtotal, taxAmount: tax,
+        totalAmount: total, status: 'pending_kitchen' as OrderStatus, 
+        customerName: customerName || user?.displayName || null, 
         customerPhoneNumber: user?.phoneNumber || customerPhoneNumberState || null, 
-        customerNotes: customerNotes || undefined,
-        paymentMethod: paymentMethod,
-        // For group orders, add groupId
-        ...(groupId && { groupId }),
+        customerNotes: customerNotes || undefined, paymentMethod: paymentMethod,
+        ...(groupId && { groupId }), // Add groupId if it's a group order
     };
 
     try {
@@ -230,18 +179,15 @@ export default function CheckoutPage() {
       toast({ title: "Order Placed Successfully!", description: "Thank you for your order."});
       
       if (groupId) {
-        // Update group status to 'ordered'
         const groupRef = doc(db, `restaurants/${restaurantId}/tableGroups`, groupId);
         await updateDoc(groupRef, { status: 'ordered', updatedAt: serverTimestamp() });
-        // Group cart is implicitly cleared by status change or can be explicitly emptied
-        localStorage.removeItem(`activeGroup_${restaurantId}_${tableId}`); // Clear active group from local storage
+        localStorage.removeItem(`activeGroup_${restaurantId}_${tableId}`);
       } else {
         clearLocalCart();
       }
       
       let confirmationUrl = `/site/${restaurantId}/order-confirmation?orderId=${newOrder.id}`;
-      if (tableId) {
-        confirmationUrl += `&tableOrder=true`;
+      if (tableId) { confirmationUrl += `&tableOrder=true`;
         if(tableNumber) confirmationUrl += `&tableNumber=${encodeURIComponent(tableNumber)}`;
       }
       router.push(confirmationUrl); 
@@ -249,53 +195,53 @@ export default function CheckoutPage() {
     } catch (error: any) {
       console.error("Order placement error:", error);
       toast({ variant: "destructive", title: "Order Failed", description: error.message || "Could not place your order."});
-    } finally {
-      setIsProcessingOrder(false);
-    }
+    } finally { setIsProcessingOrder(false); }
   }
 
   const handleSubmitOrderFlow = async (e: React.FormEvent) => {
     e.preventDefault();
     if (user?.isAnonymous) {
-        if (!isOtpSent) {
-            await handleSendOtp(); 
-        } else {
-            await handleVerifyOtpAndPlaceOrder();
-        }
-    } else {
-        await placeOrderAfterVerification(); 
-    }
+        if (!isOtpSent) { await handleSendOtp(); } 
+        else { await handleVerifyOtpAndPlaceOrder(); }
+    } else { await placeOrderAfterVerification(); }
   };
+
+  const canPlaceGroupOrder = groupId && activeGroup && user && activeGroup.creatorUid === user.uid;
+  const canPlaceIndividualOrder = !groupId;
 
   if (loading || authLoading) {
     return <div className="flex h-screen items-center justify-center"><LoadingSpinner className="h-10 w-10 text-primary" /></div>;
   }
 
   if (!restaurant) {
-    return <div className="flex h-screen items-center justify-center text-destructive p-8 text-center">Restaurant data could not be loaded. Please try returning to the homepage.</div>;
+    return <div className="flex h-screen items-center justify-center text-destructive p-8 text-center">Restaurant data could not be loaded.</div>;
   }
   
-  const cartItemCount = cartToUse.reduce((sum, item) => sum + item.quantity, 0);
+  const cartItemCountGlobal = cartToUse.reduce((sum, item) => sum + item.quantity, 0);
 
   return (
      <div className="flex min-h-screen flex-col bg-gradient-to-br from-background via-muted/5 to-background">
         <TopNavigationBar
             restaurantName={tableNumber ? `${restaurant.name} - Table ${tableNumber}` : restaurant.name}
             restaurantLogoUrl={`https://picsum.photos/seed/${restaurant.id}logo/40/40`}
-            cartItemCount={cartItemCount}
+            cartItemCount={cartItemCountGlobal}
             showShadow={showNavShadow}
             restaurantId={restaurant.id}
             tableContext={tableId && tableNumber ? { id: tableId, number: tableNumber, docId: tableId } : undefined}
             isUserAnonymous={user?.isAnonymous}
             userDisplayName={user?.displayName || user?.email || (user?.isAnonymous ? "Guest" : "")}
+            activeGroup={activeGroup || undefined}
         />
-        <div ref={recaptchaContainerRef}></div> {/* Invisible reCAPTCHA container */}
+        <div ref={recaptchaContainerRef}></div>
         <main className="container mx-auto px-4 py-8 flex-grow">
             <Card className="max-w-4xl mx-auto shadow-xl border-primary/20">
             <CardHeader className="text-center">
                 <ShoppingBag className="mx-auto h-12 w-12 text-primary mb-2" />
                 <CardTitle className="text-3xl font-bold">Checkout</CardTitle>
-                <CardDescription>Finalize your {groupId ? 'group ' : ''}order from {restaurant.name} {tableNumber ? `for Table ${tableNumber}` : ''}.</CardDescription>
+                <CardDescription>Finalize your {activeGroup ? `group order (ID: ${activeGroup.id}) `: ''}from {restaurant.name} {tableNumber ? `for Table ${tableNumber}` : ''}.</CardDescription>
+                {activeGroup && user && activeGroup.creatorUid !== user.uid && (
+                    <p className="text-sm text-amber-600 font-semibold mt-2">You are part of a group order. Only the host ({activeGroup.creatorName || 'Host'}) can place the final order.</p>
+                )}
             </CardHeader>
             <CardContent>
                 {cartToUse.length === 0 && !isProcessingOrder ? (
@@ -312,7 +258,7 @@ export default function CheckoutPage() {
                         <Card className="border-border/70">
                             <CardHeader><CardTitle className="text-lg">{user?.isAnonymous ? 'Verify & Place Order' : (tableId ? 'Order Details' : 'Your Contact & Delivery Details')}</CardTitle></CardHeader>
                             <CardContent className="space-y-4">
-                                <div><Label htmlFor="customerName">Full Name {groupId && user?.uid === groupCartItems.find(item => item.addedByUid === user.uid) ? '(Group Host)' : ''}</Label><Input id="customerName" value={customerName} onChange={e => setCustomerName(e.target.value)} required={!tableId && !user?.isAnonymous && !groupId} placeholder="John Doe" /></div>
+                                <div><Label htmlFor="customerName">Full Name {activeGroup && user?.uid === activeGroup.creatorUid ? '(Group Host)' : ''}</Label><Input id="customerName" value={customerName} onChange={e => setCustomerName(e.target.value)} required={!tableId && !user?.isAnonymous && !groupId} placeholder="John Doe" /></div>
                                 
                                 {user?.isAnonymous && (
                                     <>
@@ -367,22 +313,22 @@ export default function CheckoutPage() {
                     </div>
                     <div className="space-y-6">
                         <Card className="border-border/70">
-                            <CardHeader><CardTitle className="text-lg">Order Summary {groupId && '(Group Cart)'}</CardTitle></CardHeader>
+                            <CardHeader><CardTitle className="text-lg">Order Summary {activeGroup && <span className="text-sm text-accent">(Group Cart)</span>}</CardTitle></CardHeader>
                             <CardContent className="space-y-3 max-h-96 overflow-y-auto">
                                 {cartToUse.map(item => (
-                                <div key={item.menuItemId + JSON.stringify(item.variantChoices) + ((item as GroupCartItem).addedByUid || '')} className="flex justify-between items-center text-sm py-2 border-b last:border-b-0">
-                                    <div className="flex items-center">
+                                <div key={item.menuItemId + JSON.stringify(item.variantChoices) + ((item as GroupCartItem).addedByUid || '')} className="flex justify-between items-start text-sm py-2 border-b last:border-b-0">
+                                    <div className="flex items-start">
                                         {item.imageUrl && <Image src={item.imageUrl} alt={item.menuItemName} width={40} height={40} className="rounded mr-3 object-cover" data-ai-hint="cart item image"/>}
-                                        <div>
+                                        <div className="flex-1">
                                             <p className="font-medium">{item.menuItemName}</p>
                                             <p className="text-xs text-muted-foreground">Qty: {item.quantity} &times; ${item.unitPrice.toFixed(2)}</p>
                                             {(item as GroupCartItem).addedByName && <p className="text-xs text-blue-500">Added by: {(item as GroupCartItem).addedByName}</p>}
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        <span className="font-medium">${item.totalPrice.toFixed(2)}</span>
-                                        {/* Remove button might not be applicable for group orders in checkout, or only for group host */}
-                                        {!groupId && <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => updateQuantity(item.menuItemId, 0)}><Trash2 className="h-4 w-4"/></Button>}
+                                        <span className="font-medium min-w-[50px] text-right">${item.totalPrice.toFixed(2)}</span>
+                                        {!groupId && <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => updateLocalQuantity(item.menuItemId, 0)}><Trash2 className="h-4 w-4"/></Button>}
+                                        {/* For group orders, item removal/quantity update might be restricted or handled differently (e.g. only by person who added or host) */}
                                     </div>
                                 </div>
                                 ))}
@@ -394,9 +340,29 @@ export default function CheckoutPage() {
                                 <Separator className="my-2"/>
                                 <div className="w-full flex justify-between text-lg font-bold text-primary"><p>Total</p><p>${total.toFixed(2)}</p></div>
                                
-                               <Button type="submit" className="w-full bg-primary hover:bg-primary/80 text-primary-foreground text-lg py-3 mt-4" disabled={isProcessingOrder || isVerifyingOtp || (user?.isAnonymous && !isOtpSent && !verificationId) || (user?.isAnonymous && isOtpSent && !otp) || cartToUse.length === 0}>
-                                 {(isProcessingOrder || isVerifyingOtp) ? <LoadingSpinner className="mr-2 h-5 w-5" /> : (user?.isAnonymous && !isOtpSent ? <ShieldCheck className="mr-2 h-5 w-5" /> : (user?.isAnonymous && isOtpSent ? <MessageCircle className="mr-2 h-5 w-5" /> :<CreditCard className="mr-2 h-5 w-5" /> ) ) }
-                                 {isProcessingOrder ? 'Processing Order...' : (isVerifyingOtp ? 'Verifying...' : (user?.isAnonymous && !isOtpSent ? 'Verify Phone & Place Order' : (user?.isAnonymous && isOtpSent ? 'Confirm OTP & Place Order' : 'Place Order')))}
+                               <Button 
+                                type="submit" 
+                                className="w-full bg-primary hover:bg-primary/80 text-primary-foreground text-lg py-3 mt-4" 
+                                disabled={
+                                    isProcessingOrder || 
+                                    isVerifyingOtp || 
+                                    (user?.isAnonymous && !isOtpSent && !verificationId) || 
+                                    (user?.isAnonymous && isOtpSent && !otp) || 
+                                    cartToUse.length === 0 ||
+                                    (groupId && activeGroup && user && activeGroup.creatorUid !== user.uid) // Disable if group order and not host
+                                }
+                                title={ (groupId && activeGroup && user && activeGroup.creatorUid !== user.uid) ? "Only the group host can place the order" : ""}
+                               >
+                                 {(isProcessingOrder || isVerifyingOtp) ? <LoadingSpinner className="mr-2 h-5 w-5" /> : 
+                                 (user?.isAnonymous && !isOtpSent ? <ShieldCheck className="mr-2 h-5 w-5" /> : 
+                                 (user?.isAnonymous && isOtpSent ? <MessageCircle className="mr-2 h-5 w-5" /> :
+                                 (groupId ? <Users className="mr-2 h-5 w-5" /> : <CreditCard className="mr-2 h-5 w-5" /> )))}
+                                 
+                                 {isProcessingOrder ? 'Processing Order...' : 
+                                 (isVerifyingOtp ? 'Verifying...' : 
+                                 (user?.isAnonymous && !isOtpSent ? 'Verify Phone & Place Order' : 
+                                 (user?.isAnonymous && isOtpSent ? 'Confirm OTP & Place Order' : 
+                                 (groupId ? 'Place Group Order' : 'Place Order'))))}
                                </Button>
                             </CardFooter>
                         </Card>

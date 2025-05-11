@@ -1,15 +1,20 @@
-
 // src/components/site/public-homepage/top-navigation-bar.tsx
 'use client';
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { ShoppingCart, User as UserIcon, Menu as MenuIcon } from 'lucide-react'; 
+import { ShoppingCart, User as UserIcon, Menu as MenuIcon, Users, Info } from 'lucide-react'; 
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger, SheetClose } from '@/components/ui/sheet';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
-import type { Table } from '@/types'; 
+import type { Table, ClientTableGroup } from '@/types'; 
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 
 interface TopNavigationBarProps {
   restaurantName: string;
@@ -18,13 +23,21 @@ interface TopNavigationBarProps {
   showShadow: boolean;
   restaurantId: string; 
   tableContext?: Pick<Table, 'id' | 'number' | 'docId'>; 
-  isUserAnonymous?: boolean; // Added
-  userDisplayName?: string; // Added
+  isUserAnonymous?: boolean;
+  userDisplayName?: string;
+  activeGroup?: ClientTableGroup; // Added activeGroup
 }
 
-const NavLinks = ({ onLinkClick, restaurantId, tableContext, isUserAnonymous, userDisplayName }: { onLinkClick?: () => void, restaurantId: string, tableContext?: Pick<Table, 'id' | 'number' | 'docId'>, isUserAnonymous?: boolean, userDisplayName?: string }) => {
-  const menuLink = tableContext ? `/menu/table/${tableContext.docId}` : `/site/${restaurantId}#menu`;
-  const checkoutLink = tableContext ? `/site/${restaurantId}/checkout?tableId=${tableContext.docId}&tableNumber=${encodeURIComponent(tableContext.number)}` : `/site/${restaurantId}/checkout`;
+const NavLinks = ({ onLinkClick, restaurantId, tableContext, isUserAnonymous, userDisplayName, activeGroup }: { onLinkClick?: () => void, restaurantId: string, tableContext?: Pick<Table, 'id' | 'number' | 'docId'>, isUserAnonymous?: boolean, userDisplayName?: string, activeGroup?: ClientTableGroup }) => {
+  const menuLink = tableContext ? `/menu/table/${tableContext.docId}${activeGroup ? `?joinGroup=${activeGroup.id}` : ''}` : `/site/${restaurantId}#menu`;
+  
+  let checkoutLink = `/site/${restaurantId}/checkout`;
+  if (tableContext) {
+    checkoutLink += `?tableId=${tableContext.docId}&tableNumber=${encodeURIComponent(tableContext.number)}`;
+    if (activeGroup) {
+      checkoutLink += `&groupId=${activeGroup.id}`;
+    }
+  }
   
   return (
     <>
@@ -43,7 +56,8 @@ const NavLinks = ({ onLinkClick, restaurantId, tableContext, isUserAnonymous, us
       
        {isUserAnonymous && userDisplayName && (
          <div className="px-4 py-2 text-sm text-muted-foreground border-t mt-auto">
-           Logged in as: <span className="font-medium text-primary">{userDisplayName}</span>
+           Ordering as: <span className="font-medium text-primary">{userDisplayName}</span>
+           {activeGroup && <span className="block text-xs">Group: <strong className="text-accent">{activeGroup.id}</strong></span>}
          </div>
        )}
 
@@ -66,13 +80,22 @@ export default function TopNavigationBar({
   tableContext,
   isUserAnonymous,
   userDisplayName,
+  activeGroup, // Added activeGroup
 }: TopNavigationBarProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  const displayRestaurantName = tableContext ? `${restaurantName}` : restaurantName; // Table number is part of restaurantName prop now
-  const homeLink = tableContext ? `/menu/table/${tableContext.docId}` : `/site/${restaurantId}`;
-  const checkoutLink = tableContext ? `/site/${restaurantId}/checkout?tableId=${tableContext.docId}&tableNumber=${encodeURIComponent(tableContext.number)}` : `/site/${restaurantId}/checkout`;
-  const ordersLink = `/site/${restaurantId}/orders${tableContext ? `?tableId=${tableContext.docId}` : ''}`;
+  const displayRestaurantName = restaurantName;
+  const homeLink = tableContext ? `/menu/table/${tableContext.docId}${activeGroup ? `?joinGroup=${activeGroup.id}` : ''}` : `/site/${restaurantId}`;
+  
+  let checkoutLink = `/site/${restaurantId}/checkout`;
+  if (tableContext) {
+    checkoutLink += `?tableId=${tableContext.docId}&tableNumber=${encodeURIComponent(tableContext.number)}`;
+    if (activeGroup) {
+      checkoutLink += `&groupId=${activeGroup.id}`;
+    }
+  }
+  
+  const ordersLink = `/site/${restaurantId}/orders${tableContext ? `?tableId=${tableContext.docId}${activeGroup ? `&groupId=${activeGroup.id}`:''}`: ''}`;
 
 
   return (
@@ -93,10 +116,27 @@ export default function TopNavigationBar({
               className="rounded-full border-2 border-primary group-hover:scale-105 transition-transform"
               data-ai-hint="restaurant logo"
             />
-            <span className="text-xl font-bold text-primary group-hover:text-accent transition-colors hidden sm:block truncate max-w-[200px] md:max-w-xs">
+            <span className="text-xl font-bold text-primary group-hover:text-accent transition-colors hidden sm:block truncate max-w-[180px] md:max-w-xs">
               {displayRestaurantName}
             </span>
           </Link>
+
+          {activeGroup && (
+             <TooltipProvider>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-accent/10 text-accent border border-accent/30 cursor-default">
+                            <Users size={16} />
+                            <span className="text-sm font-semibold">Group: {activeGroup.id}</span>
+                        </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                        <p>Currently in Group Order <strong className="text-primary">{activeGroup.id}</strong></p>
+                        <p className="text-xs">Members: {activeGroup.members.length}</p>
+                    </TooltipContent>
+                </Tooltip>
+            </TooltipProvider>
+          )}
 
           <nav className="hidden lg:flex items-center gap-6">
             <Link href={`${homeLink}#menu`} className="text-sm font-medium text-foreground hover:text-primary transition-colors">Menu</Link>
@@ -147,10 +187,15 @@ export default function TopNavigationBar({
                             className="rounded-full border-2 border-primary"
                             data-ai-hint="restaurant logo small"
                             />
-                            <span className="text-lg font-bold text-primary truncate max-w-[150px]">
-                            {displayRestaurantName}
+                            <span className="text-lg font-bold text-primary truncate max-w-[100px]">
+                                {displayRestaurantName}
                             </span>
                         </Link>
+                         {activeGroup && (
+                            <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-accent/10 text-accent text-xs border border-accent/20">
+                                <Users size={12} /> Group: {activeGroup.id}
+                            </div>
+                         )}
                         <SheetClose asChild>
                              <Button variant="ghost" size="icon" className="h-7 w-7 -mr-2"><MenuIcon className="h-5 w-5"/></Button>
                         </SheetClose>
@@ -162,6 +207,7 @@ export default function TopNavigationBar({
                         tableContext={tableContext}
                         isUserAnonymous={isUserAnonymous}
                         userDisplayName={userDisplayName}
+                        activeGroup={activeGroup}
                     />
                   </nav>
                   <div className="mt-auto pt-4 border-t">
@@ -180,3 +226,4 @@ export default function TopNavigationBar({
     </header>
   );
 }
+
