@@ -64,14 +64,14 @@ export async function createOrder(restaurantId: string, orderData: Omit<Order, '
   const dataToSave = {
     ...orderData,
     restaurantId,
-    userId: orderData.userId || undefined, 
+    userId: orderData.userId || null, 
     createdAt,
     updatedAt,
     tableId: orderData.tableId || null,
     tableNumber: orderData.tableNumber || null,
-    customerName: orderData.customerName || undefined,
-    customerPhoneNumber: orderData.customerPhoneNumber || undefined,
-    customerWhatsapp: orderData.customerWhatsapp || null, // Changed from undefined to null
+    customerName: orderData.customerName || null, // Changed from undefined to null
+    customerPhoneNumber: orderData.customerPhoneNumber || null, // Changed from undefined to null
+    customerWhatsapp: orderData.customerWhatsapp || null,
   };
 
   const docRef = await addDoc(ordersCol, dataToSave);
@@ -159,6 +159,13 @@ export async function updateOrder(restaurantId: string, orderId: string, data: P
       delete updatePayload.createdAt; 
     }
     
+    // Ensure potentially undefined fields are explicitly set to null if that's desired
+    // or ensure they are present if required by your data model
+    if (updatePayload.customerName === undefined) updatePayload.customerName = null;
+    if (updatePayload.customerPhoneNumber === undefined) updatePayload.customerPhoneNumber = null;
+    if (updatePayload.customerWhatsapp === undefined) updatePayload.customerWhatsapp = null;
+    // ... any other optional fields that might be passed as undefined
+
     const finalUpdateData = { ...updatePayload, updatedAt: serverTimestamp() };
     
     await updateDoc(orderRef, finalUpdateData);

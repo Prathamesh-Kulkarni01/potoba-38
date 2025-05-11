@@ -40,7 +40,7 @@ export default function CheckoutPage() {
   
   // Form state
   const [customerName, setCustomerName] = useState(''); // Renamed from 'name' for clarity
-  const [customerPhoneNumber, setCustomerPhoneNumber] = useState(''); // Renamed from 'phone'
+  const [customerPhoneNumberState, setCustomerPhoneNumberState] = useState(''); // Renamed from 'phone'
   const [otp, setOtp] = useState('');
   const [isOtpSent, setIsOtpSent] = useState(false);
   const [verificationId, setVerificationId] = useState<string | null>(null);
@@ -118,7 +118,7 @@ export default function CheckoutPage() {
   const total = useMemo(() => subtotal + tax + deliveryFee, [subtotal, tax, deliveryFee]);
 
   const handleSendOtp = async () => {
-    if (!customerPhoneNumber) {
+    if (!customerPhoneNumberState) {
         toast({ variant: "destructive", title: "Input Error", description: "Please enter your phone number." });
         return;
     }
@@ -127,7 +127,7 @@ export default function CheckoutPage() {
         return;
     }
     setIsVerifyingOtp(true); // Indicates OTP sending process
-    const result = await linkAnonymousWithPhoneNumber(customerPhoneNumber, appVerifierRef.current);
+    const result = await linkAnonymousWithPhoneNumber(customerPhoneNumberState, appVerifierRef.current);
     if (result.verificationId) {
         setVerificationId(result.verificationId);
         setIsOtpSent(true);
@@ -144,7 +144,7 @@ export default function CheckoutPage() {
       return;
     }
     setIsVerifyingOtp(true);
-    const result = await confirmPhoneNumberVerification(verificationId, otp, customerPhoneNumber);
+    const result = await confirmPhoneNumberVerification(verificationId, otp, customerPhoneNumberState);
     if (result.success) {
         toast({ title: "Phone Verified!", description: "Your phone number has been verified." });
         // Now user is permanent (or linked), proceed to place order with the updated user context
@@ -178,7 +178,7 @@ export default function CheckoutPage() {
 
     const orderData: Omit<Order, 'id' | 'createdAt' | 'updatedAt'> = {
         restaurantId: restaurant.id,
-        userId: user?.uid, // Attach current user ID (anonymous or permanent)
+        userId: user?.uid, 
         tableId: tableId || null, 
         tableNumber: tableNumber || null, 
         items: orderItems,
@@ -186,8 +186,8 @@ export default function CheckoutPage() {
         taxAmount: tax,
         totalAmount: total,
         status: 'pending_kitchen' as OrderStatus, 
-        customerName: customerName || undefined,
-        customerPhoneNumber: user?.phoneNumber || customerPhoneNumber || undefined, // Prefer user.phoneNumber if available after linking
+        customerName: customerName || null, // Ensure null instead of undefined
+        customerPhoneNumber: user?.phoneNumber || customerPhoneNumberState || null, // Ensure null instead of undefined
         customerNotes: customerNotes || undefined,
         paymentMethod: paymentMethod,
     };
@@ -216,12 +216,12 @@ export default function CheckoutPage() {
     e.preventDefault();
     if (user?.isAnonymous) {
         if (!isOtpSent) {
-            await handleSendOtp(); // This will set isOtpSent to true on success
+            await handleSendOtp(); 
         } else {
             await handleVerifyOtpAndPlaceOrder();
         }
     } else {
-        await placeOrderAfterVerification(); // User is already permanent
+        await placeOrderAfterVerification(); 
     }
   };
 
@@ -275,11 +275,11 @@ export default function CheckoutPage() {
                                 {user?.isAnonymous && (
                                     <>
                                         <div>
-                                            <Label htmlFor="customerPhoneNumber">Phone Number for Verification</Label>
+                                            <Label htmlFor="customerPhoneNumberState">Phone Number for Verification</Label>
                                             <div className="flex gap-2">
-                                                <Input id="customerPhoneNumber" type="tel" value={customerPhoneNumber} onChange={e => setCustomerPhoneNumber(e.target.value)} required placeholder="+1 123 456 7890" disabled={isOtpSent || isVerifyingOtp}/>
+                                                <Input id="customerPhoneNumberState" type="tel" value={customerPhoneNumberState} onChange={e => setCustomerPhoneNumberState(e.target.value)} required placeholder="+1 123 456 7890" disabled={isOtpSent || isVerifyingOtp}/>
                                                 {!isOtpSent && (
-                                                    <Button type="button" onClick={handleSendOtp} disabled={isVerifyingOtp || !customerPhoneNumber} className="bg-accent hover:bg-accent/90 text-accent-foreground">
+                                                    <Button type="button" onClick={handleSendOtp} disabled={isVerifyingOtp || !customerPhoneNumberState} className="bg-accent hover:bg-accent/90 text-accent-foreground">
                                                         {isVerifyingOtp ? <LoadingSpinner className="h-4 w-4"/> : <ShieldCheck className="mr-2 h-4 w-4"/>} Send OTP
                                                     </Button>
                                                 )}
@@ -294,7 +294,7 @@ export default function CheckoutPage() {
                                 {!tableId && !user?.isAnonymous && ( 
                                   <>
                                     <div><Label htmlFor="email">Email (Optional)</Label><Input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com"/></div>
-                                    <div><Label htmlFor="customerPhoneNumberPermanent">Phone Number</Label><Input id="customerPhoneNumberPermanent" type="tel" value={customerPhoneNumber} onChange={e => setCustomerPhoneNumber(e.target.value)} placeholder="123-456-7890" required /></div>
+                                    <div><Label htmlFor="customerPhoneNumberPermanent">Phone Number</Label><Input id="customerPhoneNumberPermanent" type="tel" value={customerPhoneNumberState} onChange={e => setCustomerPhoneNumberState(e.target.value)} placeholder="123-456-7890" required /></div>
                                     <div><Label htmlFor="address">Delivery Address</Label><Input id="address" value={address} onChange={e => setAddress(e.target.value)} required placeholder="123 Main St, Anytown"/></div>
                                   </>
                                 )}
@@ -366,3 +366,4 @@ export default function CheckoutPage() {
     </div>
   );
 }
+
