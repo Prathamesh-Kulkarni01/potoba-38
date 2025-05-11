@@ -17,8 +17,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'AuthZen',
-  description: 'Secure Authentication and Role Management',
+  title: 'Potoba',
+  description: 'AI-Powered Restaurant Management and Smart Ordering System',
 };
 
 export default function RootLayout({

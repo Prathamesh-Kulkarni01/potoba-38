@@ -17,14 +17,14 @@ export default function AdminSettingsPage() {
             Application Settings
           </CardTitle>
           <CardDescription>
-            Configure global settings for AuthZen.
+            Configure global settings for Potoba.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-8 max-w-2xl">
           <form className="space-y-6">
             <div>
               <Label htmlFor="appName">Application Name</Label>
-              <Input id="appName" type="text" defaultValue="AuthZen" className="mt-1" />
+              <Input id="appName" type="text" defaultValue="Potoba" className="mt-1" />
             </div>
             
             <div className="flex items-center space-x-2">

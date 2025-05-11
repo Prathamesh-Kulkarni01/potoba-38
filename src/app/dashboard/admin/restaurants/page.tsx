@@ -24,7 +24,7 @@ export default function AdminAllRestaurantsPage() {
             All Restaurants
           </CardTitle>
           <CardDescription>
-            View and manage all restaurants registered on the AuthZen platform.
+            View and manage all restaurants registered on the Potoba platform.
           </CardDescription>
         </CardHeader>
         <CardContent>

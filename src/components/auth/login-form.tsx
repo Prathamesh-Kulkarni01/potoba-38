@@ -59,7 +59,7 @@ export default function LoginForm() {
           <LogIn className="h-8 w-8" />
         </div>
         <CardTitle className="text-3xl font-bold">Welcome Back!</CardTitle>
-        <CardDescription>Sign in to access your AuthZen dashboard.</CardDescription>
+        <CardDescription>Sign in to access your Potoba dashboard.</CardDescription>
       </CardHeader>
       <CardContent>
         <Form {...form}>

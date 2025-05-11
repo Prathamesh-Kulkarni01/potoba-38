@@ -24,7 +24,7 @@ function AdminDashboard() {
             <UserCog className="mr-3 h-7 w-7" />
             Platform Admin Panel
           </CardTitle>
-          <CardDescription>Manage users, system settings, and view overall application analytics for AuthZen.</CardDescription>
+          <CardDescription>Manage users, system settings, and view overall application analytics for Potoba.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-6 md:grid-cols-2">
           <DashboardNavigationCard
@@ -301,7 +301,7 @@ function UserDashboard() {
             <ChefHat className="mr-3 h-7 w-7" />
             Your Culinary Hub
           </CardTitle>
-          <CardDescription>Explore menus, plan your meals, and manage your culinary profile in AuthZen.</CardDescription>
+          <CardDescription>Explore menus, plan your meals, and manage your culinary profile in Potoba.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           <DashboardNavigationCard
@@ -413,7 +413,7 @@ export default function DashboardPage() {
   return (
     <div className="container mx-auto py-8 px-2 md:px-4">
       <h1 className="text-3xl md:text-4xl font-bold mb-2">
-        Welcome to AuthZen, <span className="text-primary">{user.displayName || user.email?.split('@')[0] || 'User'}</span>!
+        Welcome to Potoba, <span className="text-primary">{user.displayName || user.email?.split('@')[0] || 'User'}</span>!
       </h1>
       <p className="text-md md:text-lg text-muted-foreground mb-8">
         You are logged in as a{role === 'admin' || role === 'owner' ? 'n' : ''} <span className="font-semibold text-accent">{role}</span>.

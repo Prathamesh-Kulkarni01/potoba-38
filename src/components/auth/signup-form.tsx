@@ -101,7 +101,7 @@ export default function SignupForm() {
           <UserPlus className="h-8 w-8" />
         </div>
         <CardTitle className="text-3xl font-bold">Create an Account</CardTitle>
-        <CardDescription>Join AuthZen to manage your restaurant or culinary journey.</CardDescription>
+        <CardDescription>Join Potoba to manage your restaurant or culinary journey.</CardDescription>
       </CardHeader>
       <CardContent>
         <Form {...form}>

@@ -75,7 +75,7 @@ export default function CreateRestaurantPage() {
           </div>
           <CardTitle className="text-2xl font-bold text-center">Create a New Restaurant</CardTitle>
           <CardDescription className="text-center">
-            Add another restaurant to your AuthZen account.
+            Add another restaurant to your Potoba account.
           </CardDescription>
         </CardHeader>
         <CardContent>

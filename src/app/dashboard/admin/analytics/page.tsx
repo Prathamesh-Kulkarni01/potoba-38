@@ -38,7 +38,7 @@ export default function AdminAnalyticsPage() {
             Platform Analytics
           </CardTitle>
           <CardDescription>
-            Overview of AuthZen platform performance and user activity. (Mock Data)
+            Overview of Potoba platform performance and user activity. (Mock Data)
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-8">

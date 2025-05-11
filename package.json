@@ -1,6 +1,13 @@
 {
-  "name": "nextn",
-  "version": "0.1.0",
+  "name": "Potoba",
+  "version": "1.1.0",
+  "description": "Potoba is a web application that allows users to create and manage their own AI agents, providing a user-friendly interface for interacting with various AI models.",
+  "author": "Potoba Team",
+  "homepage": "https://potoba-v1.netlify.app",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Prathamesh-Kulkarni01/potoba-38/tree/dev"
+  },
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack -p 9002",

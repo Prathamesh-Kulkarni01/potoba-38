@@ -33,7 +33,7 @@ export default function DevLayout({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-muted/20 p-4">
        <header className="mb-6 border-b pb-4">
-        <h1 className="text-3xl font-bold text-primary">AuthZen Developer Tools</h1>
+        <h1 className="text-3xl font-bold text-primary">Potoba Developer Tools</h1>
         <p className="text-muted-foreground">Utilities for development and testing.</p>
       </header>
       <main>{children}</main>

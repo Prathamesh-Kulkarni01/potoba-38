@@ -1,4 +1,4 @@
-# **App Name**: AuthZen
+# **App Name**: Potoba
 
 ## Core Features:
 

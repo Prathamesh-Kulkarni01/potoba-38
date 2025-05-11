@@ -56,15 +56,15 @@ export default function OnboardingLayout({ children }: { children: ReactNode }) 
       <div className="flex min-h-screen flex-col items-center bg-gradient-to-br from-background to-muted/50 pt-8 sm:pt-16 px-4">
         <div className="mb-8 text-center">
           <Image 
-              src="https://picsum.photos/seed/authzenlogo/80/80"
-              alt="AuthZen Logo" 
+              src="/public/images/logo.png"
+              alt="Potoba Logo" 
               width={80} 
               height={80} 
               className="mx-auto rounded-lg shadow-md"
               data-ai-hint="modern app logo" 
           />
           <h1 className="mt-4 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-            Welcome to AuthZen!
+            Welcome to Potoba!
           </h1>
           <p className="mt-2 text-lg text-muted-foreground">
             Let&apos;s get your restaurant set up.
