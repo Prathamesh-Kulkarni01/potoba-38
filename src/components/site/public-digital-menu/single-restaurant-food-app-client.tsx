@@ -1,7 +1,7 @@
 
 'use client';
 
-import type { RestaurantProfile, MenuCategory, MenuItem as MenuItemType } from '@/types';
+import type { RestaurantProfile, MenuCategory, MenuItem as MenuItemType, Table } from '@/types';
 import { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -13,6 +13,7 @@ import LoadingSpinner from '@/components/shared/loading-spinner';
 import { Sheet, SheetContent, SheetTrigger, SheetClose } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
 import DishCard from '@/components/site/shared/dish-card';
+import TopNavigationBar from '../public-homepage/top-navigation-bar';
 
 interface RestaurantDisplayInfo {
   name: string;
@@ -32,12 +33,6 @@ interface Offer {
   color: string;
 }
 
-interface TableContext {
-  id: string; // Table's Firestore document ID
-  number: string; // Table number for display
-  docId: string; // The ID scanned from QR, usually same as id
-}
-
 interface SingleRestaurantFoodAppClientProps {
   restaurantData: RestaurantProfile & { createdAt: string; updatedAt: string };
   restaurantDisplayInfo: RestaurantDisplayInfo;
@@ -45,7 +40,7 @@ interface SingleRestaurantFoodAppClientProps {
   allMenuItemsData: (MenuItemType & { createdAt: string; updatedAt: string })[];
   popularItemsData: (MenuItemType & { createdAt: string; updatedAt: string })[];
   offersData: Offer[];
-  tableContext?: TableContext; // Optional table context
+  tableContext?: Pick<Table, 'id' | 'number' | 'docId'>; // Optional table context, using docId as the ID from QR
 }
 
 export default function SingleRestaurantFoodAppClient({
@@ -61,10 +56,10 @@ export default function SingleRestaurantFoodAppClient({
   const { toast } = useToast();
 
   const [activeTab, setActiveTab] = useState('menu');
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [favorites, setFavorites] = useState<Record<string, boolean>>({}); 
+  const [showNavShadow, setShowNavShadow] = useState(false);
 
   const cartTotalItems = useMemo(() => cart.reduce((sum, item) => sum + item.quantity, 0), [cart]);
   const cartTotalPrice = useMemo(() => cart.reduce((sum, item) => sum + item.totalPrice, 0), [cart]);
@@ -73,7 +68,12 @@ export default function SingleRestaurantFoodAppClient({
     const timer = setTimeout(() => {
       setIsLoading(false);
     }, 500); 
-    return () => clearTimeout(timer);
+    const handleScroll = () => setShowNavShadow(window.scrollY > 10);
+    window.addEventListener('scroll', handleScroll);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('scroll', handleScroll);
+    };
   }, []);
 
   const handleAddToCart = (item: MenuItemType) => {
@@ -115,10 +115,15 @@ export default function SingleRestaurantFoodAppClient({
   const checkoutUrl = useMemo(() => {
     let base = `/site/${restaurantData.id}/checkout`;
     if (tableContext) {
-      base += `?tableId=${tableContext.id}&tableNumber=${encodeURIComponent(tableContext.number)}`;
+      // Ensure docId from tableContext (which is the scanned QR value, usually table.id) is used for tableId param
+      base += `?tableId=${tableContext.docId}&tableNumber=${encodeURIComponent(tableContext.number)}`;
     }
     return base;
   }, [restaurantData.id, tableContext]);
+
+  const headerRestaurantName = tableContext 
+    ? `${restaurantDisplayInfo.name} - Table ${tableContext.number}` 
+    : restaurantDisplayInfo.name;
 
 
   if (isLoading) {
@@ -128,102 +133,20 @@ export default function SingleRestaurantFoodAppClient({
       </div>
     );
   }
-
-  const NavLinks = ({ onLinkClick, restaurantId }: { onLinkClick?: () => void, restaurantId: string }) => (
-    <>
-      <SheetClose asChild>
-        <Link href={`/site/${restaurantId}#menu-section`} onClick={onLinkClick} className="block py-2 px-3 text-foreground hover:bg-muted rounded-md">Menu</Link>
-      </SheetClose>
-      <SheetClose asChild>
-        <Link href={`/site/${restaurantId}#offers-section`} onClick={onLinkClick} className="block py-2 px-3 text-foreground hover:bg-muted rounded-md">Offers</Link>
-      </SheetClose>
-      <SheetClose asChild>
-        <Link href={`/site/${restaurantId}#info-section`} onClick={onLinkClick} className="block py-2 px-3 text-foreground hover:bg-muted rounded-md">Info</Link>
-      </SheetClose>
-      <SheetClose asChild>
-        <Button asChild variant="default" className="w-full mt-3 bg-primary hover:bg-primary/80 text-primary-foreground" onClick={onLinkClick}>
-          <Link href={checkoutUrl}>Order Now</Link>
-        </Button>
-      </SheetClose>
-    </>
-  );
-
-
+  
   return (
-    <div className="flex flex-col h-screen bg-background">
+    <div className="flex flex-col h-screen bg-gradient-to-br from-background via-muted/5 to-background">
       {/* Header */}
-      <header className="sticky top-0 z-30">
-        <div className="bg-primary text-primary-foreground p-3 sm:p-4 shadow-md">
-          <div className="container mx-auto flex items-center justify-between">
-            <div className="flex items-center">
-              <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
-                <SheetTrigger asChild>
-                  <Button variant="ghost" size="icon" className="mr-2 text-primary-foreground hover:bg-primary/80 md:hidden">
-                    <Menu size={22} />
-                  </Button>
-                </SheetTrigger>
-                <SheetContent side="left" className="w-3/4 max-w-xs bg-card p-0">
-                  <div className="flex items-center p-4 border-b">
-                    <Image
-                      src={restaurantDisplayInfo.logo}
-                      alt="Logo"
-                      width={48}
-                      height={48}
-                      className="rounded-full"
-                      data-ai-hint="restaurant logo"
-                    />
-                    <div className="ml-3">
-                      <h3 className="font-bold text-card-foreground">{restaurantDisplayInfo.name}</h3>
-                      <p className="text-xs text-muted-foreground">{restaurantDisplayInfo.cuisine}</p>
-                    </div>
-                  </div>
-                  <div className="space-y-1 p-4">
-                    <NavLinks restaurantId={restaurantData.id} onLinkClick={() => setIsMobileMenuOpen(false)} />
-                    {/* Add other mobile nav items here if needed */}
-                     <SheetClose asChild><Link href={`/site/${restaurantData.id}/profile`} className="flex items-center py-2 px-3 hover:bg-muted rounded text-card-foreground"><User size={18} className="mr-3 text-muted-foreground" /> My Profile</Link></SheetClose>
-                    <SheetClose asChild><Link href={`/site/${restaurantData.id}/orders`} className="flex items-center py-2 px-3 hover:bg-muted rounded text-card-foreground"><ShoppingBag size={18} className="mr-3 text-muted-foreground" /> My Orders</Link></SheetClose>
-                    <SheetClose asChild><Link href={`/site/${restaurantData.id}/favorites`} className="flex items-center py-2 px-3 hover:bg-muted rounded text-card-foreground"><Heart size={18} className="mr-3 text-muted-foreground" /> Favorites</Link></SheetClose>
-                  </div>
-                  <div className="absolute bottom-0 left-0 right-0 p-4 border-t">
-                    <Button className="w-full bg-destructive hover:bg-destructive/80 text-destructive-foreground">Sign Out (Mock)</Button>
-                  </div>
-                </SheetContent>
-              </Sheet>
-              <Link href={`/site/${restaurantData.id}`}>
-                <div className="cursor-pointer">
-                  <h1 className="font-bold text-lg leading-tight">{restaurantDisplayInfo.name}</h1>
-                  <p className="text-xs text-primary-foreground/80 hidden sm:block">{restaurantDisplayInfo.cuisine} {tableContext && `- Table ${tableContext.number}`}</p>
-                </div>
-              </Link>
-            </div>
-            {/* Desktop Navigation Links */}
-            <nav className="hidden md:flex items-center gap-6">
-               <Link href={`/site/${restaurantData.id}#menu-section`} className="text-sm font-medium text-primary-foreground transition-colors hover:text-yellow-300">Menu</Link>
-               <Link href={`/site/${restaurantData.id}#offers-section`}  className="text-sm font-medium text-primary-foreground transition-colors hover:text-yellow-300">Offers</Link>
-               <Link href={`/site/${restaurantData.id}#info-section`} className="text-sm font-medium text-primary-foreground transition-colors hover:text-yellow-300">Info</Link>
-               <Button asChild variant="ghost" className="text-yellow-300 hover:bg-primary/80">
-                <Link href={checkoutUrl}>Order Now</Link>
-               </Button>
-            </nav>
-            <div className="flex items-center space-x-3 sm:space-x-4">
-              <Button variant="ghost" size="icon" className="relative text-primary-foreground hover:bg-primary/80">
-                <Bell size={22} />
-                <span className="absolute -top-1 -right-1 bg-yellow-400 text-xs rounded-full w-4 h-4 flex items-center justify-center text-primary font-bold">2</span>
-              </Button>
-              <Button asChild variant="ghost" size="icon" className="relative text-primary-foreground hover:bg-primary/80">
-                <Link href={checkoutUrl}>
-                  <CartIconLucide size={22} />
-                  {cartTotalItems > 0 && (
-                    <span className="absolute -top-1 -right-1 bg-yellow-400 text-xs rounded-full w-4 h-4 flex items-center justify-center text-primary font-bold">{cartTotalItems}</span>
-                  )}
-                </Link>
-              </Button>
-            </div>
-          </div>
-        </div>
-      </header>
+       <TopNavigationBar
+        restaurantName={headerRestaurantName}
+        restaurantLogoUrl={restaurantDisplayInfo.logo}
+        cartItemCount={cartTotalItems}
+        showShadow={showNavShadow}
+        restaurantId={restaurantData.id}
+        tableContext={tableContext}
+      />
       {/* Main Content Scrollable Area */}
-      <div className="flex-1 overflow-y-auto pb-24">
+      <div className="flex-1 overflow-y-auto pb-24 pt-16"> {/* pt-16 to offset fixed header */}
         {/* Restaurant Banner */}
         <div className="relative container mx-auto mt-0 md:mt-4 rounded-b-lg md:rounded-lg overflow-hidden">
           <Image
@@ -271,7 +194,7 @@ export default function SingleRestaurantFoodAppClient({
         </div>
 
         {/* Search Bar */}
-        <div className="bg-card px-4 py-3 sticky top-[0px] md:top-[64px] z-20 shadow-sm container mx-auto"> {/* Adjust top for header height */}
+        <div className="bg-card px-4 py-3 sticky top-[64px] md:top-[76px] z-20 shadow-sm container mx-auto"> {/* Adjust top for header height */}
           <div className="flex items-center bg-muted rounded-full px-4 py-2.5">
             <Search size={18} className="text-muted-foreground mr-2" />
             <input
@@ -301,7 +224,7 @@ export default function SingleRestaurantFoodAppClient({
         </div>
 
         {/* Main Content for Selected Tab */}
-        <div className="flex-1 container mx-auto pb-24"> {/* Added pb-24 for bottom nav space */}
+        <div className="flex-1 container mx-auto"> 
           {activeTab === 'menu' && (
             <>
               {/* Offers Carousel */}
@@ -326,7 +249,7 @@ export default function SingleRestaurantFoodAppClient({
 
               {/* Menu Categories Display */}
               {menuCategoriesWithCounts.length > 0 && (
-                <div className="bg-card py-4 mt-2 sticky top-[64px] md:top-[128px] z-10 shadow-sm scrollbar-thin " id="menu-section"> {/* Adjusted sticky top */}
+                <div className="bg-card py-4 mt-2 sticky top-[128px] md:top-[140px] z-10 shadow-sm scrollbar-thin " id="menu-section"> {/* Adjusted sticky top */}
                   <h3 className="px-4 mb-3 text-lg font-semibold text-card-foreground">Menu Categories</h3>
                   <div className="flex overflow-x-auto px-4 pb-2 no-scrollbar">
                     <div className="flex space-x-3">
@@ -388,7 +311,7 @@ export default function SingleRestaurantFoodAppClient({
       {/* Bottom Navigation with Cart View Button */}
       <div className={cn("fixed bottom-0 left-0 right-0 bg-card border-t border-border p-2 transition-transform duration-300 z-40", cartTotalItems > 0 ? 'pb-[70px]' : '')}>
         <div className="container mx-auto flex justify-around">
-          <Link href={`/site/${restaurantData.id}`} className="flex flex-col items-center text-primary"> <Home size={20} /> <span className="text-xs mt-1 font-medium">Home</span> </Link>
+          <Link href={tableContext ? `/menu/table/${tableContext.docId}` : `/site/${restaurantData.id}`} className="flex flex-col items-center text-primary"> <Home size={20} /> <span className="text-xs mt-1 font-medium">Home</span> </Link>
           <button className="flex flex-col items-center text-muted-foreground"> <Search size={20} /> <span className="text-xs mt-1">Search</span> </button>
           <Link href={`/site/${restaurantData.id}/orders`} className="flex flex-col items-center text-muted-foreground"> <ShoppingBag size={20} /> <span className="text-xs mt-1">Orders</span> </Link>
           <Link href={`/site/${restaurantData.id}/profile`} className="flex flex-col items-center text-muted-foreground"> <User size={20} /> <span className="text-xs mt-1">Account</span> </Link>
@@ -413,3 +336,4 @@ export default function SingleRestaurantFoodAppClient({
     </div>
   );
 }
+

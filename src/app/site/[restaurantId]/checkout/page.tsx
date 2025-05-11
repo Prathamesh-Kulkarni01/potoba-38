@@ -26,7 +26,7 @@ import { useToast } from '@/hooks/use-toast';
 export default function CheckoutPage() {
   const params = useParams();
   const router = useRouter();
-  const searchParams = useSearchParams(); // Get query parameters
+  const searchParams = useSearchParams();
   const restaurantId = params.restaurantId as string;
   const { cart, clearCart, removeFromCart, updateQuantity } = useCart();
   const { toast } = useToast();
@@ -44,8 +44,8 @@ export default function CheckoutPage() {
   const [isProcessing, setIsProcessing] = useState(false);
 
   // Table context from query params
-  const tableId = searchParams.get('tableId');
-  const tableNumber = searchParams.get('tableNumber');
+  const tableId = useMemo(() => searchParams.get('tableId'), [searchParams]);
+  const tableNumber = useMemo(() => searchParams.get('tableNumber'), [searchParams]);
 
   useEffect(() => {
     if (restaurantId) {
@@ -82,6 +82,10 @@ export default function CheckoutPage() {
         toast({ variant: "destructive", title: "Error", description: "Restaurant data is not loaded." });
         return;
     }
+    if (cart.length === 0) {
+        toast({ variant: "destructive", title: "Empty Cart", description: "Please add items to your cart before placing an order." });
+        return;
+    }
     setIsProcessing(true);
     
     const orderItems: OrderItem[] = cart.map(ci => ({
@@ -95,17 +99,17 @@ export default function CheckoutPage() {
 
     const orderData: Omit<Order, 'id' | 'createdAt' | 'updatedAt'> = {
         restaurantId: restaurant.id,
-        tableId: tableId || null,
-        tableNumber: tableNumber || null,
+        tableId: tableId || null, // Include tableId if present
+        tableNumber: tableNumber || null, // Include tableNumber if present
         items: orderItems,
         subtotal,
         taxAmount: tax,
         totalAmount: total,
-        status: 'pending_kitchen' as OrderStatus,
+        status: 'pending_kitchen' as OrderStatus, // Default status
         customerNotes: customerNotes || undefined,
         paymentMethod: paymentMethod,
-        // Include delivery address if it's not a table order
-        // deliveryAddress: tableId ? undefined : { name, email, phone, address },
+        // Include delivery address if it's not a table order and fields are filled
+        // deliveryAddress: !tableId && name && email && phone && address ? { name, email, phone, address } : undefined,
     };
 
     try {
@@ -113,9 +117,8 @@ export default function CheckoutPage() {
       toast({ title: "Order Placed Successfully!", description: "Thank you for your order. We'll process it shortly."});
       clearCart();
       
-      // If table order, maybe go to a simpler confirmation. If delivery, more details.
       if (tableId) {
-        router.push(`/site/${restaurantId}/order-confirmation?orderId=${newOrder.id}&tableOrder=true`); 
+        router.push(`/site/${restaurantId}/order-confirmation?orderId=${newOrder.id}&tableOrder=true&tableNumber=${encodeURIComponent(tableNumber || '')}`); 
       } else {
         router.push(`/site/${restaurantId}/order-confirmation?orderId=${newOrder.id}`); 
       }
@@ -140,11 +143,12 @@ export default function CheckoutPage() {
   return (
      <div className="flex min-h-screen flex-col bg-gradient-to-br from-background via-muted/5 to-background">
         <TopNavigationBar
-            restaurantName={restaurant.name}
+            restaurantName={tableNumber ? `${restaurant.name} - Table ${tableNumber}` : restaurant.name}
             restaurantLogoUrl={`https://picsum.photos/seed/${restaurant.id}logo/40/40`}
             cartItemCount={cartItemCount}
             showShadow={showNavShadow}
             restaurantId={restaurant.id}
+            tableContext={tableId && tableNumber ? { id: tableId, number: tableNumber, docId: tableId } : undefined}
         />
         <main className="container mx-auto px-4 py-8 flex-grow">
             <Card className="max-w-4xl mx-auto shadow-xl border-primary/20">
@@ -206,7 +210,7 @@ export default function CheckoutPage() {
                             <CardHeader><CardTitle className="text-lg">Order Summary</CardTitle></CardHeader>
                             <CardContent className="space-y-3 max-h-96 overflow-y-auto">
                                 {cart.map(item => (
-                                <div key={item.menuItemId} className="flex justify-between items-center text-sm py-2 border-b last:border-b-0">
+                                <div key={item.menuItemId + JSON.stringify(item.variantChoices)} className="flex justify-between items-center text-sm py-2 border-b last:border-b-0">
                                     <div className="flex items-center">
                                         {item.imageUrl && <Image src={item.imageUrl} alt={item.menuItemName} width={40} height={40} className="rounded mr-3 object-cover" data-ai-hint="cart item image"/>}
                                         <div>
@@ -244,3 +248,4 @@ export default function CheckoutPage() {
     </div>
   );
 }
+

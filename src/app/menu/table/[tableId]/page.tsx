@@ -1,3 +1,4 @@
+
 // src/app/menu/table/[tableId]/page.tsx
 import { getRestaurant } from '@/lib/firebase/firestore';
 import { getTableByDocIdFromGroup } from '@/lib/firebase/tables';
@@ -51,7 +52,9 @@ export default async function ScanOrderPage({ params }: ScanOrderPageProps) {
   }
   
   const { table, restaurantId: resolvedRestaurantId } = tableResult;
+  // Ensure the table object passed to the client has string timestamps
   const tableInfo = stringifyTimestamps(table) as Table;
+
 
   const restaurantDataResult = await getRestaurant(resolvedRestaurantId);
   if (!restaurantDataResult) {
@@ -102,7 +105,8 @@ export default async function ScanOrderPage({ params }: ScanOrderPageProps) {
       allMenuItemsData={menuItems}
       popularItemsData={popularItems}
       offersData={offers}
-      tableContext={tableContext} // Pass table context
+      tableContext={tableContext} 
     />
   );
 }
+
