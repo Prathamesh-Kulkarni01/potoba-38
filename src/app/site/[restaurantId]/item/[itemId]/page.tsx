@@ -1,7 +1,8 @@
 
 // src/app/site/[restaurantId]/item/[itemId]/page.tsx
 import { getRestaurant } from '@/lib/firebase/firestore';
-import { getMenuItemByIdFromGroup, getMenuItems } from '@/lib/firebase/menu';
+// Changed import to relative path to troubleshoot module resolution.
+import { getMenuItemByIdFromGroup, getMenuItems } from '../../../../../lib/firebase/menu';
 import type { RestaurantProfile, MenuItem } from '@/types';
 import { notFound } from 'next/navigation';
 import { convertFirebaseTimestampToString } from '@/lib/firebase/utils';
@@ -62,12 +63,11 @@ export default async function ItemPage({ params }: ItemPageProps) {
   const itemResult = await getMenuItemByIdFromGroup(itemId);
 
   if (!itemResult) {
-    console.error(`[ItemPage] Menu item not found for ID "${itemId}" using getMenuItemByIdFromGroup. This could be an issue with the item ID, Firestore index on 'menuItems' collection group (field 'itemIdString'), or data consistency. Triggering notFound().`);
+    console.error(`[ItemPage] Menu item not found for ID "${itemId}" using getMenuItemByIdFromGroup. This often indicates a missing Firestore index on the 'menuItems' collection group for the 'itemIdString' field, or the item genuinely does not exist with this ID. Triggering notFound().`);
     notFound();
   }
   
   // Step 1.1: Validate restaurant ID match
-  // Important: Ensure the item fetched actually belongs to the restaurant specified in the URL
   if (itemResult.restaurantId !== restaurantId) {
     console.error(`[ItemPage] Item's restaurantId "${itemResult.restaurantId}" does not match current page's restaurantId "${restaurantId}". This indicates a mismatch or incorrect link. Triggering notFound().`);
     notFound();
@@ -88,15 +88,13 @@ export default async function ItemPage({ params }: ItemPageProps) {
 
   // Step 3: Fetch related items (cross-sell)
   console.log(`[ItemPage] Fetching all menu items for restaurant ID: ${restaurantId} for cross-sell suggestions.`);
-  const allRestaurantItemsData = await getMenuItems(restaurantId); // This fetches ALL items for the restaurant
+  const allRestaurantItemsData = await getMenuItems(restaurantId); 
   const frequentlyBoughtTogetherItems = allRestaurantItemsData
     .map(item => stringifyItemTimestamps(item) as MenuItem & { createdAt: string; updatedAt: string })
-    .filter(item => item.id !== menuItem.id && item.availability) // Exclude current item and unavailable items
-    .slice(0, 5); // Take top 5 for suggestions
+    .filter(item => item.id !== menuItem.id && item.availability) 
+    .slice(0, 5); 
   console.log(`[ItemPage] Found ${frequentlyBoughtTogetherItems.length} items for cross-sell suggestions.`);
 
-  // Mock reviews for now (as before)
-  // In a real app, you'd fetch these from a 'reviews' collection related to the menuItem.id or restaurantId
   const reviews = [
     { id: '1', reviewerName: 'Alice B.', rating: 5, content: 'Absolutely delicious! Best I have ever had.' },
     { id: '2', reviewerName: 'Charlie D.', rating: 4, content: 'Very good, a bit spicy for my taste but otherwise great.' },
@@ -115,11 +113,3 @@ export default async function ItemPage({ params }: ItemPageProps) {
     />
   );
 }
-
-// Developer Note: If you are consistently getting 404 errors for item pages,
-// please ensure you have a Firestore index for the 'menuItems' collection group:
-// Collection ID: menuItems (Collection group)
-// Fields to index: itemIdString (Ascending)
-// This index is necessary for the getMenuItemByIdFromGroup function to efficiently query items across all restaurants.
-// Also, ensure that the 'itemIdString' field is correctly populated in your MenuItem documents with the document's ID.
-
