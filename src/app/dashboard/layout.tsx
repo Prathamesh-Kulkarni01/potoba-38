@@ -24,7 +24,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button';
 import BottomNavigationBar, { type BottomNavItem } from '@/components/dashboard/bottom-navigation-bar';
 import { useIsMobile as useIsMobileDirect } from '@/hooks/use-mobile';
-import { LayoutDashboard, Users, Utensils, ChefHat, SquareMenu, Settings, ShieldCheck, Store, PlusCircle, BookCopy, ListOrdered, Briefcase, ExternalLink } from 'lucide-react'; // Added ExternalLink, ListOrdered for Orders, Briefcase for Table Management
+import { LayoutDashboard, Users, Utensils, ChefHat, SquareMenu, Settings, ShieldCheck, Store, PlusCircle, BookCopy, ListOrdered, Briefcase, ExternalLink, Table, List, Settings2 } from 'lucide-react'; // Added ExternalLink, ListOrdered for Orders, Briefcase for Table Management
 import type { RestaurantProfile } from '@/types';
 import { getRestaurantsByOwner } from '@/lib/firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
@@ -194,7 +194,9 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   if (dynamicBottomNavItem2) {
     bottomNavLinks.push(dynamicBottomNavItem2);
   }
-  bottomNavLinks.push({ href: '/dashboard/profile', label: 'Profile', icon: ChefHat, hint: "user profile" });
+  bottomNavLinks.push({ href: `/dashboard/table-management/${selectedRestaurantId}`, label: 'Table', icon: Table, hint: "manage tables" });
+  bottomNavLinks.push({ href: '/dashboard/menu-management', label: 'Menus', icon: List, hint: "view menus" });
+  bottomNavLinks.push({ href: '/dashboard/settings', label: 'Settings', icon: Settings2, hint: "Settings" });
   
   const selectedRestaurantName = ownedRestaurants.find(r => r.id === selectedRestaurantId)?.name || "Select Restaurant";
 

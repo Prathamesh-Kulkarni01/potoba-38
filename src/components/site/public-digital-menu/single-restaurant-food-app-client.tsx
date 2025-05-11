@@ -459,7 +459,7 @@ export default function SingleRestaurantFoodAppClient({
           )}
         </div>
 
-        <div className="bg-card px-4 py-3 sticky top-[64px] md:top-[76px] z-20 shadow-sm container mx-auto"> 
+        <div className="bg-card px-4 py-3 sticky top-[0px] md:top-[10px] z-20 shadow-sm container mx-auto"> 
           <div className="flex items-center bg-muted rounded-full px-4 py-2.5">
             <Search size={18} className="text-muted-foreground mr-2" />
             <input
@@ -510,7 +510,7 @@ export default function SingleRestaurantFoodAppClient({
               )}
 
               {menuCategoriesWithCounts.length > 0 && (
-                <div className="bg-card py-4 mt-2 sticky top-[128px] md:top-[140px] z-10 shadow-sm scrollbar-thin " id="menu-section"> 
+                <div className="bg-card py-4 mt-2 sticky top-[80px] md:top-[80px] z-10 shadow-sm scrollbar-thin " id="menu-section"> 
                   <h3 className="px-4 mb-3 text-lg font-semibold text-card-foreground">Menu Categories</h3>
                   <div className="flex overflow-x-auto px-4 pb-2 no-scrollbar">
                     <div className="flex space-x-3">
