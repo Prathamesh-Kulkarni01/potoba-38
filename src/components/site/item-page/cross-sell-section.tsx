@@ -2,9 +2,9 @@
 'use client';
 
 import type { MenuItem } from '@/types';
-import DishCard from '../public-homepage/dish-card'; // Reusing DishCard for consistency
+import DishCard from '@/components/site/shared/dish-card'; // Adjusted path to shared
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'; // Added ScrollBar
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'; 
 
 interface CrossSellSectionProps {
   items: (MenuItem & { createdAt: string; updatedAt: string })[];
@@ -31,6 +31,7 @@ export default function CrossSellSection({ items, restaurantId, onAddToCart }: C
                   dish={item} 
                   restaurantId={restaurantId} 
                   onAddToCart={onAddToCart} 
+                  context="cross-sell"
                 />
               </div>
             ))}
