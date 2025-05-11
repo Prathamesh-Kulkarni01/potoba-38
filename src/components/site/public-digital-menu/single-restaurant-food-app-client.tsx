@@ -2,7 +2,7 @@
 'use client';
 
 import type { RestaurantProfile, MenuCategory, MenuItem as MenuItemType, Table, TableGroup, ClientTableGroup } from '@/types';
-import { useState, useEffect, useMemo, Suspense, useCallback } from 'react'; // Added useCallback
+import { useState, useEffect, useMemo, Suspense, useCallback } from 'react'; 
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -94,7 +94,7 @@ export default function SingleRestaurantFoodAppClient({
     setIsJoiningGroup(true);
     const result = await joinTableGroup(restaurantData.id, code, currentUser);
     setIsJoiningGroup(false);
-    if (result && 'id' in result) {
+    if (result && 'id' in result && result.id) { // Ensure result is a group and has an id
       setActiveGroup(result);
       localStorage.setItem(`activeGroup_${restaurantData.id}_${tableContext.id}`, result.id);
       toast({ title: 'Joined Group!', description: `You are now part of group ${result.id}.` });
@@ -109,14 +109,12 @@ export default function SingleRestaurantFoodAppClient({
 
   const fetchAndSetActiveGroup = useCallback(async (groupId: string) => {
     if (!tableContext) return;
-    // setIsLoading(true); // This setIsLoading is now handled by the main useEffect
     const groupData = await getTableGroup(restaurantData.id, groupId);
     if (groupData) {
       setActiveGroup(groupData);
     } else {
       localStorage.removeItem(`activeGroup_${restaurantData.id}_${tableContext.id}`);
     }
-    // setIsLoading(false);
   }, [restaurantData.id, tableContext]);
 
   useEffect(() => {
@@ -128,7 +126,6 @@ export default function SingleRestaurantFoodAppClient({
         } else {
           toast({ variant: "destructive", title: "Error", description: "Could not start table order session." });
         }
-        // The change in 'user' or 'authLoading' will re-trigger this effect for the next phase.
       });
       return; 
     }
@@ -205,8 +202,8 @@ export default function SingleRestaurantFoodAppClient({
     setIsCreatingGroup(true);
     try {
       const group = await createTableGroup(restaurantData.id, tableContext.id, tableContext.number, user);
-      if (group) {
-        setActiveGroup(group);
+      if (group) { 
+        setActiveGroup(group); // group is already ClientTableGroup
         localStorage.setItem(`activeGroup_${restaurantData.id}_${tableContext.id}`, group.id);
         toast({ title: 'Group Created!', description: `Share code ${group.id} with others at your table.` });
         setShowGroupInfoModal(true);
@@ -215,7 +212,7 @@ export default function SingleRestaurantFoodAppClient({
         toast({ variant: 'destructive', title: 'Failed', description: 'Could not create group. Please try again.' });
       }
     } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Error', description: error.message || 'Failed to create group.' });
+      toast({ variant: 'destructive', title: 'Error Creating Group', description: error.message || 'Failed to create group.' });
     } finally {
       setIsCreatingGroup(false);
     }
@@ -239,7 +236,10 @@ export default function SingleRestaurantFoodAppClient({
     if (activeGroup && user) {
       setIsLoading(true); 
       try {
-        await addItemToGroupCart(restaurantData.id, activeGroup.id, item, 1, user);
+        // For group cart, ensure item passed to addItemToGroupCart has correct price if variants are involved
+        // This might mean the DishCard needs to pass the calculated price if variants are selected there.
+        // For simplicity, assuming `item.price` is the base or already adjusted price for now.
+        await addItemToGroupCart(restaurantData.id, activeGroup.id, item, 1, user, item.variants ? [] : undefined); // Pass empty variants or actual if supported by DishCard
         toast({ title: `${item.name} Added`, description: "Item added to group cart." });
       } catch (error: any) {
         toast({ variant: 'destructive', title: 'Error', description: `Could not add to group cart: ${error.message}` });
@@ -254,6 +254,7 @@ export default function SingleRestaurantFoodAppClient({
         unitPrice: item.price,
         totalPrice: item.price,
         imageUrl: item.imageUrl || undefined,
+        // variantChoices: item.variants ? [] : undefined, // Add if DishCard supports variant selection before adding
       };
       addLocalCartItem(cartItem);
       toast({ title: `${item.name} Added`, description: "Item added to your cart." });
@@ -262,12 +263,14 @@ export default function SingleRestaurantFoodAppClient({
     }
   };
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text).then(() => {
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
       toast({title: "Copied!", description: "Group code copied to clipboard."});
-    }).catch(err => {
-      toast({variant: 'destructive', title: "Copy Failed", description: "Could not copy code."});
-    });
+    } catch (err) {
+      console.error("Failed to copy text: ", err);
+      toast({variant: 'destructive', title: "Copy Failed", description: "Could not copy code. Please copy it manually."});
+    }
   };
 
   const shareOnWhatsApp = (code: string) => {
@@ -352,7 +355,7 @@ export default function SingleRestaurantFoodAppClient({
                 To start ordering, please create a new group or join an existing one for your table.
             </p>
             <div className="space-y-3 sm:space-y-0 sm:flex sm:gap-4 justify-center">
-                <Button onClick={handleStartGroupOrder} disabled={isCreatingGroup} className="w-full sm:w-auto bg-accent hover:bg-accent/90 text-accent-foreground px-6 py-3 text-lg">
+                <Button onClick={()=>handleStartGroupOrder()} disabled={isCreatingGroup} className="w-full sm:w-auto bg-accent hover:bg-accent/90 text-accent-foreground px-6 py-3 text-lg">
                     {isCreatingGroup ? <LoadingSpinner className="mr-2 h-5 w-5" /> : <Users className="mr-2 h-5 w-5" />} Create New Group
                 </Button>
                 <Button variant="outline" onClick={() => setShowJoinGroupModal(true)} className="w-full sm:w-auto px-6 py-3 text-lg">
@@ -688,3 +691,4 @@ export default function SingleRestaurantFoodAppClient({
     </div>
   );
 }
+

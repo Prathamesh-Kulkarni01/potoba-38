@@ -15,7 +15,7 @@ import {
   runTransaction,
 } from 'firebase/firestore';
 import { db } from './config';
-import type { TableGroup, GroupCartItem, MenuItem, UserProfile, AuthUser } from '@/types';
+import type { TableGroup, GroupCartItem, MenuItem, UserProfile, AuthUser, ClientTableGroup } from '@/types';
 import { convertFirebaseTimestampToString } from './utils';
 
 function generateUniqueGroupCode(): string {
@@ -38,7 +38,7 @@ export async function createTableGroup(
   tableId: string,
   tableNumber: string,
   creator: AuthUser
-): Promise<TableGroup | null> {
+): Promise<ClientTableGroup | null> {
   if (!db) throw new Error("Firestore is not initialized.");
   if (!creator || !creator.uid) throw new Error("Creator UID is required.");
 
@@ -55,13 +55,14 @@ export async function createTableGroup(
 
   if (!unique) {
     console.error("Failed to generate a unique group code after several attempts.");
-    return null; // Or throw an error
+    return null; 
   }
 
   const groupRef = doc(db, `restaurants/${restaurantId}/tableGroups`, groupCode);
-  const now = serverTimestamp();
+  const nowServer = serverTimestamp(); 
+  const nowClient = Timestamp.now();   
 
-  const newGroupData: Omit<TableGroup, 'id' | 'createdAt' | 'updatedAt'> & { createdAt: any, updatedAt: any } = {
+  const newGroupDataForFirestore: Omit<TableGroup, 'id' | 'createdAt' | 'updatedAt'> & { createdAt: any, updatedAt: any } = {
     restaurantId,
     tableId,
     tableNumber,
@@ -70,25 +71,32 @@ export async function createTableGroup(
     members: [{ uid: creator.uid, name: creator.displayName || creator.email?.split('@')[0] || 'Group Host' }],
     status: 'active',
     cartItems: [],
-    createdAt: now,
-    updatedAt: now,
+    createdAt: nowServer,
+    updatedAt: nowServer,
   };
 
-  await setDoc(groupRef, newGroupData);
-
+  await setDoc(groupRef, newGroupDataForFirestore);
+  
   return {
     id: groupCode,
-    ...newGroupData,
-    createdAt: Timestamp.now(), // Optimistic return
-    updatedAt: Timestamp.now(), // Optimistic return
-  } as TableGroup;
+    restaurantId: newGroupDataForFirestore.restaurantId,
+    tableId: newGroupDataForFirestore.tableId,
+    tableNumber: newGroupDataForFirestore.tableNumber,
+    creatorUid: newGroupDataForFirestore.creatorUid,
+    creatorName: newGroupDataForFirestore.creatorName,
+    members: newGroupDataForFirestore.members,
+    status: newGroupDataForFirestore.status,
+    cartItems: newGroupDataForFirestore.cartItems,
+    createdAt: convertFirebaseTimestampToString(nowClient), 
+    updatedAt: convertFirebaseTimestampToString(nowClient), 
+  };
 }
 
 export async function joinTableGroup(
   restaurantId: string,
   groupCode: string,
   user: AuthUser
-): Promise<TableGroup | { error: string } | null> {
+): Promise<ClientTableGroup | { error: string } | null> { // Return type includes ClientTableGroup
   if (!db) throw new Error("Firestore is not initialized.");
   if (!user || !user.uid) return { error: "User information is missing." };
 
@@ -100,7 +108,7 @@ export async function joinTableGroup(
       return { error: "Group code not found or invalid." };
     }
 
-    const groupData = groupDoc.data() as TableGroup;
+    const groupData = groupDoc.data() as TableGroup; // Raw data from Firestore
 
     if (groupData.status !== 'active' && groupData.status !== 'ordering') {
         return { error: `This group is currently ${groupData.status} and cannot be joined.` };
@@ -113,7 +121,7 @@ export async function joinTableGroup(
         ...groupData,
         createdAt: convertFirebaseTimestampToString(groupData.createdAt),
         updatedAt: convertFirebaseTimestampToString(groupData.updatedAt),
-       } as TableGroup; // User already in group, return group data
+       }; // User already in group, return ClientTableGroup
     }
     
     const memberData = { uid: user.uid, name: user.displayName || user.email?.split('@')[0] || 'New Member' };
@@ -123,7 +131,7 @@ export async function joinTableGroup(
       updatedAt: serverTimestamp(),
     });
     
-    const updatedGroupDoc = await getDoc(groupRef); // Fetch again to get the latest members array
+    const updatedGroupDoc = await getDoc(groupRef); 
     const updatedGroupData = updatedGroupDoc.data() as TableGroup;
 
 
@@ -132,7 +140,7 @@ export async function joinTableGroup(
         ...updatedGroupData,
         createdAt: convertFirebaseTimestampToString(updatedGroupData.createdAt),
         updatedAt: convertFirebaseTimestampToString(updatedGroupData.updatedAt),
-    } as TableGroup;
+    };
 
   } catch (error: any) {
     console.error("Error joining table group:", error);
@@ -140,7 +148,7 @@ export async function joinTableGroup(
   }
 }
 
-export async function getTableGroup(restaurantId: string, groupCode: string): Promise<TableGroup | null> {
+export async function getTableGroup(restaurantId: string, groupCode: string): Promise<ClientTableGroup | null> {
   if (!db) throw new Error("Firestore is not initialized.");
   const groupRef = doc(db, `restaurants/${restaurantId}/tableGroups`, groupCode.toUpperCase());
   const docSnap = await getDoc(groupRef);
@@ -151,7 +159,7 @@ export async function getTableGroup(restaurantId: string, groupCode: string): Pr
       ...data,
       createdAt: convertFirebaseTimestampToString(data.createdAt),
       updatedAt: convertFirebaseTimestampToString(data.updatedAt),
-    } as TableGroup;
+    };
   }
   return null;
 }
@@ -178,7 +186,6 @@ export async function addItemToGroupCart(
     const groupData = groupDoc.data() as TableGroup;
     const cartItems = groupData.cartItems || [];
 
-    // Create a unique key for the item based on ID and variants to handle existing items
     const itemKey = item.id + (variantChoices ? JSON.stringify(variantChoices.sort((a,b) => a.variantName.localeCompare(b.variantName))) : "");
     
     let itemFound = false;
@@ -190,23 +197,40 @@ export async function addItemToGroupCart(
           ...cartItem,
           quantity: cartItem.quantity + quantity,
           totalPrice: (cartItem.quantity + quantity) * cartItem.unitPrice,
-          // Potentially update addedBy if multiple people add to the same item stack
         };
       }
       return cartItem;
     });
 
     if (!itemFound) {
-      const unitPrice = variantChoices && variantChoices.length > 0 
-        ? variantChoices.reduce((sum, v) => sum + v.optionPrice, 0) // This logic might need to be more complex depending on how variant prices are set
-        : item.price;
+      // Determine unit price based on variants or base price.
+      // This logic needs to be robust. If variant prices are absolute, then the first variant's option price might be used.
+      // Or, if variants are additive, sum their price adjustments.
+      // For simplicity, if variants exist and have prices, we might take the price of the first chosen option of the first variant, or average, or sum.
+      // The item page's price calculation logic should ideally be mirrored or a base item price passed.
+      // Assuming item.price is the base and variantChoices contain actual prices of selected options that replace/modify base.
+      let effectiveUnitPrice = item.price; // Default to base item price
+      if (variantChoices && variantChoices.length > 0) {
+          // Example: if variants set absolute price, find the relevant one
+          // This example assumes the variantChoice.optionPrice IS the price for that configuration.
+          // Often, the FIRST variant choice's price might dictate the item's price, or they sum up.
+          // Let's assume the price is determined by the *item page* and passed correctly.
+          // If item page calculates a new unitPrice based on variants, that should be passed.
+          // For now, let's use item.price as a fallback if variant pricing isn't detailed here.
+          // A better approach is for `item.price` to already reflect the selected variant combination's price,
+          // or pass the calculated `pricePerItem` from the item page.
+          // The current MenuItem type might not fully support complex variant pricing structures without more info.
+          // Let's use the passed item.price as unitPrice for now, assuming it's correctly set on the `item` object from client.
+          effectiveUnitPrice = item.price;
+      }
+
 
       updatedCartItems.push({
         menuItemId: item.id,
         menuItemName: item.name,
         quantity,
-        unitPrice: unitPrice, 
-        totalPrice: quantity * unitPrice,
+        unitPrice: effectiveUnitPrice, // This should be the price for THIS specific configuration
+        totalPrice: quantity * effectiveUnitPrice,
         variantChoices: variantChoices || [],
         addedByUid: user.uid,
         addedByName: user.displayName || user.email?.split('@')[0] || 'Member',
