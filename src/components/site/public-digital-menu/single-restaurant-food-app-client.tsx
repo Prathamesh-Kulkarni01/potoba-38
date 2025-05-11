@@ -1,7 +1,8 @@
+
 'use client';
 
 import type { RestaurantProfile, MenuCategory, MenuItem as MenuItemType, Table, TableGroup, ClientTableGroup } from '@/types';
-import { useState, useEffect, useMemo, Suspense } from 'react';
+import { useState, useEffect, useMemo, Suspense, useCallback } from 'react'; // Added useCallback
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -68,6 +69,7 @@ export default function SingleRestaurantFoodAppClient({
   const searchParams = useSearchParams();
 
   const [activeTab, setActiveTab] = useState('menu');
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [favorites, setFavorites] = useState<Record<string, boolean>>({}); 
@@ -87,48 +89,7 @@ export default function SingleRestaurantFoodAppClient({
 
   const joinGroupCodeFromUrl = searchParams.get('joinGroup');
 
-  useEffect(() => {
-    if (tableContext && !user && !authLoading) {
-      signInAnonymouslyHandler().then(anonUser => {
-        if (anonUser) {
-          toast({ title: "Welcome!", description: "You're ordering for your table." });
-          checkAndJoinGroupFromUrlOrStorage(anonUser);
-        } else {
-          toast({ variant: "destructive", title: "Error", description: "Could not start table order session." });
-        }
-        setIsLoading(false);
-      });
-    } else if (user && tableContext) {
-      checkAndJoinGroupFromUrlOrStorage(user);
-      setIsLoading(false);
-    } else {
-      setIsLoading(false);
-    }
-    
-    const handleScroll = () => setShowNavShadow(window.scrollY > 10);
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-
-  }, [tableContext, user, authLoading, restaurantData.id, joinGroupCodeFromUrl]);
-
-
-  const checkAndJoinGroupFromUrlOrStorage = async (currentUser: NonNullable<typeof user>) => {
-    if (!tableContext) return;
-    if (joinGroupCodeFromUrl) {
-        const group = await attemptJoinGroup(joinGroupCodeFromUrl, currentUser);
-        if (group) {
-            // Clear URL param after successful join to prevent re-joining on refresh
-            router.replace(`/menu/table/${tableContext.docId}`, { scroll: false });
-        }
-    } else {
-        const storedGroupId = localStorage.getItem(`activeGroup_${restaurantData.id}_${tableContext.id}`);
-        if (storedGroupId) {
-            fetchAndSetActiveGroup(storedGroupId);
-        }
-    }
-  };
-  
-  const attemptJoinGroup = async (code: string, currentUser: NonNullable<typeof user>) => {
+  const attemptJoinGroup = useCallback(async (code: string, currentUser: NonNullable<typeof user>) => {
     if (!tableContext) return null;
     setIsJoiningGroup(true);
     const result = await joinTableGroup(restaurantData.id, code, currentUser);
@@ -144,22 +105,75 @@ export default function SingleRestaurantFoodAppClient({
       toast({ variant: 'destructive', title: 'Join Failed', description: errorMsg });
       return null;
     }
-  };
+  }, [restaurantData.id, tableContext, toast, clearLocalCart]);
 
-
-   const fetchAndSetActiveGroup = async (groupId: string) => {
+  const fetchAndSetActiveGroup = useCallback(async (groupId: string) => {
     if (!tableContext) return;
-    setIsLoading(true);
+    // setIsLoading(true); // This setIsLoading is now handled by the main useEffect
     const groupData = await getTableGroup(restaurantData.id, groupId);
     if (groupData) {
       setActiveGroup(groupData);
-      // setShowGroupInfoModal(true); // Optionally show info modal on rejoin
     } else {
-      localStorage.removeItem(`activeGroup_${restaurantData.id}_${tableContext.id}`); 
+      localStorage.removeItem(`activeGroup_${restaurantData.id}_${tableContext.id}`);
     }
-    setIsLoading(false);
-  };
+    // setIsLoading(false);
+  }, [restaurantData.id, tableContext]);
 
+  useEffect(() => {
+    if (tableContext && !user && !authLoading) {
+      setIsLoading(true);
+      signInAnonymouslyHandler().then(anonUser => {
+        if (anonUser) {
+          toast({ title: "Welcome!", description: "You're ordering for your table." });
+        } else {
+          toast({ variant: "destructive", title: "Error", description: "Could not start table order session." });
+        }
+        // The change in 'user' or 'authLoading' will re-trigger this effect for the next phase.
+      });
+      return; 
+    }
+
+    if (tableContext && user) {
+      const performGroupLogic = async () => {
+        setIsLoading(true);
+        if (joinGroupCodeFromUrl) {
+          const group = await attemptJoinGroup(joinGroupCodeFromUrl, user);
+          if (group) {
+            router.replace(`/menu/table/${tableContext.docId}`, { scroll: false });
+          }
+        } else {
+          const storedGroupId = localStorage.getItem(`activeGroup_${restaurantData.id}_${tableContext.id}`);
+          if (storedGroupId) {
+            await fetchAndSetActiveGroup(storedGroupId);
+          }
+        }
+        setIsLoading(false);
+      };
+      performGroupLogic();
+    } else if (!tableContext) { 
+        setIsLoading(false);
+    } else if (tableContext && !user && authLoading) {
+        setIsLoading(true); 
+    }
+
+
+    const handleScroll = () => setShowNavShadow(window.scrollY > 10);
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+
+  }, [
+    tableContext, 
+    user, 
+    authLoading, 
+    restaurantData.id, 
+    joinGroupCodeFromUrl, 
+    signInAnonymouslyHandler, 
+    attemptJoinGroup, 
+    fetchAndSetActiveGroup,
+    router, 
+    toast 
+  ]);
+  
   useEffect(() => {
     if (activeGroup?.id && db) {
       const groupRef = doc(db, `restaurants/${restaurantData.id}/tableGroups`, activeGroup.id);
@@ -180,7 +194,7 @@ export default function SingleRestaurantFoodAppClient({
       });
       return () => unsubscribe();
     }
-  }, [activeGroup?.id, restaurantData.id]);
+  }, [activeGroup?.id, restaurantData.id, tableContext, toast]);
 
 
   const handleStartGroupOrder = async () => {
@@ -190,8 +204,6 @@ export default function SingleRestaurantFoodAppClient({
     }
     setIsCreatingGroup(true);
     try {
-      // Note: OTP verification for group creation isn't implemented here, assuming anonymous user is sufficient for now
-      // or host will verify at final checkout.
       const group = await createTableGroup(restaurantData.id, tableContext.id, tableContext.number, user);
       if (group) {
         setActiveGroup(group);
@@ -225,7 +237,7 @@ export default function SingleRestaurantFoodAppClient({
 
   const handleAddToCart = async (item: MenuItemType) => {
     if (activeGroup && user) {
-      setIsLoading(true); // Indicate activity
+      setIsLoading(true); 
       try {
         await addItemToGroupCart(restaurantData.id, activeGroup.id, item, 1, user);
         toast({ title: `${item.name} Added`, description: "Item added to group cart." });
@@ -234,7 +246,7 @@ export default function SingleRestaurantFoodAppClient({
       } finally {
         setIsLoading(false);
       }
-    } else if (!tableContext) { // Only allow local cart if not a table order
+    } else if (!tableContext) { 
       const cartItem: CartItem = {
         menuItemId: item.id,
         menuItemName: item.name,
@@ -320,14 +332,13 @@ export default function SingleRestaurantFoodAppClient({
     );
   }
   
-  // Mandatory group creation/joining UI for table orders
   if (tableContext && !activeGroup && !isLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-gradient-to-br from-background via-muted/10 to-background p-4">
         <TopNavigationBar
             restaurantName={headerRestaurantName}
             restaurantLogoUrl={restaurantDisplayInfo.logo}
-            cartItemCount={0} // No cart active yet
+            cartItemCount={0} 
             showShadow={false}
             restaurantId={restaurantData.id}
             tableContext={tableContext}
@@ -349,7 +360,6 @@ export default function SingleRestaurantFoodAppClient({
                 </Button>
             </div>
         </div>
-         {/* Join Group Modal - kept here for this initial state */}
         <Dialog open={showJoinGroupModal} onOpenChange={setShowJoinGroupModal}>
             <DialogContent>
             <DialogHeader>
@@ -389,6 +399,7 @@ export default function SingleRestaurantFoodAppClient({
         tableContext={tableContext}
         isUserAnonymous={user?.isAnonymous || false}
         userDisplayName={user?.displayName || user?.email || (user?.isAnonymous ? "Guest" : "")}
+        activeGroup={activeGroup || undefined}
       />
       <div className="flex-1 overflow-y-auto pb-24 pt-16"> 
         <div className="relative container mx-auto mt-0 md:mt-4 rounded-b-lg md:rounded-lg overflow-hidden">
@@ -567,7 +578,7 @@ export default function SingleRestaurantFoodAppClient({
             href={checkoutUrl} 
             className={cn(
                 "fixed bottom-0 left-0 right-0 md:max-w-screen-sm md:mx-auto md:bottom-2 md:left-1/2 md:-translate-x-1/2 z-50",
-                !canPlaceOrder && "pointer-events-none opacity-70" // Disable if not host of group
+                !canPlaceOrder && "pointer-events-none opacity-70" 
             )}
             onClick={(e) => { if (!canPlaceOrder) e.preventDefault(); }}
             aria-disabled={!canPlaceOrder}
@@ -587,7 +598,6 @@ export default function SingleRestaurantFoodAppClient({
           </Link>
         )}
       </div>
-      {/* Join Group Modal (used when "Join Existing Group" is clicked IF no group active) */}
         <Dialog open={showJoinGroupModal} onOpenChange={setShowJoinGroupModal}>
             <DialogContent>
             <DialogHeader>
@@ -613,7 +623,6 @@ export default function SingleRestaurantFoodAppClient({
             </DialogContent>
         </Dialog>
 
-      {/* Group Info Modal (shown when activeGroup is set and modal is triggered) */}
       {activeGroup && (
       <Dialog open={showGroupInfoModal} onOpenChange={setShowGroupInfoModal}>
         <DialogContent className="sm:max-w-md">
@@ -653,7 +662,6 @@ export default function SingleRestaurantFoodAppClient({
         </DialogContent>
       </Dialog>
       )}
-      {/* QR Code Modal for Joining Group */}
       {activeGroup && tableContext && (
           <Dialog open={showGroupQRCodeModal} onOpenChange={setShowGroupQRCodeModal}>
             <DialogContent className="sm:max-w-xs">
@@ -680,4 +688,3 @@ export default function SingleRestaurantFoodAppClient({
     </div>
   );
 }
-
