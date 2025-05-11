@@ -13,6 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import LoadingSpinner from '@/components/shared/loading-spinner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label'; // Added missing import
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
@@ -148,8 +149,8 @@ export default function ScanOrderPage() {
       tableNumber: tableInfo.tableNumber,
       items: cart,
       subtotal: calculateCartTotal(),
-      totalAmount: calculateCartTotal(), 
-      status: 'pending_kitchen' as OrderStatus,
+      totalAmount: calculateCartTotal(), // Simplified total, tax/service can be added
+      status: 'pending_kitchen' as OrderStatus, // Directly to kitchen for table orders
       customerNotes: customerNotes || undefined,
     };
 
@@ -165,7 +166,6 @@ export default function ScanOrderPage() {
         } catch (statusError) {
           console.error("Error updating table status after customer order:", statusError);
           // This is a non-critical error, the order itself was placed.
-          // Potentially log this for monitoring.
         }
       }
 
@@ -351,4 +351,3 @@ const MenuItemCard = ({ item, onAddToCart }: MenuItemCardProps) => {
     </Card>
   );
 };
-
