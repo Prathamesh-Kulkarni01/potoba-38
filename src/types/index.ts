@@ -8,33 +8,36 @@ export interface AuthUser extends FirebaseUser {
   role: UserRole | null;
   restaurantId: string | null;
   onboardingComplete: boolean;
+  isAnonymous: boolean; // Added for anonymous auth
+  phoneNumber?: string | null; // Added for phone verified users
 }
 
 export interface UserProfile {
   uid: string;
-  email: string | null;
+  email: string | null; // Email might be null for phone-verified anonymous users initially
   role: UserRole;
-  restaurantId: string | null; // ID of the restaurant this user belongs to
-  onboardingComplete: boolean; // Specifically for 'owner' role
+  restaurantId: string | null; 
+  onboardingComplete: boolean; 
   createdAt: Timestamp;
+  phoneNumber?: string | null; // Added
+  isAnonymous?: boolean; // Could be useful to track origin
 }
 
 export interface RestaurantProfile {
   id: string;
   ownerId: string;
   name: string;
-  type?: string; // e.g., Italian, Cafe, Fine Dining
+  type?: string; 
   createdAt: Timestamp; 
-  subscriptionPlan?: string; // Example: 'basic', 'premium'
+  subscriptionPlan?: string; 
   stripeCustomerId?: string;
   subscriptionStatus?: 'active' | 'inactive' | 'trialing';
-  taxRate?: number; // e.g., 0.10 for 10%
+  taxRate?: number; 
   settings?: {
     onlineOrderingEnabled?: boolean;
     tableReservationsEnabled?: boolean;
     notificationEmail?: string;
-    customDomain?: string | null; // Allow null if no custom domain is set
-    // other future settings can be added here
+    customDomain?: string | null; 
   };
 }
 
@@ -42,7 +45,7 @@ export interface MenuCategory {
   id: string;
   restaurantId: string;
   name: string;
-  order: number; // For sorting categories
+  order: number; 
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
@@ -52,80 +55,75 @@ export interface MenuSubcategory {
   restaurantId: string;
   categoryId: string;
   name: string;
-  order: number; // For sorting subcategories within a category
+  order: number; 
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
 
 export interface MenuItemVariantOption {
   name: string;
-  price: number; // Absolute price for this option
-  // id?: string; // Optional: for easier management in UI state if needed
+  price: number; 
 }
 
 export interface MenuItemVariant {
-  // id?: string; // Optional: for easier management in UI state if needed
-  name: string; // e.g., "Size", "Spice Level"
+  name: string; 
   options: MenuItemVariantOption[];
 }
 
 export interface AvailabilityRule {
-  // id?: string; // Optional: for easier management in UI state if needed
   dayOfWeek: 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri' | 'Sat' | 'Sun' | 'Everyday';
-  startTime: string; // Format HH:mm
-  endTime: string;   // Format HH:mm
+  startTime: string; 
+  endTime: string;   
 }
 
 export interface MenuItem {
-  id: string; // Firestore document ID
-  itemIdString: string; // Stores the document ID also as a field for querying
+  id: string; 
+  itemIdString: string; 
   restaurantId: string;
   categoryId: string;
-  subcategoryId?: string | null; // Optional, if item is directly under a category
+  subcategoryId?: string | null; 
   name:string;
   description: string;
-  price: number; // Base price, or price if no variants
+  price: number; 
   imageUrl?: string | null;
-  videoUrl?: string | null; // For short videos
-  availability: boolean; // Master switch: true if available, false if not (temporarily disable)
-  dietaryTags?: string[]; // e.g., ['vegan', 'gluten-free']
+  videoUrl?: string | null; 
+  availability: boolean; 
+  dietaryTags?: string[]; 
   allergenInfo?: string[];
-  order: number; // For sorting items within a category/subcategory
+  order: number; 
   calories?: number; 
   crossSellItems?: string[]; 
   upsellItems?: string[]; 
-  variants?: MenuItemVariant[]; // Item variants like size or spice level
-  availabilitySchedule?: AvailabilityRule[]; // Specific time/day availability
+  variants?: MenuItemVariant[]; 
+  availabilitySchedule?: AvailabilityRule[]; 
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
 
-// Table Management System Types
 export type TableStatus = 'available' | 'occupied' | 'reserved' | 'needs_cleaning';
 
 export interface Table {
-  id: string; // Firestore document ID
+  id: string; 
   restaurantId: string;
-  tableDocId: string; // Stores its own document ID for collection group queries
-  tableNumber: string; // User-defined table identifier (e.g., "T1", "A5", "Patio 2")
+  tableDocId: string; 
+  tableNumber: string; 
   capacity: number;
   status: TableStatus;
-  qrCodeValue: string; // String value to be encoded in QR (e.g., URL to /menu/table/{id})
-  currentOrderIds?: string[]; // IDs of active orders associated with this table for a session
+  qrCodeValue: string; 
+  currentOrderIds?: string[]; 
   createdAt: string; 
   updatedAt: string; 
 }
 
-// Ordering System Types
 export type OrderStatus = 
-  | 'pending_customer_confirmation' // Cart submitted by customer, awaiting their final OK
-  | 'pending_kitchen'               // Customer confirmed, awaiting kitchen acknowledgement
-  | 'confirmed_by_kitchen'          // Kitchen acknowledged, will prepare
-  | 'preparing'                     // Order is being prepared
-  | 'ready_for_pickup'            // Food is ready at the counter/pass (for self-pickup or staff)
-  | 'served'                        // Order served to the table
-  | 'payment_pending'               // Bill presented, awaiting payment
-  | 'completed'                     // Paid and finished
+  | 'pending_customer_confirmation' 
+  | 'pending_kitchen'               
+  | 'confirmed_by_kitchen'          
+  | 'preparing'                     
+  | 'ready_for_pickup'            
+  | 'served'                        
+  | 'payment_pending'               
+  | 'completed'                     
   | 'cancelled_by_customer'
   | 'cancelled_by_restaurant';
 
@@ -133,38 +131,37 @@ export interface OrderItem {
   menuItemId: string;
   menuItemName: string;
   quantity: number;
-  unitPrice: number; // Price at the time of order for this item
-  totalPrice: number; // quantity * unitPrice
-  variantChoices?: { variantName: string; optionName: string; optionPrice: number }[]; // Record chosen variants
-  notes?: string; // Customer notes for this specific item
+  unitPrice: number; 
+  totalPrice: number; 
+  variantChoices?: { variantName: string; optionName: string; optionPrice: number }[]; 
+  notes?: string; 
 }
 
 export interface Order {
-  id: string; // Firestore document ID
+  id: string; 
   restaurantId: string;
+  userId?: string; // ID of the authenticated user (anonymous or permanent)
   tableId?: string | null; 
   tableNumber?: string | null; 
   items: OrderItem[];
-  subtotal: number; // Sum of all OrderItem.totalPrice
+  subtotal: number; 
   taxAmount?: number;
   serviceCharge?: number;
   discountAmount?: number;
-  totalAmount: number; // subtotal + tax + serviceCharge - discount
+  totalAmount: number; 
   status: OrderStatus;
-  customerName?: string; // Added
-  customerWhatsapp?: string; // Added
-  customerNotes?: string; // General notes for the entire order
-  kitchenNotes?: string; // Notes from staff to kitchen or vice-versa
+  customerName?: string; 
+  customerPhoneNumber?: string; // Store verified phone number here
+  customerWhatsapp?: string; 
+  customerNotes?: string; 
+  kitchenNotes?: string; 
   paymentMethod?: string;
   transactionId?: string;
   createdAt: Timestamp; 
   updatedAt: Timestamp; 
 }
 
-// ClientOrder is used for passing data to client components, ensuring Timestamps are strings.
 export interface ClientOrder extends Omit<Order, 'createdAt' | 'updatedAt'> {
-  createdAt: string; // ISO string
-  updatedAt: string; // ISO string
-  // tableId and tableNumber are already optional in Order, so they remain optional here.
-  // customerName and customerWhatsapp are inherited as optional from Order.
+  createdAt: string; 
+  updatedAt: string; 
 }

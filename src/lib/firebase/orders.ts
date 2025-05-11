@@ -18,14 +18,15 @@ import {
 } from 'firebase/firestore';
 import { db } from './config';
 import type { Order, OrderStatus, OrderItem, ClientOrder } from '@/types';
-import { convertFirebaseTimestampToString, getOrdersCollectionPath } from './utils'; // Import the utility
+import { convertFirebaseTimestampToString, getOrdersCollectionPath } from './utils'; 
 
-const safeString = (value: any): string | undefined => typeof value === 'string' ? value : undefined : undefined;
-const safeNumber = (value: any): number | undefined => typeof value === 'number' && !isNaN(value) ? value : undefined : undefined;
+const safeString = (value: any): string | undefined => typeof value === 'string' ? value : undefined;
+const safeNumber = (value: any): number | undefined => typeof value === 'number' && !isNaN(value) ? value : undefined;
 
 const toClientOrder = (docId: string, data: any): ClientOrder => {
     const orderBase: Omit<ClientOrder, 'id' | 'createdAt' | 'updatedAt'> = {
         restaurantId: data.restaurantId,
+        userId: data.userId || undefined, // Added userId
         tableId: data.tableId || null,
         tableNumber: data.tableNumber || null,
         items: data.items as OrderItem[],
@@ -33,6 +34,7 @@ const toClientOrder = (docId: string, data: any): ClientOrder => {
         totalAmount: data.totalAmount,
         status: data.status as OrderStatus,
         customerName: safeString(data.customerName),
+        customerPhoneNumber: safeString(data.customerPhoneNumber), // Added customerPhoneNumber
         customerWhatsapp: safeString(data.customerWhatsapp),
         taxAmount: safeNumber(data.taxAmount),
         serviceCharge: safeNumber(data.serviceCharge),
@@ -60,12 +62,14 @@ export async function createOrder(restaurantId: string, orderData: Omit<Order, '
 
   const dataToSave = {
     ...orderData,
-    restaurantId, 
+    restaurantId,
+    userId: orderData.userId || undefined, // Ensure userId is passed or undefined
     createdAt,
     updatedAt,
     tableId: orderData.tableId || null,
     tableNumber: orderData.tableNumber || null,
     customerName: orderData.customerName || undefined,
+    customerPhoneNumber: orderData.customerPhoneNumber || undefined, // Save phone number
     customerWhatsapp: orderData.customerWhatsapp || undefined,
   };
 
@@ -73,7 +77,7 @@ export async function createOrder(restaurantId: string, orderData: Omit<Order, '
   
   return {
     id: docRef.id,
-    ...orderData,
+    ...orderData, // This includes userId if it was in orderData
     createdAt: Timestamp.now(), 
     updatedAt: Timestamp.now(), 
   } as Order; 
@@ -89,8 +93,6 @@ export async function getOrder(restaurantId: string, orderId: string): Promise<C
     return null;
 }
 
-// This function is kept for potential one-time fetches if needed elsewhere.
-// For real-time updates on the main orders page, onSnapshot is used directly in the component.
 export async function getOrdersByRestaurant(
   restaurantId: string, 
   statusFilters?: OrderStatus[],
@@ -124,9 +126,6 @@ export async function getOrdersByRestaurant(
   return snapshot.docs.map(docSnap => toClientOrder(docSnap.id, docSnap.data()));
 }
 
-
-// This function is kept for potential one-time fetches if needed elsewhere.
-// For real-time updates in table management, onSnapshot is used directly in the component.
 export async function getOrdersByTable(restaurantId: string, tableId: string, activeStatusesParam?: OrderStatus[]): Promise<ClientOrder[]> {
   if (!db) throw new Error("Firestore is not initialized.");
   const ordersCol = collection(db, getOrdersCollectionPath(restaurantId));
@@ -155,14 +154,9 @@ export async function updateOrder(restaurantId: string, orderId: string, data: P
     const orderRef = doc(db, getOrdersCollectionPath(restaurantId), orderId);
     const updatePayload: { [key: string]: any } = { ...data };
     
-    // Ensure timestamps from client (which might be strings) are not passed directly if they are meant to be server timestamps.
-    // This is mainly for `createdAt` which should not be updated after creation. `updatedAt` is always serverTimestamp().
     if (updatePayload.hasOwnProperty('createdAt')) {
       delete updatePayload.createdAt; 
     }
-    // if (updatePayload.hasOwnProperty('updatedAt')) {
-    //   delete updatePayload.updatedAt; // Let serverTimestamp handle this
-    // }
     
     const finalUpdateData = { ...updatePayload, updatedAt: serverTimestamp() };
     

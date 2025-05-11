@@ -14,6 +14,7 @@ import { Sheet, SheetContent, SheetTrigger, SheetClose } from '@/components/ui/s
 import { cn } from '@/lib/utils';
 import DishCard from '@/components/site/shared/dish-card';
 import TopNavigationBar from '../public-homepage/top-navigation-bar';
+import { useAuth } from '@/lib/auth/context'; // Import useAuth
 
 interface RestaurantDisplayInfo {
   name: string;
@@ -40,7 +41,7 @@ interface SingleRestaurantFoodAppClientProps {
   allMenuItemsData: (MenuItemType & { createdAt: string; updatedAt: string })[];
   popularItemsData: (MenuItemType & { createdAt: string; updatedAt: string })[];
   offersData: Offer[];
-  tableContext?: Pick<Table, 'id' | 'number' | 'docId'>; // Optional table context, using docId as the ID from QR
+  tableContext?: Pick<Table, 'id' | 'number' | 'docId'>; 
 }
 
 export default function SingleRestaurantFoodAppClient({
@@ -54,10 +55,11 @@ export default function SingleRestaurantFoodAppClient({
 }: SingleRestaurantFoodAppClientProps) {
   const { cart, addToCart } = useCart();
   const { toast } = useToast();
+  const { user, loading: authLoading, signInAnonymouslyHandler } = useAuth(); // Get user and signInAnonymouslyHandler
 
   const [activeTab, setActiveTab] = useState('menu');
   const [searchQuery, setSearchQuery] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true); // General page loading
   const [favorites, setFavorites] = useState<Record<string, boolean>>({}); 
   const [showNavShadow, setShowNavShadow] = useState(false);
 
@@ -65,8 +67,21 @@ export default function SingleRestaurantFoodAppClient({
   const cartTotalPrice = useMemo(() => cart.reduce((sum, item) => sum + item.totalPrice, 0), [cart]);
 
   useEffect(() => {
+    // Perform anonymous sign-in if table context exists and no user is logged in (and auth isn't already loading)
+    if (tableContext && !user && !authLoading) {
+      signInAnonymouslyHandler().then(anonUser => {
+        if (anonUser) {
+          toast({ title: "Welcome!", description: "You're ordering for your table." });
+        } else {
+          toast({ variant: "destructive", title: "Error", description: "Could not start table order session." });
+        }
+      });
+    }
+  }, [tableContext, user, authLoading, signInAnonymouslyHandler, toast]);
+
+  useEffect(() => {
     const timer = setTimeout(() => {
-      setIsLoading(false);
+      setIsLoading(false); // General UI loading
     }, 500); 
     const handleScroll = () => setShowNavShadow(window.scrollY > 10);
     window.addEventListener('scroll', handleScroll);
@@ -115,7 +130,6 @@ export default function SingleRestaurantFoodAppClient({
   const checkoutUrl = useMemo(() => {
     let base = `/site/${restaurantData.id}/checkout`;
     if (tableContext) {
-      // Ensure docId from tableContext (which is the scanned QR value, usually table.id) is used for tableId param
       base += `?tableId=${tableContext.docId}&tableNumber=${encodeURIComponent(tableContext.number)}`;
     }
     return base;
@@ -126,7 +140,7 @@ export default function SingleRestaurantFoodAppClient({
     : restaurantDisplayInfo.name;
 
 
-  if (isLoading) {
+  if (isLoading || authLoading) { // Consider authLoading as well
     return (
       <div className="flex items-center justify-center h-screen bg-background">
         <LoadingSpinner className="h-12 w-12 text-primary" />
@@ -136,18 +150,17 @@ export default function SingleRestaurantFoodAppClient({
   
   return (
     <div className="flex flex-col h-screen bg-gradient-to-br from-background via-muted/5 to-background">
-      {/* Header */}
-       <TopNavigationBar
+      <TopNavigationBar
         restaurantName={headerRestaurantName}
         restaurantLogoUrl={restaurantDisplayInfo.logo}
         cartItemCount={cartTotalItems}
         showShadow={showNavShadow}
         restaurantId={restaurantData.id}
         tableContext={tableContext}
+        isUserAnonymous={user?.isAnonymous || false}
+        userDisplayName={user?.displayName || user?.email || (user?.isAnonymous ? "Guest" : "")}
       />
-      {/* Main Content Scrollable Area */}
-      <div className="flex-1 overflow-y-auto pb-24 pt-16"> {/* pt-16 to offset fixed header */}
-        {/* Restaurant Banner */}
+      <div className="flex-1 overflow-y-auto pb-24 pt-16"> 
         <div className="relative container mx-auto mt-0 md:mt-4 rounded-b-lg md:rounded-lg overflow-hidden">
           <Image
             src={restaurantDisplayInfo.coverImage}
@@ -170,7 +183,6 @@ export default function SingleRestaurantFoodAppClient({
           </div>
         </div>
 
-        {/* Restaurant Info */}
         <div className="bg-card pt-10 md:pt-12 pb-3 px-4 container mx-auto rounded-t-lg md:rounded-lg shadow-sm">
           <div className="flex justify-between items-start">
             <div>
@@ -193,8 +205,7 @@ export default function SingleRestaurantFoodAppClient({
           </div>
         </div>
 
-        {/* Search Bar */}
-        <div className="bg-card px-4 py-3 sticky top-[64px] md:top-[76px] z-20 shadow-sm container mx-auto"> {/* Adjust top for header height */}
+        <div className="bg-card px-4 py-3 sticky top-[64px] md:top-[76px] z-20 shadow-sm container mx-auto"> 
           <div className="flex items-center bg-muted rounded-full px-4 py-2.5">
             <Search size={18} className="text-muted-foreground mr-2" />
             <input
@@ -207,7 +218,6 @@ export default function SingleRestaurantFoodAppClient({
           </div>
         </div>
 
-        {/* Tabs */}
         <div className="bg-card py-2 px-2 shadow-sm border-b border-border container mx-auto">
           <div className="flex overflow-x-auto no-scrollbar">
             {['menu', 'reviews', 'info'].map(tabName => (
@@ -223,11 +233,9 @@ export default function SingleRestaurantFoodAppClient({
           </div>
         </div>
 
-        {/* Main Content for Selected Tab */}
         <div className="flex-1 container mx-auto"> 
           {activeTab === 'menu' && (
             <>
-              {/* Offers Carousel */}
               {offersData.length > 0 && (
                 <div className="bg-card py-4" id="offers-section">
                   <h3 className="px-4 mb-3 text-lg font-semibold text-card-foreground">Special Offers</h3>
@@ -247,9 +255,8 @@ export default function SingleRestaurantFoodAppClient({
                 </div>
               )}
 
-              {/* Menu Categories Display */}
               {menuCategoriesWithCounts.length > 0 && (
-                <div className="bg-card py-4 mt-2 sticky top-[128px] md:top-[140px] z-10 shadow-sm scrollbar-thin " id="menu-section"> {/* Adjusted sticky top */}
+                <div className="bg-card py-4 mt-2 sticky top-[128px] md:top-[140px] z-10 shadow-sm scrollbar-thin " id="menu-section"> 
                   <h3 className="px-4 mb-3 text-lg font-semibold text-card-foreground">Menu Categories</h3>
                   <div className="flex overflow-x-auto px-4 pb-2 no-scrollbar">
                     <div className="flex space-x-3">
@@ -265,7 +272,6 @@ export default function SingleRestaurantFoodAppClient({
                 </div>
               )}
 
-              {/* Menu Items (Popular or Filtered) */}
               <div className="bg-card mt-2 py-4">
                 <div className="flex justify-between items-center px-4 mb-3">
                   <h3 className="text-lg font-semibold text-card-foreground">{searchQuery ? 'Search Results' : 'Menu Items'}</h3>
@@ -308,12 +314,11 @@ export default function SingleRestaurantFoodAppClient({
           )}
         </div>
       </div>
-      {/* Bottom Navigation with Cart View Button */}
       <div className={cn("fixed bottom-0 left-0 right-0 bg-card border-t border-border p-2 transition-transform duration-300 z-40", cartTotalItems > 0 ? 'pb-[70px]' : '')}>
         <div className="container mx-auto flex justify-around">
           <Link href={tableContext ? `/menu/table/${tableContext.docId}` : `/site/${restaurantData.id}`} className="flex flex-col items-center text-primary"> <Home size={20} /> <span className="text-xs mt-1 font-medium">Home</span> </Link>
           <button className="flex flex-col items-center text-muted-foreground"> <Search size={20} /> <span className="text-xs mt-1">Search</span> </button>
-          <Link href={`/site/${restaurantData.id}/orders`} className="flex flex-col items-center text-muted-foreground"> <ShoppingBag size={20} /> <span className="text-xs mt-1">Orders</span> </Link>
+          <Link href={`/site/${restaurantData.id}/orders${tableContext ? `?tableId=${tableContext.docId}`: ''}`} className="flex flex-col items-center text-muted-foreground"> <ShoppingBag size={20} /> <span className="text-xs mt-1">Orders</span> </Link>
           <Link href={`/site/${restaurantData.id}/profile`} className="flex flex-col items-center text-muted-foreground"> <User size={20} /> <span className="text-xs mt-1">Account</span> </Link>
         </div>
 
@@ -336,4 +341,3 @@ export default function SingleRestaurantFoodAppClient({
     </div>
   );
 }
-

@@ -3,7 +3,7 @@
 'use client';
 
 import { useParams, useRouter, useSearchParams } from 'next/navigation'; 
-import { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react'; // Added React
 import Link from 'next/link';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button'; 
@@ -19,9 +19,11 @@ import type { RestaurantProfile, OrderItem, Order, OrderStatus } from '@/types';
 import { createOrder } from '@/lib/firebase/orders';
 import TopNavigationBar from '@/components/site/public-homepage/top-navigation-bar';
 import SiteFooter from '@/components/site/public-homepage/site-footer';
-import { AlertCircle, CreditCard, ShoppingBag, Truck, Trash2, User, Phone } from 'lucide-react';
+import { AlertCircle, CreditCard, ShoppingBag, Truck, Trash2, Phone, ShieldCheck, MessageCircle } from 'lucide-react'; // Added Phone, ShieldCheck, MessageCircle
 import { useToast } from '@/hooks/use-toast';
-
+import { useAuth } from '@/lib/auth/context'; // Import useAuth
+import { RecaptchaVerifier } from 'firebase/auth'; // Import RecaptchaVerifier
+import { auth } from '@/lib/firebase/config'; // Import auth for Recaptcha
 
 export default function CheckoutPage() {
   const params = useParams();
@@ -30,23 +32,61 @@ export default function CheckoutPage() {
   const restaurantId = params.restaurantId as string;
   const { cart, clearCart, removeFromCart, updateQuantity } = useCart();
   const { toast } = useToast();
+  const { user, loading: authLoading, linkAnonymousWithPhoneNumber, confirmPhoneNumberVerification } = useAuth(); // Get auth state and functions
+
   const [restaurant, setRestaurant] = useState<RestaurantProfile | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // General page loading
   const [showNavShadow, setShowNavShadow] = useState(false);
   
   // Form state
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState(''); // Kept for potential future use (e.g., email receipts)
-  const [phone, setPhone] = useState(''); // Can be general phone or specific field
-  const [whatsappNumber, setWhatsappNumber] = useState(''); // New field
-  const [address, setAddress] = useState(''); // For delivery
+  const [customerName, setCustomerName] = useState(''); // Renamed from 'name' for clarity
+  const [customerPhoneNumber, setCustomerPhoneNumber] = useState(''); // Renamed from 'phone'
+  const [otp, setOtp] = useState('');
+  const [isOtpSent, setIsOtpSent] = useState(false);
+  const [verificationId, setVerificationId] = useState<string | null>(null);
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+
+  // Kept for potential future use or non-table orders
+  const [email, setEmail] = useState(''); 
+  const [address, setAddress] = useState(''); 
   const [customerNotes, setCustomerNotes] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'cod' | 'card'>('card');
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [isProcessingOrder, setIsProcessingOrder] = useState(false); // For placing order
 
-  // Table context from query params
+  const recaptchaContainerRef = useRef<HTMLDivElement>(null); // Ref for invisible reCAPTCHA
+  const appVerifierRef = useRef<RecaptchaVerifier | null>(null); // Ref for appVerifier instance
+
   const tableId = useMemo(() => searchParams.get('tableId'), [searchParams]);
   const tableNumber = useMemo(() => searchParams.get('tableNumber'), [searchParams]);
+
+  // Initialize reCAPTCHA verifier
+  useEffect(() => {
+    if (!auth || appVerifierRef.current || !recaptchaContainerRef.current) return;
+    try {
+      appVerifierRef.current = new RecaptchaVerifier(auth, recaptchaContainerRef.current, {
+        'size': 'invisible',
+        'callback': (response: any) => {
+          // reCAPTCHA solved, allow verifyPhoneNumber.
+          console.log("reCAPTCHA solved:", response);
+        },
+        'expired-callback': () => {
+          // Response expired. Ask user to solve reCAPTCHA again.
+          console.warn("reCAPTCHA expired. Please try again.");
+          // Reset reCAPTCHA if needed
+          appVerifierRef.current?.clear();
+          if (recaptchaContainerRef.current) { // Re-initialize if it was cleared or container still exists
+            appVerifierRef.current = new RecaptchaVerifier(auth, recaptchaContainerRef.current, { size: 'invisible' });
+          }
+        }
+      });
+    } catch (error) {
+      console.error("Error initializing RecaptchaVerifier:", error);
+      toast({variant: "destructive", title: "Verification Error", description: "Could not initialize phone verification system."});
+    }
+    return () => {
+        appVerifierRef.current?.clear(); // Clean up on unmount
+    }
+  }, [auth, toast]); // auth is stable from firebase/config
 
   useEffect(() => {
     if (restaurantId) {
@@ -64,7 +104,7 @@ export default function CheckoutPage() {
             toast({variant: "destructive", title: "Error", description: "Could not load restaurant details."});
             router.push('/');
         })
-        .finally(() => setLoading(false));
+        .finally(() => setLoading(false)); // General page loading done
     }
      const handleScroll = () => setShowNavShadow(window.scrollY > 10);
     window.addEventListener('scroll', handleScroll);
@@ -74,20 +114,58 @@ export default function CheckoutPage() {
   const subtotal = useMemo(() => cart.reduce((sum, item) => sum + item.totalPrice, 0), [cart]);
   const taxRate = useMemo(() => restaurant?.taxRate || 0.08, [restaurant]); 
   const tax = useMemo(() => subtotal * taxRate, [subtotal, taxRate]);
-  const deliveryFee = tableId ? 0 : 5.00; // No delivery fee for table orders
+  const deliveryFee = tableId ? 0 : 5.00; 
   const total = useMemo(() => subtotal + tax + deliveryFee, [subtotal, tax, deliveryFee]);
 
-  const handlePlaceOrder = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSendOtp = async () => {
+    if (!customerPhoneNumber) {
+        toast({ variant: "destructive", title: "Input Error", description: "Please enter your phone number." });
+        return;
+    }
+    if (!appVerifierRef.current) {
+        toast({ variant: "destructive", title: "Verification Error", description: "Phone verification system not ready. Please refresh." });
+        return;
+    }
+    setIsVerifyingOtp(true); // Indicates OTP sending process
+    const result = await linkAnonymousWithPhoneNumber(customerPhoneNumber, appVerifierRef.current);
+    if (result.verificationId) {
+        setVerificationId(result.verificationId);
+        setIsOtpSent(true);
+        toast({ title: "OTP Sent", description: "Please check your phone for the verification code." });
+    } else {
+        toast({ variant: "destructive", title: "OTP Error", description: result.error?.message || "Could not send OTP. Please try again." });
+    }
+    setIsVerifyingOtp(false);
+  };
+
+  const handleVerifyOtpAndPlaceOrder = async () => {
+    if (!verificationId || !otp) {
+      toast({ variant: "destructive", title: "Input Error", description: "Please enter the OTP." });
+      return;
+    }
+    setIsVerifyingOtp(true);
+    const result = await confirmPhoneNumberVerification(verificationId, otp, customerPhoneNumber);
+    if (result.success) {
+        toast({ title: "Phone Verified!", description: "Your phone number has been verified." });
+        // Now user is permanent (or linked), proceed to place order with the updated user context
+        await placeOrderAfterVerification();
+    } else {
+        toast({ variant: "destructive", title: "OTP Verification Failed", description: result.error?.message || "Invalid OTP or an error occurred." });
+    }
+    setIsVerifyingOtp(false);
+  };
+
+  const placeOrderAfterVerification = async () => {
+    // This function is called after phone verification or if user is already permanent
     if (!restaurant) {
         toast({ variant: "destructive", title: "Error", description: "Restaurant data is not loaded." });
         return;
     }
     if (cart.length === 0) {
-        toast({ variant: "destructive", title: "Empty Cart", description: "Please add items to your cart before placing an order." });
+        toast({ variant: "destructive", title: "Empty Cart", description: "Please add items to your cart." });
         return;
     }
-    setIsProcessing(true);
+    setIsProcessingOrder(true);
     
     const orderItems: OrderItem[] = cart.map(ci => ({
         menuItemId: ci.menuItemId,
@@ -100,6 +178,7 @@ export default function CheckoutPage() {
 
     const orderData: Omit<Order, 'id' | 'createdAt' | 'updatedAt'> = {
         restaurantId: restaurant.id,
+        userId: user?.uid, // Attach current user ID (anonymous or permanent)
         tableId: tableId || null, 
         tableNumber: tableNumber || null, 
         items: orderItems,
@@ -107,17 +186,15 @@ export default function CheckoutPage() {
         taxAmount: tax,
         totalAmount: total,
         status: 'pending_kitchen' as OrderStatus, 
-        customerName: name || undefined, // Add name
-        customerWhatsapp: whatsappNumber || undefined, // Add WhatsApp number
+        customerName: customerName || undefined,
+        customerPhoneNumber: user?.phoneNumber || customerPhoneNumber || undefined, // Prefer user.phoneNumber if available after linking
         customerNotes: customerNotes || undefined,
         paymentMethod: paymentMethod,
-        // Example: deliveryAddress could be an object if not a table order
-        // deliveryAddress: !tableId && address ? { street: address, contactName: name, contactPhone: phone } : undefined,
     };
 
     try {
       const newOrder = await createOrder(restaurant.id, orderData);
-      toast({ title: "Order Placed Successfully!", description: "Thank you for your order. We'll process it shortly."});
+      toast({ title: "Order Placed Successfully!", description: "Thank you for your order."});
       clearCart();
       
       let confirmationUrl = `/site/${restaurantId}/order-confirmation?orderId=${newOrder.id}`;
@@ -129,13 +206,26 @@ export default function CheckoutPage() {
       
     } catch (error: any) {
       console.error("Order placement error:", error);
-      toast({ variant: "destructive", title: "Order Failed", description: error.message || "Could not place your order. Please try again."});
+      toast({ variant: "destructive", title: "Order Failed", description: error.message || "Could not place your order."});
     } finally {
-      setIsProcessing(false);
+      setIsProcessingOrder(false);
+    }
+  }
+
+  const handleSubmitOrderFlow = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (user?.isAnonymous) {
+        if (!isOtpSent) {
+            await handleSendOtp(); // This will set isOtpSent to true on success
+        } else {
+            await handleVerifyOtpAndPlaceOrder();
+        }
+    } else {
+        await placeOrderAfterVerification(); // User is already permanent
     }
   };
 
-  if (loading) {
+  if (loading || authLoading) {
     return <div className="flex h-screen items-center justify-center"><LoadingSpinner className="h-10 w-10 text-primary" /></div>;
   }
 
@@ -154,7 +244,10 @@ export default function CheckoutPage() {
             showShadow={showNavShadow}
             restaurantId={restaurant.id}
             tableContext={tableId && tableNumber ? { id: tableId, number: tableNumber, docId: tableId } : undefined}
+            isUserAnonymous={user?.isAnonymous}
+            userDisplayName={user?.displayName || user?.email || (user?.isAnonymous ? "Guest" : "")}
         />
+        <div ref={recaptchaContainerRef}></div> {/* Invisible reCAPTCHA container */}
         <main className="container mx-auto px-4 py-8 flex-grow">
             <Card className="max-w-4xl mx-auto shadow-xl border-primary/20">
             <CardHeader className="text-center">
@@ -163,7 +256,7 @@ export default function CheckoutPage() {
                 <CardDescription>Finalize your order from {restaurant.name} {tableNumber ? `for Table ${tableNumber}` : ''}.</CardDescription>
             </CardHeader>
             <CardContent>
-                {cart.length === 0 && !isProcessing ? (
+                {cart.length === 0 && !isProcessingOrder ? (
                     <div className="text-center py-10">
                         <AlertCircle className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
                         <p className="text-lg text-muted-foreground">Your cart is empty.</p>
@@ -172,18 +265,36 @@ export default function CheckoutPage() {
                         </Button>
                     </div>
                 ) : (
-                <form onSubmit={handlePlaceOrder} className="grid md:grid-cols-2 gap-8">
+                <form onSubmit={handleSubmitOrderFlow} className="grid md:grid-cols-2 gap-8">
                     <div className="space-y-6">
                         <Card className="border-border/70">
-                            <CardHeader><CardTitle className="text-lg">{tableId ? 'Order Details' : 'Your Contact & Delivery Details'}</CardTitle></CardHeader>
+                            <CardHeader><CardTitle className="text-lg">{user?.isAnonymous ? 'Verify & Place Order' : (tableId ? 'Order Details' : 'Your Contact & Delivery Details')}</CardTitle></CardHeader>
                             <CardContent className="space-y-4">
-                                <div><Label htmlFor="name">Full Name</Label><Input id="name" value={name} onChange={e => setName(e.target.value)} required={!tableId} placeholder="John Doe" /></div>
-                                <div><Label htmlFor="whatsappNumber">WhatsApp Number</Label><Input id="whatsappNumber" type="tel" value={whatsappNumber} onChange={e => setWhatsappNumber(e.target.value)} required={!tableId} placeholder="+1 123 456 7890"/></div>
+                                <div><Label htmlFor="customerName">Full Name</Label><Input id="customerName" value={customerName} onChange={e => setCustomerName(e.target.value)} required={!tableId && !user?.isAnonymous} placeholder="John Doe" /></div>
                                 
-                                {!tableId && ( // Only show email and address if not a table order
+                                {user?.isAnonymous && (
+                                    <>
+                                        <div>
+                                            <Label htmlFor="customerPhoneNumber">Phone Number for Verification</Label>
+                                            <div className="flex gap-2">
+                                                <Input id="customerPhoneNumber" type="tel" value={customerPhoneNumber} onChange={e => setCustomerPhoneNumber(e.target.value)} required placeholder="+1 123 456 7890" disabled={isOtpSent || isVerifyingOtp}/>
+                                                {!isOtpSent && (
+                                                    <Button type="button" onClick={handleSendOtp} disabled={isVerifyingOtp || !customerPhoneNumber} className="bg-accent hover:bg-accent/90 text-accent-foreground">
+                                                        {isVerifyingOtp ? <LoadingSpinner className="h-4 w-4"/> : <ShieldCheck className="mr-2 h-4 w-4"/>} Send OTP
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        </div>
+                                        {isOtpSent && (
+                                        <div><Label htmlFor="otp">Enter OTP</Label><Input id="otp" type="text" value={otp} onChange={e => setOtp(e.target.value)} required placeholder="123456" disabled={isVerifyingOtp}/></div>
+                                        )}
+                                    </>
+                                )}
+                                
+                                {!tableId && !user?.isAnonymous && ( 
                                   <>
                                     <div><Label htmlFor="email">Email (Optional)</Label><Input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com"/></div>
-                                    <div><Label htmlFor="phone">Phone Number (Optional)</Label><Input id="phone" type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="123-456-7890"/></div>
+                                    <div><Label htmlFor="customerPhoneNumberPermanent">Phone Number</Label><Input id="customerPhoneNumberPermanent" type="tel" value={customerPhoneNumber} onChange={e => setCustomerPhoneNumber(e.target.value)} placeholder="123-456-7890" required /></div>
                                     <div><Label htmlFor="address">Delivery Address</Label><Input id="address" value={address} onChange={e => setAddress(e.target.value)} required placeholder="123 Main St, Anytown"/></div>
                                   </>
                                 )}
@@ -239,9 +350,9 @@ export default function CheckoutPage() {
                                 <Separator className="my-2"/>
                                 <div className="w-full flex justify-between text-lg font-bold text-primary"><p>Total</p><p>${total.toFixed(2)}</p></div>
                                
-                               <Button type="submit" className="w-full bg-primary hover:bg-primary/80 text-primary-foreground text-lg py-3 mt-4" disabled={isProcessing || cart.length === 0}>
-                                 {isProcessing ? <LoadingSpinner className="mr-2 h-5 w-5" /> : <CreditCard className="mr-2 h-5 w-5" />}
-                                 {isProcessing ? 'Processing...' : 'Place Order'}
+                               <Button type="submit" className="w-full bg-primary hover:bg-primary/80 text-primary-foreground text-lg py-3 mt-4" disabled={isProcessingOrder || isVerifyingOtp || (user?.isAnonymous && !isOtpSent && !verificationId) || (user?.isAnonymous && isOtpSent && !otp) || cart.length === 0}>
+                                 {(isProcessingOrder || isVerifyingOtp) ? <LoadingSpinner className="mr-2 h-5 w-5" /> : (user?.isAnonymous && !isOtpSent ? <ShieldCheck className="mr-2 h-5 w-5" /> : (user?.isAnonymous && isOtpSent ? <MessageCircle className="mr-2 h-5 w-5" /> :<CreditCard className="mr-2 h-5 w-5" /> ) ) }
+                                 {isProcessingOrder ? 'Processing Order...' : (isVerifyingOtp ? 'Verifying...' : (user?.isAnonymous && !isOtpSent ? 'Verify Phone & Place Order' : (user?.isAnonymous && isOtpSent ? 'Confirm OTP & Place Order' : 'Place Order')))}
                                </Button>
                             </CardFooter>
                         </Card>
