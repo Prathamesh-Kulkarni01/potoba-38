@@ -10,25 +10,25 @@ import Link from 'next/link';
 export default function DevLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
 
-  useEffect(() => {
-    if (process.env.NODE_ENV !== 'development') {
-      router.replace('/'); // Or a 404 page
-    }
-  }, [router]);
+  // useEffect(() => {
+  //   if (process.env.NODE_ENV !== 'development') {
+  //     router.replace('/'); // Or a 404 page
+  //   }
+  // }, [router]);
 
-  if (process.env.NODE_ENV !== 'development') {
-    return (
-      <div className="flex h-screen items-center justify-center bg-background">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-destructive">Access Denied</h1>
-          <p className="text-muted-foreground">This page is only available in development mode.</p>
-          <Link href="/" className="mt-4 inline-block text-primary hover:underline">
-            Go to Homepage
-          </Link>
-        </div>
-      </div>
-    );
-  }
+  // if (process.env.NODE_ENV !== 'development') {
+  //   return (
+  //     <div className="flex h-screen items-center justify-center bg-background">
+  //       <div className="text-center">
+  //         <h1 className="text-2xl font-bold text-destructive">Access Denied</h1>
+  //         <p className="text-muted-foreground">This page is only available in development mode.</p>
+  //         <Link href="/" className="mt-4 inline-block text-primary hover:underline">
+  //           Go to Homepage
+  //         </Link>
+  //       </div>
+  //     </div>
+  //   );
+  // }
 
   return (
     <div className="min-h-screen bg-muted/20 p-4">
