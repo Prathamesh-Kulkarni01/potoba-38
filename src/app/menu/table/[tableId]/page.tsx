@@ -1,4 +1,3 @@
-
 // src/app/menu/table/[tableId]/page.tsx
 'use client';
 
@@ -6,7 +5,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { getRestaurant } from '@/lib/firebase/firestore';
-import { getTableByDocIdFromGroup } from '@/lib/firebase/tables'; // Updated import
+import { getTableByDocIdFromGroup, updateTable } from '@/lib/firebase/tables'; // Added updateTable
 import { getMenuCategories, getMenuSubcategories, getMenuItems as fetchMenuItemsFirebase } from '@/lib/firebase/menu';
 import { createOrder } from '@/lib/firebase/orders';
 import type { RestaurantProfile, Table, MenuCategory, MenuSubcategory, MenuItem as MenuItemType, OrderItem, OrderStatus } from '@/types';
@@ -145,7 +144,7 @@ export default function ScanOrderPage() {
     setOrderPlacing(true);
     const orderData = {
       restaurantId: restaurant.id,
-      tableId: tableInfo.id, // Use the actual table ID (which is tableDocId here)
+      tableId: tableInfo.id, 
       tableNumber: tableInfo.tableNumber,
       items: cart,
       subtotal: calculateCartTotal(),
@@ -157,6 +156,19 @@ export default function ScanOrderPage() {
     try {
       await createOrder(restaurant.id, orderData);
       toast({ title: 'Order Placed!', description: 'Your order has been sent to the kitchen.' });
+      
+      // If table was available, mark it as occupied
+      if (tableInfo.status === 'available') {
+        try {
+          await updateTable(restaurant.id, tableInfo.id, { status: 'occupied' });
+          console.log(`Table ${tableInfo.tableNumber} status updated to occupied after customer order.`);
+        } catch (statusError) {
+          console.error("Error updating table status after customer order:", statusError);
+          // This is a non-critical error, the order itself was placed.
+          // Potentially log this for monitoring.
+        }
+      }
+
       setCart([]);
       setCustomerNotes('');
       setIsCartModalOpen(false);
@@ -172,7 +184,7 @@ export default function ScanOrderPage() {
     return <div className="flex min-h-screen items-center justify-center bg-background"><LoadingSpinner className="h-12 w-12 text-primary" /></div>;
   }
 
-  if (!restaurant || !tableInfo) { // Check if restaurant or tableInfo is still null after loading
+  if (!restaurant || !tableInfo) { 
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4 text-center">
         <AlertTriangle className="h-16 w-16 text-destructive mb-4" />
@@ -339,3 +351,4 @@ const MenuItemCard = ({ item, onAddToCart }: MenuItemCardProps) => {
     </Card>
   );
 };
+
