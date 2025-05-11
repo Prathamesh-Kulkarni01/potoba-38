@@ -261,14 +261,14 @@ function MyOrdersContent() {
                       {order.items.map(item => (
                         <li key={item.menuItemId + (item.variantChoices ? JSON.stringify(item.variantChoices) : '')} className="flex justify-between">
                           <span>{item.menuItemName} <span className="text-muted-foreground">x{item.quantity}</span></span>
-                          <span>${item.totalPrice.toFixed(2)}</span>
+                          <span>₹{item.totalPrice.toFixed(2)}</span>
                         </li>
                       ))}
                     </ul>
                     <div className="border-t pt-2 mt-2">
                       <div className="flex justify-between font-semibold text-md">
                         <span>Total:</span>
-                        <span>${order.totalAmount.toFixed(2)}</span>
+                        <span>₹{order.totalAmount.toFixed(2)}</span>
                       </div>
                     </div>
                     {(order.status === 'preparing' || order.status === 'confirmed_by_kitchen') && (

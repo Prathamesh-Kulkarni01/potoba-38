@@ -339,12 +339,12 @@ export default function CheckoutPage() {
                                             {item.imageUrl && <Image src={item.imageUrl} alt={item.menuItemName} width={40} height={40} className="rounded mr-3 object-cover" data-ai-hint="cart item image"/>}
                                             <div className="flex-1">
                                                 <p className="font-medium">{item.menuItemName}</p>
-                                                <p className="text-xs text-muted-foreground">Qty: {item.quantity} &times; ${item.unitPrice.toFixed(2)}</p>
+                                                <p className="text-xs text-muted-foreground">Qty: {item.quantity} &times; ₹{item.unitPrice.toFixed(2)}</p>
                                                 <p className="text-xs text-blue-500">Added by: {displayName}</p>
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-2">
-                                            <span className="font-medium min-w-[50px] text-right">${item.totalPrice.toFixed(2)}</span>
+                                            <span className="font-medium min-w-[50px] text-right">₹{item.totalPrice.toFixed(2)}</span>
                                             {!groupId && <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => updateLocalQuantity(item.menuItemId, 0)}><Trash2 className="h-4 w-4"/></Button>}
                                             {/* For group orders, item removal/quantity update might be restricted or handled differently (e.g. only by person who added or host) */}
                                         </div>
@@ -353,11 +353,11 @@ export default function CheckoutPage() {
                                 })}
                             </CardContent>
                              <CardFooter className="flex-col space-y-2 border-t pt-4">
-                                <div className="w-full flex justify-between text-sm"><p>Subtotal</p><p>${subtotal.toFixed(2)}</p></div>
-                                <div className="w-full flex justify-between text-sm text-muted-foreground"><p>Tax ({(taxRate * 100).toFixed(0)}%)</p><p>${tax.toFixed(2)}</p></div>
-                                {!(tableId || groupId) && <div className="w-full flex justify-between text-sm text-muted-foreground"><p>Delivery Fee</p><p>${deliveryFee.toFixed(2)}</p></div>}
+                                <div className="w-full flex justify-between text-sm"><p>Subtotal</p><p>₹{subtotal.toFixed(2)}</p></div>
+                                <div className="w-full flex justify-between text-sm text-muted-foreground"><p>Tax ({(taxRate * 100).toFixed(0)}%)</p><p>₹{tax.toFixed(2)}</p></div>
+                                {!(tableId || groupId) && <div className="w-full flex justify-between text-sm text-muted-foreground"><p>Delivery Fee</p><p>₹{deliveryFee.toFixed(2)}</p></div>}
                                 <Separator className="my-2"/>
-                                <div className="w-full flex justify-between text-lg font-bold text-primary"><p>Total</p><p>${total.toFixed(2)}</p></div>
+                                <div className="w-full flex justify-between text-lg font-bold text-primary"><p>Total</p><p>₹{total.toFixed(2)}</p></div>
                                
                                <Button 
                                 type="submit" 

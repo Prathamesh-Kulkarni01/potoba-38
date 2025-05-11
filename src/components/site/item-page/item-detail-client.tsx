@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -165,7 +164,7 @@ export default function ItemDetailClient({
     addGlobalCartItem(cartItem);
     toast({
       title: `${menuItem.name} added to cart!`,
-      description: `Quantity: ${quantity}. Your new item total: $${(pricePerItem * quantity).toFixed(2)}`,
+      description: `Quantity: ${quantity}. Your new item total: ₹${(pricePerItem * quantity).toFixed(2)}`,
     });
     setIsAddingToCart(false);
   };

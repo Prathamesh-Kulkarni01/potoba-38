@@ -1,4 +1,3 @@
-
 'use client';
 
 import type { MenuItem } from '@/types';
@@ -90,7 +89,7 @@ export default function DishCard({
         )}
       </CardHeader>
       <CardFooter className="p-3 mt-auto flex items-center justify-between">
-        <p className={cn("font-semibold text-primary", priceSize)}>${dish.price.toFixed(2)}</p>
+        <p className={cn("font-semibold text-primary", priceSize)}>₹{dish.price.toFixed(2)}</p>
         {onAddToCart ? (
             <Button 
                 onClick={(e) => { e.stopPropagation(); onAddToCart(dish); }} 

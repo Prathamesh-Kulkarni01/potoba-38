@@ -1,4 +1,3 @@
-
 // src/app/site/[restaurantId]/page.tsx
 import { getRestaurant } from '@/lib/firebase/firestore';
 import { getMenuCategories, getMenuSubcategories, getMenuItems } from '@/lib/firebase/menu';
@@ -71,13 +70,13 @@ export default async function RestaurantPublicPage({ params }: RestaurantPublicP
     { 
       id: "1", 
       title: "50% OFF", 
-      description: "Up to $10 | Use code WELCOME50",
+      description: "Up to ₹10 | Use code WELCOME50",
       color: "bg-gradient-to-r from-purple-500 to-indigo-600" // Match provided UI
     },
     { 
       id: "2", 
       title: "FREE DELIVERY", 
-      description: "On orders above $15 | Limited time",
+      description: "On orders above ₹15 | Limited time",
       color: "bg-gradient-to-r from-orange-400 to-pink-500"
     },
     { 
@@ -96,7 +95,7 @@ export default async function RestaurantPublicPage({ params }: RestaurantPublicP
     cuisine: restaurant.type || "Delicious Food", // Use restaurant type as cuisine
     rating: 4.6, // Mocked, or fetch from reviews system
     deliveryTime: "25-30 min", // Mocked, or derive from settings
-    minOrder: "$10", // Mocked, or derive from settings
+    minOrder: "₹10", // Mocked, or derive from settings
     isOpen: true, // Mocked, or derive from operational hours settings
   };
   

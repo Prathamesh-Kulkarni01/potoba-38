@@ -74,7 +74,7 @@ export default async function ScanOrderPage({ params }: ScanOrderPageProps) {
 
   const offers = [
     { id: "1", title: "Table Order Special", description: "10% off your first table order!", color: "bg-gradient-to-r from-teal-500 to-cyan-600" },
-    { id: "2", title: "Quick Bites Combo", description: "Starter + Drink for $5", color: "bg-gradient-to-r from-amber-400 to-yellow-500"}
+    { id: "2", title: "Quick Bites Combo", description: "Starter + Drink for ₹5", color: "bg-gradient-to-r from-amber-400 to-yellow-500"}
   ];
 
   const restaurantDisplayInfo = {
@@ -84,7 +84,7 @@ export default async function ScanOrderPage({ params }: ScanOrderPageProps) {
     cuisine: restaurant.type || "Delicious Food",
     rating: 4.5, // Mock or fetch
     deliveryTime: "N/A - Table Order",
-    minOrder: "$0", // No min for table order usually
+    minOrder: "₹0", // No min for table order usually
     isOpen: true, // Mock or fetch
   };
   

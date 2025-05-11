@@ -1,4 +1,3 @@
-
 'use client';
 
 import type { MenuItemVariant } from '@/types';
@@ -41,7 +40,7 @@ export default function VariantSelector({ variants, selectedVariants, onVariantC
                     <RadioGroupItem value={option.name} id={`${variant.name}-${option.name}`} className="shrink-0"/>
                     <span className="text-sm font-medium text-foreground">{option.name}</span>
                   </div>
-                  <span className="text-sm font-semibold text-primary">${option.price.toFixed(2)}</span>
+                  <span className="text-sm font-semibold text-primary">₹{option.price.toFixed(2)}</span>
                 </Label>
               ))}
             </RadioGroup>

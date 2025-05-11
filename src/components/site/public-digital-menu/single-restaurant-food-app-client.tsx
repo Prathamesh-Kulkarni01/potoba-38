@@ -934,7 +934,7 @@ export default function SingleRestaurantFoodAppClient({
               <div>
                 <span className="font-bold">{cartTotalItems} item{cartTotalItems > 1 ? 's' : ''}</span>
                 <span className="mx-2">|</span>
-                <span>${cartTotalPrice.toFixed(2)}</span>
+                <span>₹{cartTotalPrice.toFixed(2)}</span>
               </div>
               <div className="flex items-center font-semibold">
                 <span>{canPlaceOrder ? "View Cart" : "Group Cart"}</span>

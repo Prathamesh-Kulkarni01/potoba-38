@@ -1,4 +1,3 @@
-
 'use client';
 
 import type { MenuItem } from '@/types';
@@ -23,7 +22,7 @@ export default function DishInfoPane({ menuItem }: DishInfoPaneProps) {
     <div className="space-y-3 p-4 md:p-6 bg-card rounded-lg shadow-lg border-border/50">
       <h1 className="text-3xl md:text-4xl font-bold text-primary">{menuItem.name}</h1>
       <p className="text-lg text-muted-foreground">{menuItem.description || 'No description available.'}</p>
-      <p className="text-2xl font-semibold text-accent">${menuItem.price.toFixed(2)}</p>
+      <p className="text-2xl font-semibold text-accent">₹{menuItem.price.toFixed(2)}</p>
       
       <div className="flex flex-wrap gap-2 items-center">
         {menuItem.dietaryTags?.map(tag => (

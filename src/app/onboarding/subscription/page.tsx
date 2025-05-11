@@ -12,9 +12,9 @@ import { CheckCircle, ShieldAlert, Star } from 'lucide-react'; // Icons for plan
 
 // Mock plans
 const plans = [
-  { id: 'free', name: 'Free Trial', price: '$0/mo', features: ['Basic Recipe Management', 'Limited Meal Planning', '1 Staff Account'], icon: ShieldAlert, cta: 'Start Free Trial' },
-  { id: 'basic', name: 'Basic Plan', price: '$29/mo', features: ['Full Recipe Management', 'Meal Planning Tools', 'Up to 5 Staff Accounts', 'Customer Support'], icon: CheckCircle, cta: 'Choose Basic' },
-  { id: 'premium', name: 'Premium Plan', price: '$79/mo', features: ['All Basic Features', 'Inventory Management', 'Advanced Analytics', 'Priority Support', 'Unlimited Staff'], icon: Star, cta: 'Go Premium' },
+  { id: 'free', name: 'Free Trial', price: '₹0/mo', features: ['Basic Recipe Management', 'Limited Meal Planning', '1 Staff Account'], icon: ShieldAlert, cta: 'Start Free Trial' },
+  { id: 'basic', name: 'Basic Plan', price: '₹29/mo', features: ['Full Recipe Management', 'Meal Planning Tools', 'Up to 5 Staff Accounts', 'Customer Support'], icon: CheckCircle, cta: 'Choose Basic' },
+  { id: 'premium', name: 'Premium Plan', price: '₹79/mo', features: ['All Basic Features', 'Inventory Management', 'Advanced Analytics', 'Priority Support', 'Unlimited Staff'], icon: Star, cta: 'Go Premium' },
 ];
 
 export default function SubscriptionPage() {
