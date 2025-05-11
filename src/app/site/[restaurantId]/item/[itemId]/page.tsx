@@ -29,7 +29,6 @@ const stringifyItemTimestamps = <T extends { createdAt?: any, updatedAt?: any }>
 
 export async function generateMetadata({ params }: ItemPageProps) {
   if (!params.itemId || typeof params.itemId !== 'string' || params.itemId.trim() === '') {
-    // This case should ideally be caught before, but good to handle
     return { title: 'Invalid Item Request' };
   }
   const itemResult = await getMenuItemByIdFromGroup(params.itemId);
@@ -49,20 +48,27 @@ export default async function ItemPage({ params }: ItemPageProps) {
   const { restaurantId, itemId } = params;
 
   if (!itemId || typeof itemId !== 'string' || itemId.trim() === '') {
-    console.error("ItemPage: Invalid itemId received from params:", itemId);
+    console.error(`ItemPage: Invalid itemId received from params: "${itemId}" for restaurant "${restaurantId}".`);
     notFound();
   }
 
-  const restaurantData = await getRestaurant(restaurantId);
-  if (!restaurantData) {
+  const restaurantDataResult = await getRestaurant(restaurantId);
+  if (!restaurantDataResult) {
+    console.error(`ItemPage: Restaurant not found for restaurantId "${restaurantId}".`);
     notFound();
   }
-  const restaurant = stringifyItemTimestamps(restaurantData) as RestaurantProfile & { createdAt: string; updatedAt: string };
+  const restaurant = stringifyItemTimestamps(restaurantDataResult) as RestaurantProfile & { createdAt: string; updatedAt: string };
 
   const itemResult = await getMenuItemByIdFromGroup(itemId);
 
-  if (!itemResult || itemResult.restaurantId !== restaurantId) {
-    console.warn(`Item with ID ${itemId} found, but its restaurantId ${itemResult?.restaurantId} does not match expected ${restaurantId}. Or item was not found via itemIdString query.`);
+  if (!itemResult) {
+    console.error(`ItemPage: No item found for itemId "${itemId}" in restaurant "${restaurantId}" using getMenuItemByIdFromGroup. This often indicates a missing Firestore index on the 'menuItems' collection group for the 'itemIdString' field, or the item genuinely does not exist with this ID.`);
+    notFound();
+  }
+
+  // This check is crucial: an item might be found by its ID (itemIdString), but we must ensure it belongs to the *current* restaurant context.
+  if (itemResult.restaurantId !== restaurantId) {
+    console.error(`ItemPage: Item found for itemId "${itemId}", but its restaurantId "${itemResult.restaurantId}" does not match the current restaurantId "${restaurantId}". Access denied or item belongs to a different restaurant.`);
     notFound();
   }
   const menuItem = stringifyItemTimestamps(itemResult.menuItem) as MenuItem & { createdAt: string; updatedAt: string };
@@ -94,3 +100,8 @@ export default async function ItemPage({ params }: ItemPageProps) {
   );
 }
 
+// Developer Note: If you are consistently getting 404 errors for item pages,
+// please ensure you have a Firestore index for the 'menuItems' collection group:
+// Collection ID: menuItems (Collection group)
+// Fields to index: itemIdString (Ascending)
+// This index is necessary for the getMenuItemByIdFromGroup function to efficiently query items across all restaurants.
