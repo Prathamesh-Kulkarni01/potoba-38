@@ -368,7 +368,15 @@ export default function OrderManagementPage() {
               </div>
               {(pageLoading && displayedOrders.length === 0) ? ( <div className="text-center py-10"><LoadingSpinner className="h-8 w-8 text-primary" /></div> ) : displayedOrders.length > 0 ? (
                 <Table>
-                  <TableHeader> <TableRow> <SortableTableHead columnKey="id">Order ID</SortableTableHead> <SortableTableHead columnKey="tableNumber">Table</SortableTableHead> <SortableTableHead columnKey="createdAt">Created</SortableTableHead> <TableHead>Items</TableHead> <SortableTableHead columnKey="totalAmount">Total</SortableTableHead> <SortableTableHead columnKey="status">Status</SortableTableHead> <TableHead className="text-right w-[200px]">Actions</TableHead> </TableRow> </TableHeader>
+                  <TableHeader><TableRow>
+                    <SortableTableHead columnKey="id">Order ID</SortableTableHead>
+                    <SortableTableHead columnKey="tableNumber">Table</SortableTableHead>
+                    <SortableTableHead columnKey="createdAt">Created</SortableTableHead>
+                    <TableHead>Items</TableHead>
+                    <SortableTableHead columnKey="totalAmount">Total</SortableTableHead>
+                    <SortableTableHead columnKey="status">Status</SortableTableHead>
+                    <TableHead className="text-right w-[200px]">Actions</TableHead>
+                  </TableRow></TableHeader>
                   <TableBody>
                     {displayedOrders.map(order => {
                       const StatusIcon = orderStatusConfig[order.status]?.icon;
