@@ -24,7 +24,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button';
 import BottomNavigationBar, { type BottomNavItem } from '@/components/dashboard/bottom-navigation-bar';
 import { useIsMobile as useIsMobileDirect } from '@/hooks/use-mobile';
-import { LayoutDashboard, Users, Utensils, ChefHat, SquareMenu, Settings, ShieldCheck, Store, PlusCircle, BookCopy, ListOrdered, Briefcase, ExternalLink, Table, List, Settings2 } from 'lucide-react'; // Added ExternalLink, ListOrdered for Orders, Briefcase for Table Management
+import { LayoutDashboard, Users, Utensils, ChefHat, SquareMenu, Settings, ShieldCheck, Store, PlusCircle, BookCopy, ListOrdered, Briefcase, ExternalLink, Table, List, Settings2, CookingPot } from 'lucide-react'; // Added ExternalLink, ListOrdered for Orders, Briefcase for Table Management, CookingPot for KOT
 import type { RestaurantProfile } from '@/types';
 import { getRestaurantsByOwner } from '@/lib/firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
@@ -132,6 +132,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       { href: `/dashboard/menu-management/${currentRestaurantId}`, label: 'Menu Management', icon: BookCopy, roles: ['owner'], hint: "manage menu" },
       { href: `/dashboard/table-management/${currentRestaurantId}`, label: 'Table Management', icon: Briefcase, roles: ['owner'], hint: "manage tables" },
       { href: `/dashboard/orders/${currentRestaurantId}`, label: 'Orders', icon: ListOrdered, roles: ['owner', 'staff'], hint: "view orders" },
+      { href: `/dashboard/restaurant/${currentRestaurantId}/kitchen`, label: 'Kitchen (KOT)', icon: CookingPot, roles: ['owner', 'kitchen'], hint: "kitchen order tickets" },
       { href: `/dashboard/recipes/${currentRestaurantId}`, label: 'Recipes (Old)', icon: Utensils, roles: ['owner', 'staff'], hint: "food recipes" },
       { href: `/dashboard/meal-planner/${currentRestaurantId}`, label: 'Meal Planner', icon: SquareMenu, roles: ['owner', 'staff'], hint: "meal plan" },
       { href: `/dashboard/staff/${currentRestaurantId}`, label: 'Staff Management', icon: Users, roles: ['owner'], hint: "manage staff" },
@@ -169,35 +170,48 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   let dynamicBottomNavItem: BottomNavItem;
   let dynamicBottomNavItem2: BottomNavItem | null = null;
 
+  // Construct bottomNavLinks first, then mutate as needed
+  const bottomNavLinks: BottomNavItem[] = [
+    { href: '/dashboard', label: 'Home', icon: LayoutDashboard, hint: "dashboard home" },
+  ];
+
   if (authContextRole === 'owner' && selectedRestaurantId) {
     dynamicBottomNavItem = { href: `/dashboard/menu-management/${selectedRestaurantId}`, label: 'Menu', icon: BookCopy, hint: "manage menu" };
     dynamicBottomNavItem2 = { href: `/dashboard/orders/${selectedRestaurantId}`, label: 'Orders', icon: ListOrdered, hint: "view orders" };
+    bottomNavLinks.push(dynamicBottomNavItem);
+    if (dynamicBottomNavItem2) bottomNavLinks.push(dynamicBottomNavItem2);
+    // Insert KOT after Orders
+    bottomNavLinks.push({ href: `/dashboard/restaurant/${selectedRestaurantId}/kitchen`, label: 'Kitchen', icon: CookingPot, hint: "kitchen order tickets" });
+    bottomNavLinks.push({ href: `/dashboard/table-management/${selectedRestaurantId}`, label: 'Table', icon: Table, hint: "manage tables" });
+    bottomNavLinks.push({ href: '/dashboard/menu-management', label: 'Menus', icon: List, hint: "view menus" });
+    bottomNavLinks.push({ href: '/dashboard/settings', label: 'Settings', icon: Settings2, hint: "Settings" });
   } else if (authContextRole === 'admin') {
     dynamicBottomNavItem = { href: '/dashboard/admin/users', label: 'Users', icon: Users, hint: "all users" };
+    bottomNavLinks.push(dynamicBottomNavItem);
+    bottomNavLinks.push({ href: '/dashboard/settings', label: 'Settings', icon: Settings2, hint: "Settings" });
   } else if (authContextRole === 'staff' && user?.restaurantId) {
     dynamicBottomNavItem = { href: `/dashboard/orders/${user.restaurantId}`, label: 'Orders', icon: ListOrdered, hint: "view orders" };
     dynamicBottomNavItem2 = { href: `/dashboard/menu-management/${user.restaurantId}`, label: 'Menu', icon: BookCopy, hint: "view menu" };
-  } else { 
-     const relevantRestaurantId = user?.restaurantId || selectedRestaurantId;
-     if (relevantRestaurantId) {
-        dynamicBottomNavItem = { href: `/dashboard/menu-management/${relevantRestaurantId}`, label: 'Menu', icon: BookCopy, hint: "view menu" };
-     } else {
-        dynamicBottomNavItem = { href: `/dashboard/recipes`, label: 'Recipes', icon: Utensils, hint: "food recipes" }; // Fallback or generic recipes
-     }
+    bottomNavLinks.push(dynamicBottomNavItem);
+    if (dynamicBottomNavItem2) bottomNavLinks.push(dynamicBottomNavItem2);
+    bottomNavLinks.push({ href: `/dashboard/table-management/${user.restaurantId}`, label: 'Table', icon: Table, hint: "manage tables" });
+    bottomNavLinks.push({ href: '/dashboard/menu-management', label: 'Menus', icon: List, hint: "view menus" });
+    bottomNavLinks.push({ href: '/dashboard/settings', label: 'Settings', icon: Settings2, hint: "Settings" });
+  } else {
+    const relevantRestaurantId = user?.restaurantId || selectedRestaurantId;
+    if (relevantRestaurantId) {
+      dynamicBottomNavItem = { href: `/dashboard/menu-management/${relevantRestaurantId}`, label: 'Menu', icon: BookCopy, hint: "view menu" };
+      bottomNavLinks.push(dynamicBottomNavItem);
+      bottomNavLinks.push({ href: `/dashboard/table-management/${relevantRestaurantId}`, label: 'Table', icon: Table, hint: "manage tables" });
+      bottomNavLinks.push({ href: '/dashboard/menu-management', label: 'Menus', icon: List, hint: "view menus" });
+      bottomNavLinks.push({ href: '/dashboard/settings', label: 'Settings', icon: Settings2, hint: "Settings" });
+    } else {
+      dynamicBottomNavItem = { href: `/dashboard/recipes`, label: 'Recipes', icon: Utensils, hint: "food recipes" };
+      bottomNavLinks.push(dynamicBottomNavItem);
+      bottomNavLinks.push({ href: '/dashboard/settings', label: 'Settings', icon: Settings2, hint: "Settings" });
+    }
   }
 
-
-  const bottomNavLinks: BottomNavItem[] = [
-    { href: '/dashboard', label: 'Home', icon: LayoutDashboard, hint: "dashboard home" },
-    dynamicBottomNavItem,
-  ];
-  if (dynamicBottomNavItem2) {
-    bottomNavLinks.push(dynamicBottomNavItem2);
-  }
-  bottomNavLinks.push({ href: `/dashboard/table-management/${selectedRestaurantId}`, label: 'Table', icon: Table, hint: "manage tables" });
-  bottomNavLinks.push({ href: '/dashboard/menu-management', label: 'Menus', icon: List, hint: "view menus" });
-  bottomNavLinks.push({ href: '/dashboard/settings', label: 'Settings', icon: Settings2, hint: "Settings" });
-  
   const selectedRestaurantName = ownedRestaurants.find(r => r.id === selectedRestaurantId)?.name || "Select Restaurant";
 
   return (
