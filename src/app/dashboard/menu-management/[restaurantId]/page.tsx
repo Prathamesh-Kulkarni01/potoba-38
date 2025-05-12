@@ -299,9 +299,8 @@ export default function MenuManagementPage() {
     return <Card><CardHeader><CardTitle>Error</CardTitle></CardHeader><CardContent><p>Restaurant not found or no permission.</p></CardContent></Card>;
   }
   const isOwner = role === 'owner';
-
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-full">
       <Card className="shadow-xl">
         {/* <CardHeader>
           <CardTitle className="text-2xl md:text-3xl">Menu Management for {restaurant.name}</CardTitle>
@@ -336,7 +335,7 @@ export default function MenuManagementPage() {
           {categories.length > 0 ? (
             <Tabs defaultValue={categories[0]?.id || ""} className="w-full">
               <div className="w-full overflow-x-auto">
-                <TabsList className="flex w-full whitespace-nowrap gap-2 px-4 scrollbar-thin scrollbar-thumb-muted-foreground scrollbar-track-transparent">
+                <TabsList className="flex w-full h-full flex-wrap  gap-2 px-4 scrollbar-thin scrollbar-thumb-muted-foreground scrollbar-track-transparent">
                   {categories.map(category => (
                     <TabsTrigger
                       key={category.id}
@@ -352,19 +351,23 @@ export default function MenuManagementPage() {
               {categories.map(category => (
                 <TabsContent key={category.id} value={category.id}>
                   <Card className="mb-6 border-primary/50 shadow-md">
-                    <CardHeader className="flex flex-col md:flex-row justify-between items-start md:items-center bg-muted/30 p-4 rounded-t-lg">
-                      <div className="mb-2 md:mb-0">
-                        <CardTitle className="text-xl">{category.name}</CardTitle>
-                        <CardDescription>Manage items and subcategories within {category.name}.</CardDescription>
+                    <CardHeader className="flex w-full flex-col md:flex-1 md:flex-row justify-between items-start md:items-center bg-muted/30 p-4 rounded-t-lg">
+                      <div className="flex  min-w-[calc(100%-300px)] flex-row gap-2 justify-between md:mt-4 ">
+                        <div className="mb-2 md:mb-0 flex-1">
+                          <CardTitle className="text-xl">{category.name}</CardTitle>
+                          <CardDescription>Manage items and subcategories within {category.name}.</CardDescription>
+                        </div>
+                        <div className="flex flex-row ">
+                          <Button variant="outline"  size="sm" onClick={() => { setEditingCategory(category); setIsCategoryModalOpen(true); }}><Edit3 className="mr-2 h-3 w-3" /> </Button>
+                          <Button variant="outline" size="sm" onClick={() => openDeleteConfirmation('category', category)} className="  text-destructive  hover:bg-destructive/10"><Trash2 className="mr-2 h-3 w-3" /></Button>
+                        </div>
                       </div>
                       {isOwner && (
-                        <div className="flex space-x-2 flex-wrap gap-2">
-                          <Button variant="outline" size="sm" onClick={() => { setEditingCategory(category); setIsCategoryModalOpen(true); }}><Edit3 className="mr-2 h-3 w-3" /> Edit Category</Button>
-                          <Button variant="outline" size="sm" onClick={() => openDeleteConfirmation('category', category)} className="text-destructive border-destructive hover:bg-destructive/10"><Trash2 className="mr-2 h-3 w-3" />Delete Category</Button>
+                        <div className="flex flex-nowrap gap-2 flex-1  w-full">
                           <Dialog open={isSubcategoryModalOpen && parentCategoryIdForNewSub === category.id && !editingSubcategory} onOpenChange={(isOpen) => { if (!isOpen) { setIsSubcategoryModalOpen(false); setParentCategoryIdForNewSub(null); setEditingSubcategory(null); } }}>
                             <DialogTrigger asChild>
-                              <Button variant="outline" size="sm" className="bg-accent hover:bg-accent/80 text-accent-foreground" onClick={() => { setEditingSubcategory(null); setParentCategoryIdForNewSub(category.id); setIsSubcategoryModalOpen(true); }}>
-                                <PlusCircle className="mr-2 h-3 w-3" /> Add Subcategory
+                              <Button variant="outline" size="sm" className=" ml-2 bg-accent flex-1 md:flex-none  md:w-36 hover:bg-accent/80 text-accent-foreground" onClick={() => { setEditingSubcategory(null); setParentCategoryIdForNewSub(category.id); setIsSubcategoryModalOpen(true); }}>
+                                <PlusCircle className="mr-2 h-3 w-3" /> Subcategory
                               </Button>
                             </DialogTrigger>
                             {isSubcategoryModalOpen && parentCategoryIdForNewSub === category.id && !editingSubcategory && (
@@ -379,8 +382,8 @@ export default function MenuManagementPage() {
                           </Dialog>
                           <Dialog open={isMenuItemModalOpen && parentCategoryForItem === category.id && parentSubcategoryForItem === null && !editingMenuItem} onOpenChange={(isOpen) => { if (!isOpen) { setIsMenuItemModalOpen(false); setParentCategoryForItem(null); setParentSubcategoryForItem(null); setEditingMenuItem(null); } }}>
                             <DialogTrigger asChild>
-                              <Button variant="outline" size="sm" className="bg-primary hover:bg-primary/80 text-primary-foreground" onClick={() => { setEditingMenuItem(null); setParentCategoryForItem(category.id); setParentSubcategoryForItem(null); setIsMenuItemModalOpen(true); }}>
-                                <PlusCircle className="mr-2 h-3 w-3" /> Add Item to {category.name}
+                              <Button variant="outline" size="sm" className="bg-primary flex-1 md:flex-none md:w-36 hover:bg-primary/80 text-primary-foreground" onClick={() => { setEditingMenuItem(null); setParentCategoryForItem(category.id); setParentSubcategoryForItem(null); setIsMenuItemModalOpen(true); }}>
+                                <PlusCircle className="mr-2 h-3 w-3" />  Item
                               </Button>
                             </DialogTrigger>
                             {isMenuItemModalOpen && parentCategoryForItem === category.id && parentSubcategoryForItem === null && !editingMenuItem && (
@@ -416,16 +419,20 @@ export default function MenuManagementPage() {
 
                       {subcategories.filter(sub => sub.categoryId === category.id).sort((a, b) => a.order - b.order).map(subcategory => (
                         <div key={subcategory.id} className="mt-4">
-                          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-3 p-3 bg-muted/50 rounded-md border">
-                            <h4 className="text-lg font-semibold mb-2 md:mb-0">{subcategory.name}</h4>
+                          <div className="flex md:flex-row justify-between items-start md:items-center mb-3 p-3 bg-muted/50 rounded-md border">
+                            <div className="flex w-full flex-row gap-2 justify-between items-center ">
+                              <h4 className="text-lg font-semibold mb-2 md:mb-0">{subcategory.name}</h4>
+                              <div className="flex flex-row ">
+                                <Button variant="outline" className='w-22' size="xs" onClick={() => { setEditingSubcategory(subcategory); setParentCategoryIdForNewSub(category.id); setIsSubcategoryModalOpen(true); }}><Edit3 className="mr-1 h-3 w-3" /> </Button>
+                                <Button variant="outline" size="xs" className="w-22 text-destructive  hover:bg-destructive/10" onClick={() => openDeleteConfirmation('subcategory', subcategory)}><Trash2 className="mr-1 h-3 w-3" /></Button>
+                              </div>
+                            </div>
                             {isOwner && (
-                              <div className="flex space-x-2">
-                                <Button variant="outline" size="xs" onClick={() => { setEditingSubcategory(subcategory); setParentCategoryIdForNewSub(category.id); setIsSubcategoryModalOpen(true); }}><Edit3 className="mr-1 h-3 w-3" /> Edit Sub</Button>
-                                <Button variant="outline" size="xs" className="text-destructive border-destructive hover:bg-destructive/10" onClick={() => openDeleteConfirmation('subcategory', subcategory)}><Trash2 className="mr-1 h-3 w-3" /> Del Sub</Button>
+                              <div className="flex  m-1">
                                 <Dialog open={isMenuItemModalOpen && parentSubcategoryForItem === subcategory.id && !editingMenuItem} onOpenChange={(isOpen) => { if (!isOpen) { setIsMenuItemModalOpen(false); setParentCategoryForItem(null); setParentSubcategoryForItem(null); setEditingMenuItem(null); } }}>
-                                  <DialogTrigger asChild>
-                                    <Button variant="default" size="xs" className="bg-primary hover:bg-primary/80 text-primary-foreground" onClick={() => { setEditingMenuItem(null); setParentCategoryForItem(category.id); setParentSubcategoryForItem(subcategory.id); setIsMenuItemModalOpen(true); }}>
-                                      <PlusCircle className="mr-1 h-3 w-3" /> Add Item
+                                  <DialogTrigger asChild >
+                                    <Button variant="default" size="xs" className="max-w-20  bg-primary hover:bg-primary/80 text-primary-foreground" onClick={() => { setEditingMenuItem(null); setParentCategoryForItem(category.id); setParentSubcategoryForItem(subcategory.id); setIsMenuItemModalOpen(true); }}>
+                                      <PlusCircle className="mr-1 h-2 w-2" /> 
                                     </Button>
                                   </DialogTrigger>
                                   {isMenuItemModalOpen && parentSubcategoryForItem === subcategory.id && !editingMenuItem && (
