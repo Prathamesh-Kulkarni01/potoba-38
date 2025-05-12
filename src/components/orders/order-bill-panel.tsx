@@ -9,10 +9,14 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Utensils, PlusCircle, MinusCircle, Trash2, X, Save, PackageOpen } from 'lucide-react';
+import { Utensils, PlusCircle, MinusCircle, Trash2, X, Save, PackageOpen, Clock, CheckCircle, ShoppingCart, Hourglass } from 'lucide-react';
 import LoadingSpinner from '@/components/shared/loading-spinner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+
+// Define a type for the orderStatusConfig prop
+type OrderStatusConfigType = Record<OrderStatus, { label: string; icon?: React.ElementType; color: string; shortLabel?: string }>;
+
 
 interface OrderBillPanelProps {
   restaurantId: string;
@@ -27,6 +31,7 @@ interface OrderBillPanelProps {
   onToggleMenuSelection: () => void;
   isMenuSelectionOpen: boolean;
   taxRate: number;
+  orderStatusConfig: OrderStatusConfigType; // Added prop
 }
 
 const OrderBillPanel = ({
@@ -42,6 +47,7 @@ const OrderBillPanel = ({
   onToggleMenuSelection,
   isMenuSelectionOpen,
   taxRate,
+  orderStatusConfig, // Destructure the prop
 }: OrderBillPanelProps) => {
   
   const [customerName, setCustomerName] = useState(orderToEdit?.customerName || '');
@@ -113,7 +119,7 @@ const OrderBillPanel = ({
                      <SelectTrigger id="ordStatus"><SelectValue /></SelectTrigger>
                      <SelectContent>
                          {(Object.keys(orderStatusConfig) as OrderStatus[]).map(s => (
-                            <SelectItem key={s} value={s} className="capitalize text-xs">{s.replace(/_/g, ' ')}</SelectItem>
+                            <SelectItem key={s} value={s} className="capitalize text-xs">{orderStatusConfig[s].label}</SelectItem>
                          ))}
                      </SelectContent>
                  </Select>
@@ -124,9 +130,15 @@ const OrderBillPanel = ({
         <h3 className="text-md font-medium mb-1 mt-4 text-muted-foreground">Order Items</h3>
         <div className="border rounded-md p-1 bg-muted/20">
             {currentBillItems.length > 0 ? currentBillItems.map(item => (
-            <Card key={item.menuItemId} className="mb-1 p-2 shadow-none border-b last:border-b-0 rounded-none bg-background">
+            <Card key={item.menuItemId + JSON.stringify(item.variantChoices)} className="mb-1 p-2 shadow-none border-b last:border-b-0 rounded-none bg-background">
                 <div className="flex justify-between items-center">
-                <div> <p className="font-medium text-sm">{item.menuItemName}</p> <p className="text-xs text-muted-foreground">${item.unitPrice.toFixed(2)} each</p> </div>
+                <div> <p className="font-medium text-sm">{item.menuItemName}</p> <p className="text-xs text-muted-foreground">${item.unitPrice.toFixed(2)} each</p> 
+                  {item.variantChoices && item.variantChoices.length > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      {item.variantChoices.map(vc => `${vc.variantName}: ${vc.optionName}`).join(', ')}
+                    </p>
+                  )}
+                </div>
                 <div className="flex items-center gap-1">
                     <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onUpdateItemQuantity(item.menuItemId, item.quantity - 1)} disabled={item.quantity <= 1 || isLoading}><MinusCircle className="h-4 w-4"/></Button>
                     <span className="w-5 text-center text-sm">{item.quantity}</span>
@@ -153,3 +165,4 @@ const OrderBillPanel = ({
 };
 
 export default OrderBillPanel;
+
