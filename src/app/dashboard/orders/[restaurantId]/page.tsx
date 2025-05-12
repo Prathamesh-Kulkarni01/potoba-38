@@ -338,7 +338,30 @@ export default function OrderManagementPage() {
                 </Tabs>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
                   <div className="space-y-1"> <label htmlFor="detailed-status-filter" className="text-sm font-medium text-muted-foreground">Specific Status</label> <Select value={detailedStatusFilter || ALL_STATUSES_VALUE} onValueChange={(value) => setDetailedStatusFilter(value === ALL_STATUSES_VALUE ? null : value as OrderStatusType)}> <SelectTrigger id="detailed-status-filter" className="h-10"><SelectValue placeholder="Select status..." /></SelectTrigger> <SelectContent> <SelectItem value={ALL_STATUSES_VALUE}>All Specific Statuses</SelectItem> {DETAILED_STATUS_OPTIONS.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)} </SelectContent> </Select> </div>
-                  <div className="space-y-1"> <label className="text-sm font-medium text-muted-foreground">Date Range</label> <Popover> <PopoverTrigger asChild> <Button id="date" variant={"outline"} className={cn("w-full justify-start text-left font-normal h-10", !dateRange && "text-muted-foreground")} > <CalendarIcon className="mr-2 h-4 w-4" /> {dateRange?.from ? (dateRange.to ? (<>{format(dateRange.from, "LLL dd, y")} - {format(dateRange.to, "LLL dd, y")}</>) : (format(dateRange.from, "LLL dd, y"))) : (<span>Pick a date range</span>)} </Button> </PopoverTrigger> <PopoverContent className="w-auto p-0" align="start"><Calendar initialFocus mode="range" defaultMonth={dateRange?.from} selected={dateRange} onSelect={setDateRange} numberOfMonths={2}/></PopoverContent> </Popover> </div>
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium text-muted-foreground">Date Range</label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button id="date" variant={"outline"} className={cn("w-full justify-start text-left font-normal h-10", !dateRange && "text-muted-foreground")} >
+                          <span className="flex items-center w-full">
+                            <CalendarIcon className="mr-2 h-4 w-4 flex-shrink-0" />
+                            <span className="truncate">
+                              {dateRange?.from ? 
+                                (dateRange.to ? 
+                                  `${format(dateRange.from, "LLL dd, y")} - ${format(dateRange.to, "LLL dd, y")}` : 
+                                  format(dateRange.from, "LLL dd, y")
+                                ) : 
+                                "Pick a date range"
+                              }
+                            </span>
+                          </span>
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar initialFocus mode="range" defaultMonth={dateRange?.from} selected={dateRange} onSelect={setDateRange} numberOfMonths={2}/>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
                   <div className="space-y-1"> <label className="text-sm font-medium text-muted-foreground">Price Range</label> <div className="flex gap-2"> <Input type="number" placeholder="Min $" value={priceRange.min} onChange={e => setPriceRange(p => ({...p, min: e.target.value}))} className="h-10" /> <Input type="number" placeholder="Max $" value={priceRange.max} onChange={e => setPriceRange(p => ({...p, max: e.target.value}))} className="h-10" /> </div> </div>
                   <Button onClick={handleClearFilters} variant="outline" className="h-10 self-end"> <Filter className="mr-2 h-4 w-4"/> Clear Filters </Button>
                 </div>
