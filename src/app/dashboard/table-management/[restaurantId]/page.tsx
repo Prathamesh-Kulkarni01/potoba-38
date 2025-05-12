@@ -411,8 +411,8 @@ export default function TableManagementPage() {
   );
 
   const billPanelClasses = cn(
-    "p-4 border-l bg-card text-card-foreground overflow-y-auto flex flex-col transition-all duration-300 ease-in-out",
-    "w-full md:w-2/5" 
+    "absolute top-0 right-0 h-[calc(100vh-theme(spacing.16)-80px)] md:relative md:top-0 md:right-0 md:h-full p-4 border-l bg-card text-card-foreground overflow-y-auto flex flex-col transition-all duration-300 ease-in-out",
+    "w-full md:w-4/5" 
   );
   
   const menuSelectionPanelClasses = cn(
@@ -423,7 +423,7 @@ export default function TableManagementPage() {
 
 
   return (
-    <div className="flex h-[calc(100vh-theme(spacing.16)-1px)] overflow-hidden relative">
+    <div className="flex h-[calc(100vh-theme(spacing.16)-80px)] overflow-hidden relative">
        {selectedTable && isBillPanelVisible && (
         <div className={menuSelectionPanelClasses}>
           {isMenuSelectionPanelOpen && ( 
@@ -438,17 +438,17 @@ export default function TableManagementPage() {
         </div>
       )}
       
-      <div className="flex flex-1 overflow-hidden">
-        <div className={tableGridPanelClasses}>
-          <Card className="shadow-xl h-full flex flex-col">
+      <div className="flex flex-1 ">
+      <ScrollArea className={tableGridPanelClasses}> 
+          <Card className="shadow-xl  overflow-auto h-full flex flex-col">
             <CardHeader>
-              <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
-                <div className="mb-4 md:mb-0">
+              <div className="flex flex-col md:flex-row justify-end items-end md:items-center">
+                {/* <div className="mb-4 md:mb-0">
                     <CardTitle className="text-2xl md:text-3xl flex items-center">
                         <Users className="mr-3 h-7 w-7 text-primary" /> Table Management
                     </CardTitle>
                     <CardDescription>Oversee tables for {restaurant?.name || 'your restaurant'}.</CardDescription>
-                </div>
+                </div> */}
                 <Button onClick={openAddModal} className="bg-accent hover:bg-accent/90 text-accent-foreground">
                   <PlusCircle className="mr-2 h-4 w-4" /> Add New Table
                 </Button>
@@ -504,7 +504,7 @@ export default function TableManagementPage() {
               )}
             </CardContent>
           </Card>
-        </div>
+       </ScrollArea>
 
         {selectedTable && isBillPanelVisible && (
           <div className={billPanelClasses}>
@@ -627,13 +627,13 @@ const BillPanel = ({ selectedTable, billItems, isLoading, onUpdateItemQuantity, 
             <div className="flex justify-between items-center">
               <div>
                 <p className="font-medium text-sm">{item.menuItemName}</p>
-                <p className="text-xs text-muted-foreground">${item.unitPrice.toFixed(2)} each</p>
+                <p className="text-xs text-muted-foreground">₹{item.unitPrice.toFixed(2)} each</p>
               </div>
               <div className="flex items-center gap-1">
                 <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onUpdateItemQuantity(item.menuItemId, item.quantity - 1)} disabled={item.quantity <= 1 || isLoading}><MinusCircle className="h-4 w-4"/></Button>
                 <span className="w-5 text-center text-sm">{item.quantity}</span>
                 <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onUpdateItemQuantity(item.menuItemId, item.quantity + 1)} disabled={isLoading}><PlusCircle className="h-4 w-4"/></Button>
-                <p className="w-16 text-right font-medium text-sm">${item.totalPrice.toFixed(2)}</p>
+                <p className="w-16 text-right font-medium text-sm">₹{item.totalPrice.toFixed(2)}</p>
                 <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => onRemoveItem(item.menuItemId)} disabled={isLoading}><Trash2 className="h-4 w-4"/></Button>
               </div>
             </div>
@@ -642,9 +642,9 @@ const BillPanel = ({ selectedTable, billItems, isLoading, onUpdateItemQuantity, 
       </ScrollArea>
 
       <div className="mt-auto border-t pt-4 space-y-2">
-        <div className="flex justify-between text-sm font-medium"><span>Subtotal:</span><span>${subtotal.toFixed(2)}</span></div>
-        <div className="flex justify-between text-sm text-muted-foreground"><span>Tax ({ (taxRate * 100).toFixed(0) }%):</span><span>${taxAmount.toFixed(2)}</span></div>
-        <div className="flex justify-between text-xl font-bold text-primary"><span>Total:</span><span>${totalAmount.toFixed(2)}</span></div>
+        <div className="flex justify-between text-sm font-medium"><span>Subtotal:</span><span>₹{subtotal.toFixed(2)}</span></div>
+        <div className="flex justify-between text-sm text-muted-foreground"><span>Tax ({ (taxRate * 100).toFixed(0) }%):</span><span>₹{taxAmount.toFixed(2)}</span></div>
+        <div className="flex justify-between text-xl font-bold text-primary"><span>Total:</span><span>₹{totalAmount.toFixed(2)}</span></div>
         <Button className="w-full mt-3 bg-primary hover:bg-primary/90 text-primary-foreground" onClick={onFinalizeBill} disabled={isLoading || billItems.length === 0}>
           {isLoading ? <LoadingSpinner className="mr-2 h-4 w-4"/> : 'Finalize Bill & Pay'}
         </Button>

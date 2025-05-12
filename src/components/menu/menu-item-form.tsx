@@ -19,6 +19,7 @@ import { Sparkles, PlusCircle, Trash2 } from 'lucide-react';
 import { generateMenuItemDescription } from '@/ai/flows/generate-menu-item-description-flow';
 import { useToast } from '@/hooks/use-toast';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Card } from '../ui/card';
 
 const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/; // HH:mm format
 
@@ -243,7 +244,7 @@ export default function MenuItemForm({
               </TabsContent>
             </ScrollArea>
           </Tabs>
-          <DialogFooter className="sticky bottom-0 bg-background py-4 border-t mt-0">
+          <DialogFooter className="fixed w-[95%] bottom-0 bg-background py-4 border-t mt-0">
             <DialogClose asChild><Button type="button" variant="outline" onClick={onClose} disabled={isLoading || isGeneratingDescription}>Cancel</Button></DialogClose>
             <Button type="submit" disabled={isLoading || isGeneratingDescription} className="bg-primary hover:bg-primary/90 text-primary-foreground">{(isLoading || isGeneratingDescription) ? <LoadingSpinner className="mr-2 h-4 w-4" /> : (menuItem ? 'Save Changes' : 'Add Item')}</Button>
           </DialogFooter>

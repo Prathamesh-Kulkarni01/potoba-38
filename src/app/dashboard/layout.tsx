@@ -317,7 +317,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         </SidebarProvider>
       ) : (
         <div className="flex min-h-screen flex-col">
-          <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b bg-background/80 px-4 backdrop-blur-md sm:px-6">
+          <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b bg-background/80 px-4 backdrop-blur-md sm:px-6">
             <Link href="/dashboard" className="flex items-center gap-2">
               <Image src="/public/images/logo.png" alt="App Logo" width={32} height={32} className="rounded-md" data-ai-hint="modern logo" />
               <h1 className="text-xl font-bold text-primary">Potoba</h1>
@@ -352,7 +352,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                 <UserNav />
             </div>
           </header>
-          <main className="flex-1 bg-background p-4 pt-6 pb-20">
+          <main className="flex-1 bg-background max-h-dvh overflow-y-auto p-4 pt-6 ">
             {children}
           </main>
           <BottomNavigationBar navItems={bottomNavLinks} />
