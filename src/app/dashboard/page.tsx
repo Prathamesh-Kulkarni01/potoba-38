@@ -148,7 +148,7 @@ interface SalesTrendDataPoint {
   orders: number;
 }
 
-const orderStatusConfig: Record<OrderStatusType, { label: string; icon?: React.ElementType, shortLabel?: string }> = {
+const orderStatusConfig: Record<OrderStatusType, { label: string; icon?: React.ElementType; shortLabel?: string }> = {
   pending_customer_confirmation: { label: 'Pending Customer Confirmation', shortLabel: 'Pending Cust.', icon: Hourglass },
   pending_kitchen: { label: 'Pending Kitchen Acceptance', shortLabel: 'Pending Kitchen', icon: Hourglass },
   confirmed_by_kitchen: { label: 'Kitchen Confirmed', shortLabel: 'Kitchen Confirmed', icon: Utensils },
@@ -273,30 +273,37 @@ function OwnerDashboard() {
   }, [toast]);
 
   useEffect(() => {
-    if (selectedRestaurantId) {
-      fetchDataForDashboard(selectedRestaurantId, salesDataPeriod === '7d' ? 7 : 30);
+    if (!selectedRestaurantId) {
+      return;
     }
-  }, [selectedRestaurantId, salesDataPeriod, fetchDataForDashboard]);
-
-  useEffect(() => {
-    if (!selectedRestaurantId) return;
   
-    let unsubOrders: (() => void) | null = null;
-    let unsubTables: (() => void) | null = null;
+    // Fetch initial data when restaurantId or period changes
+    fetchDataForDashboard(selectedRestaurantId, salesDataPeriod === '7d' ? 7 : 30);
   
-    const setupListeners = async () => {
+    // Setup listeners
+    let currentUnsubOrders: (() => void) | null = null;
+    let currentUnsubTables: (() => void) | null = null;
+  
+    const setupAsyncListeners = async () => {
       try {
-        unsubOrders = listenToRestaurantOrders(selectedRestaurantId, (updatedOrders) => {
-          setLiveOrders(updatedOrders);
-        }, salesDataPeriod === '7d' ? 7 : 30);
+        currentUnsubOrders = listenToRestaurantOrders(
+          selectedRestaurantId,
+          (updatedOrders) => {
+            setLiveOrders(updatedOrders);
+          },
+          salesDataPeriod === '7d' ? 7 : 30
+        );
   
-        unsubTables = listenToRestaurantTables(selectedRestaurantId, (updatedTables) => {
+        // Assuming listenToRestaurantTables is now synchronous as per previous fixes
+        // If it were still async returning a Promise for the unsub function:
+        // currentUnsubTables = await listenToRestaurantTables(selectedRestaurantId, (updatedTables) => { ... });
+        // But since it should be sync:
+        currentUnsubTables = listenToRestaurantTables(selectedRestaurantId, (updatedTables) => {
           setLiveTables(updatedTables);
           const occupiedCount = updatedTables.filter(t => t.status === 'occupied').length;
           const totalTables = updatedTables.length;
           const occupancyRate = totalTables > 0 ? (occupiedCount / totalTables) * 100 : 0;
           setDashboardMetrics(prev => {
-            // Ensure prev is not null before spreading
             const currentPrev = prev || { totalRevenue: 0, totalOrders: 0, averageOrderValue: 0 };
             return {
               ...currentPrev, 
@@ -309,14 +316,19 @@ function OwnerDashboard() {
         toast({ variant: "destructive", title: "Listener Error", description: "Could not set up live data updates." });
       }
     };
+
+    setupAsyncListeners();
   
-    setupListeners();
-  
+    // Cleanup function for listeners
     return () => {
-      if (unsubOrders) unsubOrders();
-      if (unsubTables) unsubTables();
+      if (currentUnsubOrders) {
+        currentUnsubOrders();
+      }
+      if (currentUnsubTables) {
+        currentUnsubTables();
+      }
     };
-  }, [selectedRestaurantId, salesDataPeriod, toast]);
+  }, [selectedRestaurantId, salesDataPeriod, toast, fetchDataForDashboard]);
 
 
   if (!user || user.role !== 'owner') {
@@ -646,3 +658,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+

@@ -1,5 +1,4 @@
 // src/lib/firebase/tables.ts
-// 'use server'; // This directive should NOT be here if onSnapshot is used for client-side listeners
 import {
   collection,
   addDoc,
@@ -168,27 +167,26 @@ export async function getRestaurantTableOccupancy(restaurantId: string): Promise
 }
 
 // Real-time listener setup for a restaurant's tables
-export async function listenToRestaurantTables(
+export function listenToRestaurantTables( // Removed async
   restaurantId: string,
   callback: (tables: Table[]) => void
-): Promise<() => void> { 
+): () => void { // Returns the unsubscribe function directly
   if (!db) throw new Error("Firestore is not initialized for real-time listener.");
   
   const tablesCol = collection(db, getTablesCollectionPath(restaurantId));
   const q = query(tablesCol, orderBy('tableNumber', 'asc'));
 
-  return new Promise((resolve) => {
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const tables = snapshot.docs.map(docSnap => ({
-          id: docSnap.id,
-          ...docSnap.data(),
-          createdAt: convertFirebaseTimestampToString(docSnap.data().createdAt as Timestamp),
-          updatedAt: convertFirebaseTimestampToString(docSnap.data().updatedAt as Timestamp),
-        } as Table));
-      callback(tables);
-    }, (error) => {
-      console.error(`Error listening to tables for restaurant ${restaurantId}:`, error);
-    });
-    resolve(unsubscribe); 
+  const unsubscribe = onSnapshot(q, (snapshot) => {
+    const tables = snapshot.docs.map(docSnap => ({
+        id: docSnap.id,
+        ...docSnap.data(),
+        createdAt: convertFirebaseTimestampToString(docSnap.data().createdAt as Timestamp),
+        updatedAt: convertFirebaseTimestampToString(docSnap.data().updatedAt as Timestamp),
+      } as Table));
+    callback(tables);
+  }, (error) => {
+    console.error(`Error listening to tables for restaurant ${restaurantId}:`, error);
   });
+
+  return unsubscribe; // Return the unsubscribe function directly
 }
