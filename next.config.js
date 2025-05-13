@@ -1,11 +1,13 @@
-import type {NextConfig} from 'next';
-import withPWAInit from 'next-pwa';
+/** @type {import('next').NextConfig} */
 
-const withPWA = withPWAInit({
+const withPWA = require('next-pwa')({
   dest: 'public',
   register: true,
   skipWaiting: true,
   disable: process.env.NODE_ENV === 'development',
+  // swSrc: 'service-worker.js', // if you have a custom service worker
+  // For more advanced caching strategies, you can add them here or let next-pwa handle common ones.
+  // Example of a runtime caching strategy (next-pwa uses Workbox by default)
   runtimeCaching: [
     {
       urlPattern: /^https:\/\/fonts\.(?:googleapis|gstatic)\.com\/.*/i,
@@ -31,12 +33,12 @@ const withPWA = withPWAInit({
     },
     {
       urlPattern: /\.(?:jpg|jpeg|gif|png|svg|ico|webp)$/i,
-      handler: 'StaleWhileRevalidate',
+      handler: 'StaleWhileRevalidate', // Or CacheFirst if images don't change often
       options: {
         cacheName: 'static-image-assets',
         expiration: {
           maxEntries: 64,
-          maxAgeSeconds: 24 * 60 * 60, // 24 hours
+          maxAgeSeconds: 30 * 24 * 60 * 60, // 30 days
         },
       },
     },
@@ -63,32 +65,20 @@ const withPWA = withPWAInit({
       },
     },
     {
-      urlPattern: /\.(?:json|xml|csv)$/i,
+      urlPattern: /\/api\/.*$/i, // For API routes
       handler: 'NetworkFirst',
-      options: {
-        cacheName: 'static-data-assets',
-        expiration: {
-          maxEntries: 32,
-          maxAgeSeconds: 24 * 60 * 60, // 24 hours
-        },
-      },
-    },
-    {
-      urlPattern: /\/api\/.*$/i,
-      handler: 'NetworkFirst',
-      method: 'GET',
       options: {
         cacheName: 'apis',
         expiration: {
           maxEntries: 16,
           maxAgeSeconds: 24 * 60 * 60, // 24 hours
         },
-        networkTimeoutSeconds: 10, // fall back to cache if api does not response within 10 seconds
+        networkTimeoutSeconds: 10, // Fall back to cache if network fails or is slow
       },
     },
     {
-      urlPattern: /.*/i,
-      handler: 'NetworkFirst',
+      urlPattern: /.*/i, // Default for everything else
+      handler: 'NetworkFirst', // Or StaleWhileRevalidate depending on needs
       options: {
         cacheName: 'others',
         expiration: {
@@ -101,14 +91,13 @@ const withPWA = withPWAInit({
   ],
 });
 
-
-const nextConfig: NextConfig = {
-  /* config options here */
+const nextConfig = {
+  reactStrictMode: true, // Recommended for development
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: true, // Consider addressing these errors instead of ignoring
   },
   eslint: {
-    ignoreDuringBuilds: true,
+    ignoreDuringBuilds: true, // Consider addressing lint issues
   },
   images: {
     remotePatterns: [
@@ -124,7 +113,7 @@ const nextConfig: NextConfig = {
         port: '',
         pathname: '/v1/create-qr-code/**',
       },
-       {
+      {
         protocol: 'https',
         hostname: 'logo.clearbit.com',
         port: '',
@@ -132,6 +121,9 @@ const nextConfig: NextConfig = {
       }
     ],
   },
+  // If you need to serve files from the public directory (like firebase-messaging-sw.js)
+  // and want to ensure they are handled correctly, next-pwa usually handles this.
+  // For specific headers or redirects, you might use the `headers` or `redirects` functions.
 };
 
-export default withPWA(nextConfig);
+module.exports = withPWA(nextConfig);

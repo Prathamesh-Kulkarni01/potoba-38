@@ -154,10 +154,32 @@
 }
 
 .wavy-bg {
-  background-image: url("data:image/svg+xml,%3Csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3E%3Cdefs%3E%3Cpattern id='pattern' width='100' height='30' patternUnits='userSpaceOnUse' patternTransform='scale(0.5) rotate(0)'%3E%3Cpath d='M0 5C20 5 20 25 40 25C60 25 60 5 80 5C100 5 100 25 120 25C140 25 140 5 160 5C180 5 180 25 200 25C220 25 220 5 240 5C260 5 260 25 280 25C300 25 300 5 320 5C340 5 340 25 360 25C380 25 380 5 400 5C420 5 420 25 440 25C460 25 460 5 480 5C500 5 500 25 520 25C540 25 540 5 560 5' stroke-width='1' stroke='hsl(var(--primary) / 0.1)' fill='none'/%3E%3C/pattern%3E%3C/defs%3E%3Crect width='100%25' height='100%25' fill='url(%23pattern)'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3E%3Cdefs%3E%3Cpattern id='pattern' width='100' height='30' patternUnits='userSpaceOnUse' patternTransform='scale(0.5) rotate(0)'%3E%3Cpath d='M0 5C20 5 20 25 40 25C60 25 60 5 80 5C100 5 100 25 120 25C140 25 140 5 160 5C180 5 180 25 200 25C220 25 220 5 240 5C260 5 260 25 280 25C300 25 300 5 320 5C340 5 340 25 360 25C380 25 380 5 400 5C420 5 420 25 440 25C460 25 460 5 480 5C500 5 500 25 520 25C540 25 540 5 560 5' stroke-width='1' stroke='hsl(var(--primary) / 0.08)' fill='none'/%3E%3C/pattern%3E%3C/defs%3E%3Crect width='100%25' height='100%25' fill='url(%23pattern)'/%3E%3C/svg%3E");
+}
+.dark .wavy-bg {
+    background-image: url("data:image/svg+xml,%3Csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3E%3Cdefs%3E%3Cpattern id='pattern' width='100' height='30' patternUnits='userSpaceOnUse' patternTransform='scale(0.5) rotate(0)'%3E%3Cpath d='M0 5C20 5 20 25 40 25C60 25 60 5 80 5C100 5 100 25 120 25C140 25 140 5 160 5C180 5 180 25 200 25C220 25 220 5 240 5C260 5 260 25 280 25C300 25 300 5 320 5C340 5 340 25 360 25C380 25 380 5 400 5C420 5 420 25 440 25C460 25 460 5 480 5C500 5 500 25 520 25C540 25 540 5 560 5' stroke-width='1' stroke='hsl(var(--primary) / 0.15)' fill='none'/%3E%3C/pattern%3E%3C/defs%3E%3Crect width='100%25' height='100%25' fill='url(%23pattern)'/%3E%3C/svg%3E");
 }
 
-/* New animations for the improved header */
+
+/* Animations for AppLoadingScreen */
+@keyframes potoba-bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-15px);
+  }
+}
+@keyframes potoba-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* New animations for the improved header - kept from previous user request */
 .animate-float-slow {
   animation: float 5s ease-in-out infinite;
 }
@@ -210,17 +232,13 @@
   box-shadow: 0 0 0 2px hsl(var(--primary) / 0.2);
 }
 
-.dark .wavy-bg {
-  background-image: url("data:image/svg+xml,%3Csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3E%3Cdefs%3E%3Cpattern id='pattern' width='100' height='30' patternUnits='userSpaceOnUse' patternTransform='scale(0.5) rotate(0)'%3E%3Cpath d='M0 5C20 5 20 25 40 25C60 25 60 5 80 5C100 5 100 25 120 25C140 25 140 5 160 5C180 5 180 25 200 25C220 25 220 5 240 5C260 5 260 25 280 25C300 25 300 5 320 5C340 5 340 25 360 25C380 25 380 5 400 5C420 5 420 25 440 25C460 25 460 5 480 5C500 5 500 25 520 25C540 25 540 5 560 5' stroke-width='1' stroke='hsl(var(--primary) / 0.2)' fill='none'/%3E%3C/pattern%3E%3C/defs%3E%3Crect width='100%25' height='100%25' fill='url(%23pattern)'/%3E%3C/svg%3E");
-}
-
 .dark .bg-food-neutral {
-  background-color: hsl(var(--muted) / 0.8); /* Example, adjust as needed */
+  background-color: hsl(var(--muted) / 0.8); 
 }
 
 
 .dark .bg-gradient-to-br.from-food-neutral.to-food-neutral\/80 {
-  background: linear-gradient(to bottom right, hsl(var(--muted)) , hsl(var(--muted) / 0.7)); /* Example */
+  background: linear-gradient(to bottom right, hsl(var(--muted)) , hsl(var(--muted) / 0.7)); 
 }
 
 /* Improved theme transitions */
@@ -228,47 +246,6 @@
   transition: background-color 0.5s ease, color 0.5s ease, border-color 0.3s ease, opacity 0.3s ease;
 }
 
-/* Ensure text classes use HSL variables for consistency if needed for overrides, though Tailwind generally handles this */
-.dark .text-food-dark\/70 {
-  color: hsl(var(--foreground) / 0.7);
-}
-
-.dark .text-food-dark\/80 {
-   color: hsl(var(--foreground) / 0.8);
-}
-
-.dark .text-food-dark {
-  color: hsl(var(--foreground));
-}
-
-.dark .bg-food-primary\/10 {
-  background-color: hsl(var(--primary) / 0.2);
-}
-
-.dark .bg-food-primary\/20 {
-  background-color: hsl(var(--primary) / 0.3);
-}
-
-.dark .bg-food-secondary\/20 {
-  background-color: hsl(var(--secondary) / 0.3);
-}
-
-.dark .bg-food-accent\/20 {
-  background-color: hsl(var(--accent) / 0.3);
-}
-
-/* New animations for theme transitions */
-/* .theme-transition class is already defined above, ensuring smooth transitions. */
-
-/* Add any additional specific styles for .dark mode if Tailwind's default variables aren't sufficient */
-/* For example, .dark .bg-white would use --background from .dark scope */
-/* If you need a "pure white" in dark mode, you'd use a specific class or inline style */
-
-/* General application of theme transition to common elements for smoother feel */
 body, header, main, footer, nav, aside, section, article, div, button, input, select, textarea, a, p, h1, h2, h3, h4, h5, h6, span, li, ul, ol, table, th, td {
   @apply theme-transition;
 }
-
-/* Removing redundant .dark .bg-white as Tailwind will handle it via --background variable */
-/* Removing redundant .dark .text-food-dark, .dark .text-food-dark/70, .dark .text-food-dark/80 as these should ideally use --foreground and its opacities */
-/* The .theme-transition on body and other elements should cover general transitions well. */
