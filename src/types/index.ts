@@ -1,4 +1,3 @@
-
 import type { User as FirebaseUser } from 'firebase/auth';
 import type { Timestamp } from 'firebase/firestore';
 
@@ -78,7 +77,7 @@ export interface AvailabilityRule {
 
 export interface MenuItem {
   id: string; 
-  itemIdString: string; // New field: Stores the document ID for easier collection group queries
+  itemIdString: string; 
   restaurantId: string;
   categoryId: string;
   subcategoryId?: string | null; 
@@ -96,6 +95,9 @@ export interface MenuItem {
   upsellItems?: string[]; 
   variants?: MenuItemVariant[]; 
   availabilitySchedule?: AvailabilityRule[]; 
+  isVegetarian?: boolean | null;
+  currency?: string | null;
+  portionSize?: string | null;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
@@ -157,7 +159,7 @@ export interface Order {
   kitchenNotes?: string; 
   paymentMethod?: string;
   transactionId?: string;
-  groupId?: string; // Added for group orders
+  groupId?: string; 
   createdAt: Timestamp; 
   updatedAt: Timestamp; 
 }
@@ -167,21 +169,19 @@ export interface ClientOrder extends Omit<Order, 'createdAt' | 'updatedAt'> {
   updatedAt: string; 
 }
 
-// For Group Orders
 export interface GroupCartItem extends OrderItem {
   addedByUid: string;
-  addedByName?: string; // Optional: display name of user who added
+  addedByName?: string; 
 }
 
 export interface TableGroupMember {
-  uid: string | null; // Can be null if user is not fully authenticated yet (e.g. just name/phone)
+  uid: string | null; 
   name: string;
-  phone?: string | null; // Optional for anonymous, might be required later
-  // Add any other relevant member details
+  phone?: string | null; 
 }
 
 export interface TableGroup {
-  id: string; // This will be the 4-digit code
+  id: string; 
   restaurantId: string;
   tableId: string;
   tableNumber: string; 

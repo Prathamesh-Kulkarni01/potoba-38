@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
@@ -14,19 +13,20 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Camera, UploadCloud, FileImage, Wand2, CheckCircle, XCircle, RefreshCw, AlertCircle } from 'lucide-react'; // Added AlertCircle
+import { Camera, UploadCloud, FileImage, Wand2, CheckCircle, XCircle, RefreshCw, AlertCircle, ListChecks } from 'lucide-react'; // Added ListChecks
 import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
 import LoadingSpinner from '@/components/shared/loading-spinner';
 import { recognizeMenuFromImage, type RecognizeMenuOutput } from '@/ai/flows/recognize-menu-from-image-flow';
-import { addMenuCategory, addMenuItem } from '@/lib/firebase/menu'; // Assuming these exist
+import { addMenuCategory, addMenuItem, addMenuSubcategory } from '@/lib/firebase/menu'; 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import type { MenuItem } from '@/types'; // Import MenuItem type
 
 interface ImportMenuImageDialogProps {
   isOpen: boolean;
   onClose: () => void;
   restaurantId: string;
-  onImportSuccess: () => void; // Callback to refresh menu data on parent
+  onImportSuccess: () => void; 
 }
 
 export default function ImportMenuImageDialog({
@@ -37,7 +37,7 @@ export default function ImportMenuImageDialog({
 }: ImportMenuImageDialogProps) {
   const { toast } = useToast();
   const [step, setStep] = useState<'select' | 'preview' | 'recognize' | 'confirm'>('select');
-  const [imageSrc, setImageSrc] = useState<string | null>(null); // Data URI
+  const [imageSrc, setImageSrc] = useState<string | null>(null); 
   const [recognitionResult, setRecognitionResult] = useState<RecognizeMenuOutput | null>(null);
   const [isRecognizing, setIsRecognizing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
@@ -66,7 +66,6 @@ export default function ImportMenuImageDialog({
   }, [stream]);
 
   useEffect(() => {
-    // Clean up stream when dialog is closed or component unmounts
     return () => {
       if (stream) {
         stream.getTracks().forEach(track => track.stop());
@@ -102,12 +101,12 @@ export default function ImportMenuImageDialog({
         title: 'Camera Access Denied',
         description: 'Please enable camera permissions in your browser settings.',
       });
-      setIsCameraMode(false); // Revert to upload mode
+      setIsCameraMode(false); 
     }
   };
 
   useEffect(() => {
-    if (isCameraMode && hasCameraPermission === null) { // Only request if not already determined
+    if (isCameraMode && hasCameraPermission === null) { 
         getCameraPermission();
     }
   }, [isCameraMode, hasCameraPermission]);
@@ -128,7 +127,7 @@ export default function ImportMenuImageDialog({
           stream.getTracks().forEach(track => track.stop());
           setStream(null);
         }
-        setIsCameraMode(false); // Exit camera mode after capture
+        setIsCameraMode(false); 
       }
     }
   };
@@ -147,7 +146,7 @@ export default function ImportMenuImageDialog({
     } catch (error: any) {
       console.error('Error recognizing menu:', error);
       toast({ variant: 'destructive', title: 'Recognition Failed', description: error.message || 'Could not process the menu image.' });
-      setStep('preview'); // Go back to preview if recognition fails
+      setStep('preview'); 
     } finally {
       setIsRecognizing(false);
     }
@@ -161,18 +160,22 @@ export default function ImportMenuImageDialog({
     setIsImporting(true);
     try {
       let itemsImportedCount = 0;
+      const globalCurrency = recognitionResult.detectedCurrency || '₹'; // Default currency
+
       for (const categoryData of recognitionResult.structuredItems) {
-        let categoryId = '';
-        // Check if category exists or create it (simplified: assuming names are unique for now)
-        // In a real app, you might want to match existing categories or allow user to map
-        const newCategory = await addMenuCategory(restaurantId, { 
-            name: categoryData.categoryName || 'Uncategorized', 
-            order: 0 // Default order, can be improved
-        });
-        categoryId = newCategory.id;
+        const categoryName = categoryData.categoryName || 'Uncategorized';
+        // For simplicity, we create categories if they don't exist by name.
+        // In a real app, allow mapping to existing or provide better duplicate handling.
+        const newCategory = await addMenuCategory(restaurantId, { name: categoryName, order: 0 });
+        let categoryId = newCategory.id;
+        let subcategoryId: string | null = null;
+
+        if(categoryData.subcategoryName) {
+            const newSubCategory = await addMenuSubcategory(restaurantId, categoryId, {name: categoryData.subcategoryName, order: 0});
+            subcategoryId = newSubCategory.id;
+        }
 
         for (const itemData of categoryData.items) {
-          // Basic price parsing attempt
           let price = 0;
           if (itemData.itemPrice) {
             const parsedPrice = parseFloat(itemData.itemPrice.replace(/[^0-9.-]+/g,""));
@@ -181,20 +184,26 @@ export default function ImportMenuImageDialog({
             }
           }
           
-          await addMenuItem(restaurantId, categoryId, null, {
+          const menuItemPayload: Omit<MenuItem, 'id' | 'restaurantId' | 'categoryId' | 'subcategoryId' | 'createdAt' | 'updatedAt' | 'itemIdString'> = {
             name: itemData.itemName,
-            description: itemData.itemDescription || '',
+            description: itemData.itemDescription || `Delicious ${itemData.itemName}.`, // Use AI desc or fallback
             price: price,
-            availability: true, // Default
-            order: 0, // Default
-            // other fields can be defaulted or left empty
-          });
+            availability: true, 
+            order: 0, 
+            isVegetarian: itemData.isVegetarian,
+            currency: itemData.currency || globalCurrency,
+            portionSize: itemData.portionSize || null,
+            // dietaryTags can be populated if AI provides them, or based on isVegetarian
+            dietaryTags: itemData.isVegetarian ? ['vegetarian'] : (itemData.isVegetarian === false ? ['non-vegetarian'] : []),
+          };
+          
+          await addMenuItem(restaurantId, categoryId, subcategoryId, menuItemPayload);
           itemsImportedCount++;
         }
       }
       toast({ title: 'Import Successful', description: `${itemsImportedCount} items imported into your menu.` });
-      onImportSuccess(); // Call parent callback
-      onClose(); // Close the dialog
+      onImportSuccess(); 
+      onClose(); 
     } catch (error: any) {
       console.error('Error importing menu items:', error);
       toast({ variant: 'destructive', title: 'Import Failed', description: error.message || 'Could not add items to the menu.' });
@@ -283,30 +292,39 @@ export default function ImportMenuImageDialog({
             <div className="flex flex-col items-center justify-center space-y-3 p-8">
               <LoadingSpinner className="h-10 w-10 text-primary" />
               <p className="text-lg text-muted-foreground">AI is analyzing your menu... This may take a moment.</p>
-              <p className="text-xs text-muted-foreground">(Please ensure the image is clear and well-lit for best results)</p>
+              <p className="text-xs text-muted-foreground">(Ensure image is clear and well-lit for best results)</p>
             </div>
           )}
 
           {step === 'confirm' && recognitionResult && (
             <div className="space-y-3">
-              <h3 className="text-lg font-semibold">Review Recognized Items</h3>
+              <h3 className="text-lg font-semibold flex items-center"><ListChecks className="mr-2 h-5 w-5 text-primary"/>Review Recognized Items</h3>
               <Alert>
                 <AlertCircle className="h-4 w-4" />
                 <AlertTitle>Beta Feature</AlertTitle>
                 <AlertDescription>
-                  Menu recognition is experimental. Please review items carefully before importing. Editing capabilities will be added soon.
+                  Menu recognition is experimental. Please review items carefully before importing. Detected Currency: <strong>{recognitionResult.detectedCurrency || 'N/A'}</strong> (will default to ₹ if not specified per item).
                 </AlertDescription>
               </Alert>
               <div className="max-h-80 overflow-y-auto space-y-2 border rounded-md p-3 bg-muted/30">
                 {recognitionResult.structuredItems && recognitionResult.structuredItems.length > 0 ? (
                   recognitionResult.structuredItems.map((cat, catIndex) => (
                     <div key={catIndex} className="mb-2 p-2 border-b last:border-b-0">
-                      <h4 className="font-medium text-primary">{cat.categoryName || 'Uncategorized Items'}</h4>
+                      <h4 className="font-medium text-primary">{cat.categoryName || 'Uncategorized Items'}
+                        {cat.subcategoryName && <span className="text-sm text-muted-foreground"> &gt; {cat.subcategoryName}</span>}
+                      </h4>
                       <ul className="list-disc list-inside pl-4 text-sm">
                         {cat.items.map((item, itemIndex) => (
-                          <li key={itemIndex} className="text-muted-foreground">
-                            {item.itemName} 
+                          <li key={itemIndex} className="text-muted-foreground mt-1">
+                            <strong>{item.itemName}</strong>
                             {item.itemPrice && ` - ${item.itemPrice}`}
+                            {item.currency && ` (${item.currency})`}
+                            {item.portionSize && ` (${item.portionSize})`}
+                            {item.isVegetarian !== undefined && (
+                              <span className={`ml-2 text-xs font-semibold p-0.5 rounded ${item.isVegetarian ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                {item.isVegetarian ? 'VEG' : 'NON-VEG'}
+                              </span>
+                            )}
                             {item.itemDescription && <span className="block text-xs italic pl-2">- {item.itemDescription}</span>}
                           </li>
                         ))}

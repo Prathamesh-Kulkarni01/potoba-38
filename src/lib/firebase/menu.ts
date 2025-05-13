@@ -1,4 +1,3 @@
-
 import {
   collection,
   addDoc,
@@ -17,7 +16,7 @@ import {
   collectionGroup,
   limit,
   setDoc, 
-  documentId, // Keep for potential direct doc ID queries if needed elsewhere
+  documentId, 
 } from 'firebase/firestore';
 import { db } from './config';
 import type { MenuCategory, MenuSubcategory, MenuItem, MenuItemVariant, AvailabilityRule } from '@/types';
@@ -47,8 +46,8 @@ export async function addMenuCategory(restaurantId: string, categoryData: Omit<M
     id: docRef.id, 
     restaurantId, 
     ...categoryData, 
-    createdAt: Timestamp.now(), // Optimistic return
-    updatedAt: Timestamp.now()  // Optimistic return
+    createdAt: Timestamp.now(), 
+    updatedAt: Timestamp.now()  
   } as MenuCategory;
 }
 
@@ -167,9 +166,7 @@ export async function getMenuItemByIdFromGroup(itemIdValue: string): Promise<{ m
     console.error("[getMenuItemByIdFromGroup] Invalid itemIdValue received:", itemIdValue);
     return null;
   }
-  console.log(`[getMenuItemByIdFromGroup] Querying 'menuItems' collection group for itemIdString: "${itemIdValue}"`);
   const itemsGroupRef = collectionGroup(db, 'menuItems');
-  // Query for a document where the 'itemIdString' field matches the provided itemIdValue
   const q = query(itemsGroupRef, where("itemIdString", "==", itemIdValue), limit(1));
   
   const snapshot = await getDocs(q);
@@ -223,6 +220,9 @@ export async function addMenuItem(
     restaurantId,
     categoryId,
     subcategoryId: subcategoryId || null,
+    isVegetarian: typeof itemData.isVegetarian === 'boolean' ? itemData.isVegetarian : null,
+    currency: itemData.currency || null,
+    portionSize: itemData.portionSize || null,
     createdAt,
     updatedAt,
   };
@@ -248,6 +248,9 @@ export async function addMenuItem(
     categoryId, 
     subcategoryId: subcategoryId || null, 
     ...itemData, 
+    isVegetarian: typeof itemData.isVegetarian === 'boolean' ? itemData.isVegetarian : null,
+    currency: itemData.currency || null,
+    portionSize: itemData.portionSize || null,
     createdAt: Timestamp.now(), 
     updatedAt: Timestamp.now()
   } as MenuItem;
@@ -286,9 +289,18 @@ export async function updateMenuItem(
     } else if (key === 'calories') {
        cleanedData[key] = Number(cleanedData[key]); 
     }
+    if (key === 'isVegetarian' && typeof cleanedData[key] !== 'boolean') {
+        cleanedData[key] = null; // Ensure boolean or null
+    }
+    if (key === 'currency' && (cleanedData[key] === '' || cleanedData[key] === undefined)) {
+        cleanedData[key] = null;
+    }
+    if (key === 'portionSize' && (cleanedData[key] === '' || cleanedData[key] === undefined)) {
+        cleanedData[key] = null;
+    }
     
     if ((key === 'variants' || key === 'availabilitySchedule' || key === 'dietaryTags' || key === 'allergenInfo' || key === 'crossSellItems' || key === 'upsellItems') && (!cleanedData[key] || (Array.isArray(cleanedData[key]) && cleanedData[key].length === 0))) {
-       cleanedData[key] = null; // Store null for empty arrays to remove them if desired
+       cleanedData[key] = null; 
     }
   });
   
@@ -311,23 +323,27 @@ export async function deleteMenuItem(restaurantId: string, categoryId: string, s
   await deleteDoc(itemRefPath);
 }
 
-// Batch add menu items (e.g., for import)
 export async function batchAddMenuItems(restaurantId: string, itemsToImport: Array<{
   categoryName: string;
+  subcategoryName?: string; // Added for subcategory support
   itemName: string;
   itemPrice?: string;
   itemDescription?: string;
+  isVegetarian?: boolean;
+  currency?: string;
+  portionSize?: string;
 }>): Promise<number> {
   if (!db) throw new Error("Firestore is not initialized.");
   const batch = writeBatch(db);
   let importedCount = 0;
+  const globalDefaultCurrency = '₹'; // Default currency if not specified
 
-  const categoriesCache: Record<string, string> = {}; // Cache categoryName to categoryId
+  const categoriesCache: Record<string, string> = {}; 
+  const subcategoriesCache: Record<string, string> = {}; // Cache for subcategoryId: `categoryId_subcategoryName`
 
   for (const importItem of itemsToImport) {
     let categoryId = categoriesCache[importItem.categoryName];
     if (!categoryId) {
-      // Simple check for existing category by name, or create new
       const categoriesCol = collection(db, `restaurants/${restaurantId}/menuCategories`);
       const q = query(categoriesCol, where("name", "==", importItem.categoryName), limit(1));
       const catSnapshot = await getDocs(q);
@@ -342,29 +358,74 @@ export async function batchAddMenuItems(restaurantId: string, itemsToImport: Arr
       categoriesCache[importItem.categoryName] = categoryId;
     }
 
+    let subcategoryId: string | null = null;
+    if (importItem.subcategoryName) {
+      const subcategoryCacheKey = `${categoryId}_${importItem.subcategoryName}`;
+      subcategoryId = subcategoriesCache[subcategoryCacheKey];
+      if (!subcategoryId) {
+        const subcategoriesCol = collection(db, `restaurants/${restaurantId}/menuCategories/${categoryId}/menuSubcategories`);
+        const qSub = query(subcategoriesCol, where("name", "==", importItem.subcategoryName), limit(1));
+        const subCatSnapshot = await getDocs(qSub);
+        if (!subCatSnapshot.empty) {
+          subcategoryId = subCatSnapshot.docs[0].id;
+        } else {
+          const newSubCategoryData = { name: importItem.subcategoryName, order: 0, restaurantId, categoryId, createdAt: serverTimestamp(), updatedAt: serverTimestamp() };
+          const newSubCategoryRef = doc(collection(db, `restaurants/${restaurantId}/menuCategories/${categoryId}/menuSubcategories`));
+          batch.set(newSubCategoryRef, newSubCategoryData);
+          subcategoryId = newSubCategoryRef.id;
+        }
+        subcategoriesCache[subcategoryCacheKey] = subcategoryId;
+      }
+    }
+
+
     let price = 0;
     if (importItem.itemPrice) {
       const parsedPrice = parseFloat(importItem.itemPrice.replace(/[^0-9.-]+/g, ""));
       if (!isNaN(parsedPrice)) price = parsedPrice;
     }
 
-    const itemsColRef = collection(db, `restaurants/${restaurantId}/menuCategories/${categoryId}/menuItems`);
+    let itemsColPath = `restaurants/${restaurantId}/menuCategories/${categoryId}`;
+    if (subcategoryId) {
+      itemsColPath += `/menuSubcategories/${subcategoryId}/menuItems`;
+    } else {
+      itemsColPath += `/menuItems`;
+    }
+    const itemsColRef = collection(db, itemsColPath);
     const newItemDocRef = doc(itemsColRef);
     const itemIdString = newItemDocRef.id;
 
-    const menuItemData = {
+    const menuItemData: Omit<MenuItem, 'id' | 'createdAt' | 'updatedAt'> = { // Ensure this matches MenuItem structure
       itemIdString,
       restaurantId,
       categoryId,
+      subcategoryId: subcategoryId || null,
       name: importItem.itemName,
-      description: importItem.itemDescription || '',
+      description: importItem.itemDescription || `A delicious ${importItem.itemName}.`,
       price,
       availability: true,
       order: 0,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
+      isVegetarian: typeof importItem.isVegetarian === 'boolean' ? importItem.isVegetarian : null,
+      currency: importItem.currency || globalDefaultCurrency,
+      portionSize: importItem.portionSize || null,
+      dietaryTags: importItem.isVegetarian ? ['vegetarian'] : (importItem.isVegetarian === false ? ['non-vegetarian'] : []),
+      // Add other optional fields as null or default if not provided
+      imageUrl: null,
+      videoUrl: null,
+      allergenInfo: [],
+      calories: null,
+      crossSellItems: [],
+      upsellItems: [],
+      variants: [],
+      availabilitySchedule: [],
     };
-    batch.set(newItemDocRef, menuItemData);
+    
+    const dataToSave = {
+        ...menuItemData,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+    };
+    batch.set(newItemDocRef, dataToSave);
     importedCount++;
   }
 
