@@ -1,3 +1,4 @@
+// src/app/dashboard/page.tsx
 'use client';
 
 import * as React from 'react'; 
@@ -388,18 +389,6 @@ function OwnerDashboard() {
             </>}
         </CardContent>
       </Card>
-
-      {/* Quick Actions */}
-      <Card className="shadow-md">
-        <CardHeader><CardTitle className="text-lg">Quick Management Actions</CardTitle></CardHeader>
-        <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            <DashboardNavigationCard title="Menu Management" description="Add, edit, and organize menu items." icon={<BookCopy className="h-6 w-6 text-accent" />} actionText="Manage Menu" actionHref={`/dashboard/menu-management/${selectedRestaurantId}`} imageUrl="https://picsum.photos/seed/menumgmt/300/150" dataAiHint="food menu list" small/>
-            <DashboardNavigationCard title="Table Management" description="Oversee table statuses and QR codes." icon={<Briefcase className="h-6 w-6 text-accent" />} actionText="Manage Tables" actionHref={`/dashboard/table-management/${selectedRestaurantId}`} imageUrl="https://picsum.photos/seed/tablemgmt/300/150" dataAiHint="restaurant tables" small/>
-            <DashboardNavigationCard title="Order Management" description="View and process customer orders." icon={<ListOrdered className="h-6 w-6 text-accent" />} actionText="View Orders" actionHref={`/dashboard/orders/${selectedRestaurantId}`} imageUrl="https://picsum.photos/seed/ordermgmt/300/150" dataAiHint="order tickets" small/>
-            <DashboardNavigationCard title="Staff Management" description="Manage your restaurant staff." icon={<Users2 className="h-6 w-6 text-accent" />} actionText="Manage Staff" actionHref={`/dashboard/staff/${selectedRestaurantId}`} imageUrl="https://picsum.photos/seed/staffmgmt/300/150" dataAiHint="team staff" small/>
-            <DashboardNavigationCard title="Restaurant Settings" description="Configure restaurant details." icon={<Settings className="h-6 w-6 text-accent" />} actionText="Settings" actionHref={`/dashboard/restaurant/${selectedRestaurantId}/settings`} imageUrl="https://picsum.photos/seed/restosettings/300/150" dataAiHint="settings gear" small/>
-        </CardContent>
-      </Card>
     </div>
   );
 }
@@ -470,7 +459,7 @@ function DashboardNavigationCard({ title, description, icon, actionText, actionH
       <Image src={imageUrl} alt={title} width={small ? 300 : 400} height={small ? 150 : 200} className={`w-full ${small ? 'h-32' : 'h-40'} object-cover`} data-ai-hint={dataAiHint}/>
       <CardHeader className={small ? 'p-3' : 'p-6'}>
         <div className={`flex items-center gap-3 ${small ? 'mb-1' : 'mb-2'}`}>
-          {React.cloneElement(icon as React.ReactElement, small ? {className: "h-6 w-6 text-accent"} : {})}
+          {React.cloneElement(icon as React.ReactElement, small ? {className: "h-6 w-6 text-accent"} : {className: (icon as React.ReactElement).props.className || "h-8 w-8 text-accent"})}
           <CardTitle className={small ? 'text-md' : 'text-xl'}>{title}</CardTitle>
         </div>
         <CardDescription className={small ? 'text-xs leading-snug' : ''}>{description}</CardDescription>
@@ -512,3 +501,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+
