@@ -14,7 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Camera, UploadCloud, FileImage, Wand2, CheckCircle, XCircle, RefreshCw } from 'lucide-react';
+import { Camera, UploadCloud, FileImage, Wand2, CheckCircle, XCircle, RefreshCw, AlertCircle } from 'lucide-react'; // Added AlertCircle
 import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
 import LoadingSpinner from '@/components/shared/loading-spinner';
