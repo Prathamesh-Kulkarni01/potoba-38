@@ -26,7 +26,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button';
 import BottomNavigationBar, { type BottomNavItem } from '@/components/dashboard/bottom-navigation-bar';
 import { useIsMobile as useIsMobileDirect } from '@/hooks/use-mobile';
-import { LayoutDashboard, Users, Utensils, ChefHat, Settings, ShieldCheck, Store, PlusCircle, BookCopy, ListOrdered, Briefcase, ExternalLink, Table, List, Settings2, CookingPot, ChevronDown, LogOut, ChevronsLeftRight } from 'lucide-react';
+import { LayoutDashboard, Users, Utensils, ChefHat, Settings, ShieldCheck, Store, PlusCircle, BookCopy, ListOrdered, Briefcase, ExternalLink, Table, List, Settings2, CookingPot, ChevronDown, LogOut, ChevronsLeftRight, SquareMenu } from 'lucide-react';
 import type { RestaurantProfile } from '@/types';
 import { getRestaurantsByOwner, updateUserProfile } from '@/lib/firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
@@ -85,7 +85,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       }
     }
   }, [user, authContextRole, initialLoading, authContextLoading, router]);
-  
+
   useEffect(() => {
     if (authContextRole === 'owner' && user?.uid) {
       setRestaurantsLoading(true);
@@ -128,12 +128,12 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
   const handleRestaurantChange = (restaurantId: string) => {
     if (restaurantId === "create_new_restaurant_redirect_target") {
-        router.push('/dashboard/create-restaurant');
-        return;
+      router.push('/dashboard/create-restaurant');
+      return;
     }
     setSelectedRestaurantId(restaurantId);
   };
-  
+
   if (initialLoading || authContextLoading || (authContextRole === 'owner' && restaurantsLoading && ownedRestaurants.length === 0 && !pathname.endsWith('/create-restaurant'))) {
     return <FullScreenLoader />;
   }
@@ -141,7 +141,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   if (!user || !authContextRole || (authContextRole === 'owner' && user.onboardingComplete === false)) {
     return <FullScreenLoader />;
   }
-  
+
   const commonNavItems: NavItem[] = [
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['owner', 'staff', 'admin', 'user'] },
   ];
@@ -153,41 +153,43 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       ];
     }
     return [
-      { 
-        label: 'My Restaurant', icon: Store, roles: ['owner'], hint: "manage restaurant", isGroup: true,
+      { href: `/dashboard/restaurant/${currentRestaurantId}`, label: 'Overview', icon: Store, roles: ['owner'], hint: "restaurant details" },
+      { href: `/dashboard/menu-management/${currentRestaurantId}`, label: 'Menu', icon: BookCopy, roles: ['owner'], hint: "manage menu" },
+      { href: `/dashboard/table-management/${currentRestaurantId}`, label: 'Tables', icon: Briefcase, roles: ['owner'], hint: "manage tables", badgeCount: 2 /* Placeholder */ },
+      { href: `/dashboard/orders/${currentRestaurantId}`, label: 'Orders', icon: ListOrdered, roles: ['owner', 'staff'], hint: "view orders", badgeCount: 5 /* Placeholder */ },
+      { href: `/dashboard/restaurant/${currentRestaurantId}/kitchen`, label: 'KOT', icon: CookingPot, roles: ['owner', 'kitchen'], hint: "kitchen order tickets", badgeCount: 3 /* Placeholder */ },
+      { href: `/dashboard/staff/${currentRestaurantId}`, label: 'Staff', icon: Users, roles: ['owner'], hint: "manage staff" },
+      { href: `/dashboard/restaurant/${currentRestaurantId}/settings`, label: 'Restaurant Settings', icon: Settings, roles: ['owner'], hint: "specific settings" },
+      {
+        label: 'Manage', icon: Store, roles: ['owner'], hint: "manage restaurant", isGroup: false,
         children: [
-          { href: `/dashboard/restaurant/${currentRestaurantId}`, label: 'Overview', icon: Store, roles: ['owner'], hint: "restaurant details" },
-          { href: `/dashboard/menu-management/${currentRestaurantId}`, label: 'Menu', icon: BookCopy, roles: ['owner'], hint: "manage menu" },
-          { href: `/dashboard/table-management/${currentRestaurantId}`, label: 'Tables', icon: Briefcase, roles: ['owner'], hint: "manage tables", badgeCount: 2 /* Placeholder */ },
-          { href: `/dashboard/orders/${currentRestaurantId}`, label: 'Orders', icon: ListOrdered, roles: ['owner', 'staff'], hint: "view orders", badgeCount: 5 /* Placeholder */ },
-          { href: `/dashboard/restaurant/${currentRestaurantId}/kitchen`, label: 'KOT', icon: CookingPot, roles: ['owner', 'kitchen'], hint: "kitchen order tickets", badgeCount: 3 /* Placeholder */ },
-          { href: `/dashboard/staff/${currentRestaurantId}`, label: 'Staff', icon: Users, roles: ['owner'], hint: "manage staff" },
-          { href: `/dashboard/restaurant/${currentRestaurantId}/settings`, label: 'Restaurant Settings', icon: Settings, roles: ['owner'], hint: "specific settings" },
-        ]
+          { href: `/dashboard/recipes/${currentRestaurantId}`, label: 'Recipes (Old)', icon: Utensils, roles: ['owner', 'staff'], hint: "food recipes" },
+          { href: `/dashboard/meal-planner/${currentRestaurantId}`, label: 'Meal Planner', icon: SquareMenu, roles: ['owner', 'staff'], hint: "meal plan" },
+
+        ],
       },
-      { href: `/dashboard/recipes/${currentRestaurantId}`, label: 'Recipes (Old)', icon: Utensils, roles: ['owner', 'staff'], hint: "food recipes" },
-      { href: `/dashboard/meal-planner/${currentRestaurantId}`, label: 'Meal Planner', icon: SquareMenu, roles: ['owner', 'staff'], hint: "meal plan" },
-    ];
+    ]
   };
-  
+
   const platformAdminNavItems: NavItem[] = [
-     { 
-        label: 'Platform Admin', icon: ShieldCheck, roles: ['admin'], hint: "admin section", isGroup: true,
-        children: [
-            { href: '/dashboard/admin/users', label: 'All Users', icon: Users, roles: ['admin'], hint: "users list" },
-            { href: '/dashboard/admin/restaurants', label: 'All Restaurants', icon: Store, roles: ['admin'], hint: "platform restaurants" }, 
-            { href: '/dashboard/admin/analytics', label: 'Platform Analytics', icon: LayoutDashboard, roles: ['admin'], hint: "admin analytics"},
-            { href: '/dashboard/admin/content', label: 'Content Moderation', icon: SquareMenu, roles: ['admin'], hint: "admin content"},
-            { href: '/dashboard/admin/settings', label: 'Platform Settings', icon: Settings, roles: ['admin'], hint: "admin settings" },
-        ]
-     }
+    {
+      label: 'Platform Admin', icon: ShieldCheck, roles: ['admin'], hint: "admin section", isGroup: true,
+      children: [
+        { href: '/dashboard/admin/users', label: 'All Users', icon: Users, roles: ['admin'], hint: "users list" },
+        { href: '/dashboard/admin/restaurants', label: 'All Restaurants', icon: Store, roles: ['admin'], hint: "platform restaurants" },
+        { href: '/dashboard/admin/analytics', label: 'Platform Analytics', icon: LayoutDashboard, roles: ['admin'], hint: "admin analytics" },
+        { href: '/dashboard/admin/content', label: 'Content Moderation', icon: SquareMenu, roles: ['admin'], hint: "admin content" },
+        { href: '/dashboard/admin/settings', label: 'Platform Settings', icon: Settings, roles: ['admin'], hint: "admin settings" },
+      ]
+    }
   ];
 
   const settingsNavItems: NavItem[] = [
     {
       label: 'Settings', icon: Settings2, roles: ['owner', 'staff', 'admin', 'user'], hint: 'App and Profile Settings', isGroup: true,
       children: [
-        { href: '/dashboard/profile', label: 'My Profile', icon: ChefHat, roles: ['owner', 'staff', 'admin', 'user'], hint: "user profile" },
+        { href: ' /dashboard/restaurant/${currentRestaurantId}/settings', label: 'Customise', icon: ChefHat, roles: ['owner', 'staff', 'admin',], hint: "Customise Setting" },
+        { href: '/dashboard/profile', label: 'My Profile', icon: ChefHat, roles: ['staff', 'user'], hint: "user profile" },
         { href: '/dashboard/settings/theme', label: 'Theme & Branding', icon: Settings, roles: ['owner', 'admin'], hint: "theme settings" },
       ]
     }
@@ -197,18 +199,18 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   if (authContextRole === 'owner') {
     desktopNavItems = [...desktopNavItems, ...getOwnerNavItems(selectedRestaurantId)];
   } else if (authContextRole === 'staff') {
-    const staffRestaurantId = user?.restaurantId; 
-     if (staffRestaurantId) {
-        desktopNavItems = [
+    const staffRestaurantId = user?.restaurantId;
+    if (staffRestaurantId) {
+      desktopNavItems = [
         ...desktopNavItems,
-        ...getOwnerNavItems(staffRestaurantId).filter(item => 
-            item.label === 'Orders' || 
-            item.label === 'Recipes (Old)' || 
-            item.label === 'Meal Planner' ||
-            item.label === 'KOT'
+        ...getOwnerNavItems(staffRestaurantId).filter(item =>
+          item.label === 'Orders' ||
+          item.label === 'Recipes (Old)' ||
+          item.label === 'Meal Planner' ||
+          item.label === 'KOT'
         ),
-        ];
-     }
+      ];
+    }
   }
   if (authContextRole === 'admin') {
     desktopNavItems = [...desktopNavItems, ...platformAdminNavItems];
@@ -219,8 +221,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   const getFilteredNavItems = (items: NavItem[], currentRole: UserRole | null) => {
     if (!currentRole) return [];
     return items.filter(item => item.roles.includes(currentRole)).map(item => ({
-        ...item,
-        children: item.children ? getFilteredNavItems(item.children, currentRole) : undefined
+      ...item,
+      children: item.children ? getFilteredNavItems(item.children, currentRole) : undefined
     }));
   };
 
@@ -238,7 +240,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     ] : []),
     { href: '/dashboard/profile', label: 'Profile', icon: ChefHat, hint: "user profile" },
   ];
-  
+
   const selectedRestaurantName = ownedRestaurants.find(r => r.id === selectedRestaurantId)?.name || "Select Restaurant";
 
   const renderNavMenu = (items: NavItem[], isSubmenu = false) => {
@@ -248,22 +250,24 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           <SidebarMenuItem key={item.label + (item.href || '')}>
             {item.children && item.children.length > 0 ? (
               <Collapsible open={openCollapsibles[item.label] || false} onOpenChange={() => toggleCollapsible(item.label)}>
-                <CollapsibleTrigger asChild>
-                   <SidebarMenuButton
+                <CollapsibleTrigger asChild >
+                  <SidebarMenuButton
+                    isActive={false}
+                    variant='ghost'
                     className="justify-between w-full"
                     tooltip={{ children: item.label, "data-ai-hint": item.hint, side: "right", align: "center" }}
                     size={isSubmenu ? "sm" : "default"}
                   >
                     <div className="flex items-center gap-2">
-                        <item.icon className={cn("h-5 w-5", isSubmenu && "h-4 w-4")} />
-                        <span className={cn("ml-1 group-data-[collapsible=icon]:hidden truncate", isSubmenu && "text-sm")}>{item.label}</span>
+                      <item.icon className={cn("h-5 w-5", isSubmenu && "h-4 w-4")} />
+                      <span className={cn("ml-1 group-data-[collapsible=icon]:hidden truncate", isSubmenu && "text-sm")}>{item.label}</span>
                     </div>
                     <ChevronDown className={cn("h-4 w-4 transition-transform group-data-[collapsible=icon]:hidden", openCollapsibles[item.label] && "rotate-180")} />
                     {item.badgeCount && item.badgeCount > 0 && <SidebarMenuBadge>{item.badgeCount}</SidebarMenuBadge>}
                   </SidebarMenuButton>
                 </CollapsibleTrigger>
                 <CollapsibleContent className="group-data-[collapsible=icon]:absolute group-data-[collapsible=icon]:left-full group-data-[collapsible=icon]:top-0 group-data-[collapsible=icon]:ml-2 group-data-[collapsible=icon]:bg-sidebar group-data-[collapsible=icon]:p-2 group-data-[collapsible=icon]:rounded-md group-data-[collapsible=icon]:shadow-lg group-data-[collapsible=icon]:w-48 group-data-[collapsible=icon]:z-50">
-                   <div className={cn(!isSubmenu && "py-1 group-data-[collapsible=icon]:py-0", isSubmenu && "ml-4 border-l border-sidebar-border/50 group-data-[collapsible=icon]:ml-0 group-data-[collapsible=icon]:border-l-0")}>
+                  <div className={cn(!isSubmenu && "py-1 group-data-[collapsible=icon]:py-0", isSubmenu && "ml-4 border-l border-sidebar-border/50 group-data-[collapsible=icon]:ml-0 group-data-[collapsible=icon]:border-l-0")}>
                     {renderNavMenu(item.children, true)}
                   </div>
                 </CollapsibleContent>
@@ -346,41 +350,19 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
               )}
               {renderNavMenu(desktopNavItems)}
             </SidebarContent>
-            <SidebarFooter className="p-2 border-t border-sidebar-border">
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                     <SidebarMenuButton
-                        variant="ghost"
-                        className="w-full justify-start group-data-[collapsible=icon]:justify-center"
-                        size="default"
-                        asChild
-                      >
-                         <Button variant="ghost" onClick={() => {
-                              // Perform sign out logic
-                              toast({ title: 'Signing out...' });
-                              setTimeout(() => router.push('/login'), 1000); // Replace with actual sign out
-                          }} className="w-full justify-start text-muted-foreground hover:text-destructive group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:p-0">
-                            <LogOut className="h-5 w-5" />
-                            <span className="ml-3 group-data-[collapsible=icon]:hidden">Sign Out</span>
-                          </Button>
-                      </SidebarMenuButton>
-                  </TooltipTrigger>
-                  <TooltipContent side="right" align="center" className="group-data-[collapsible=expanded]:hidden">Sign Out</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-               <SidebarTrigger className="hidden md:flex self-center mt-2 h-8 w-8 p-0 group-data-[collapsible=icon]:mt-auto">
-                 <ChevronsLeftRight className="h-4 w-4"/>
-               </SidebarTrigger>
+            <SidebarFooter className="flex p-2 border-t border-sidebar-border">
+              <SidebarTrigger className="self-end hidden md:flex self-center mt-2 h-8 w-8 p-0 group-data-[collapsible=icon]:mt-auto">
+                <ChevronsLeftRight className="h-4 w-4" />
+              </SidebarTrigger>
             </SidebarFooter>
           </Sidebar>
           <SidebarInset>
             <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b bg-background/80 px-4 backdrop-blur-md sm:px-6">
               <div className="flex items-center">
                 <SidebarTrigger className="md:hidden" />
-                 {authContextRole === 'owner' && (
+                {authContextRole === 'owner' && (
                   <div className="ml-4 text-sm font-medium text-foreground">
-                    Current: {selectedRestaurantName}
+                     {selectedRestaurantName}
                   </div>
                 )}
               </div>
@@ -398,34 +380,34 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
               <Image src="/public/images/logo.png" alt="App Logo" width={32} height={32} className="rounded-md" data-ai-hint="modern logo" />
               <h1 className="text-xl font-bold text-primary">Potoba</h1>
             </Link>
-             <div className="flex items-center gap-2">
-                {authContextRole === 'owner' && (
-                  <>
-                    <Select value={selectedRestaurantId || ''} onValueChange={handleRestaurantChange}>
-                        <SelectTrigger className="w-auto h-8 text-xs px-2 py-1 max-w-[110px] truncate">
-                        <SelectValue placeholder="Restaurant" />
-                        </SelectTrigger>
-                        <SelectContent>
-                        {ownedRestaurants.map(restaurant => (
-                            <SelectItem key={restaurant.id} value={restaurant.id} className="text-xs">
-                            {restaurant.name}
-                            </SelectItem>
-                        ))}
-                        <SelectItem value="create_new_restaurant_redirect_target" className="text-xs text-primary">
-                            Create New
+            <div className="flex items-center gap-2">
+              {authContextRole === 'owner' && (
+                <>
+                  <Select value={selectedRestaurantId || ''} onValueChange={handleRestaurantChange}>
+                    <SelectTrigger className="w-auto h-8 text-xs px-2 py-1 max-w-[110px] truncate">
+                      <SelectValue placeholder="Restaurant" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ownedRestaurants.map(restaurant => (
+                        <SelectItem key={restaurant.id} value={restaurant.id} className="text-xs">
+                          {restaurant.name}
                         </SelectItem>
-                        </SelectContent>
-                    </Select>
-                    {selectedRestaurantId && (
-                        <Button variant="ghost" size="icon" asChild className="h-8 w-8 text-primary p-0">
-                            <Link href={`/site/${selectedRestaurantId}`} target="_blank" rel="noopener noreferrer" title="Open Public Page">
-                                <ExternalLink className="h-4 w-4" />
-                            </Link>
-                        </Button>
-                    )}
-                  </>
-                )}
-                <UserNav />
+                      ))}
+                      <SelectItem value="create_new_restaurant_redirect_target" className="text-xs text-primary">
+                        Create New
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {selectedRestaurantId && (
+                    <Button variant="ghost" size="icon" asChild className="h-8 w-8 text-primary p-0">
+                      <Link href={`/site/${selectedRestaurantId}`} target="_blank" rel="noopener noreferrer" title="Open Public Page">
+                        <ExternalLink className="h-4 w-4" />
+                      </Link>
+                    </Button>
+                  )}
+                </>
+              )}
+              <UserNav />
             </div>
           </header>
           <main className="flex-1 bg-background max-h-dvh overflow-y-auto p-4 pt-6 ">

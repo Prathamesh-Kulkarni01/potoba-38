@@ -327,11 +327,11 @@ const SidebarInset = React.forwardRef<
       ref={ref}
       className={cn(
         "relative flex min-h-svh flex-1 flex-col bg-background transition-[margin-left,margin-right] duration-200 ease-in-out",
-        "md:peer-data-[state=expanded]:peer-data-[side=left]:ml-[var(--sidebar-width)]",
-        "md:peer-data-[state=expanded]:peer-data-[side=right]:mr-[var(--sidebar-width)]",
-        "md:peer-data-[state=collapsed]:peer-data-[collapsible=icon]:peer-data-[side=left]:ml-[var(--sidebar-width-icon)]",
-        "md:peer-data-[state=collapsed]:peer-data-[collapsible=icon]:peer-data-[side=right]:mr-[var(--sidebar-width-icon)]",
-        "peer-data-[variant=inset]:min-h-[calc(100svh-theme(spacing.4))] md:peer-data-[variant=inset]:m-2 md:peer-data-[state=collapsed]:peer-data-[variant=inset]:ml-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow",
+        // "md:peer-data-[state=expanded]:peer-data-[side=left]:ml-[var(--sidebar-width)]",
+        // "md:peer-data-[state=expanded]:peer-data-[side=right]:mr-[var(--sidebar-width)]",
+        // "md:peer-data-[state=collapsed]:peer-data-[collapsible=icon]:peer-data-[side=left]:ml-[var(--sidebar-width-icon)]",
+        // "md:peer-data-[state=collapsed]:peer-data-[collapsible=icon]:peer-data-[side=right]:mr-[var(--sidebar-width-icon)]",
+        // "peer-data-[variant=inset]:min-h-[calc(100svh-theme(spacing.4))] md:peer-data-[variant=inset]:m-2 md:peer-data-[state=collapsed]:peer-data-[variant=inset]:ml-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow",
         className
       )}
       {...props}
@@ -524,6 +524,8 @@ const sidebarMenuButtonVariants = cva(
     variants: {
       variant: {
         default: "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+        ghost: 'hover:bg-transparent hover:text-sidebar-foreground active:bg-transparent active:text-sidebar-foreground data-[active=true]:active:bg-transparent data-[state=open]:bg-transparent data-[state=open]:text-sidebar-foreground',
+        link: 'hover:bg-transparent hover:text-sidebar-foreground active:bg-transparent active:text-sidebar-foreground data-[active=true]:active:bg-transparent' ,
         outline:
           "bg-background shadow-[0_0_0_1px_hsl(var(--sidebar-border))] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:shadow-[0_0_0_1px_hsl(var(--sidebar-accent))]",
       },
