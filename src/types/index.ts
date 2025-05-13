@@ -90,7 +90,7 @@ export interface MenuItem {
   dietaryTags?: string[]; 
   allergenInfo?: string[];
   order: number; 
-  calories?: number; 
+  calories?: number | null; 
   crossSellItems?: string[]; 
   upsellItems?: string[]; 
   variants?: MenuItemVariant[]; 
@@ -142,7 +142,7 @@ export interface OrderItem {
 export interface Order {
   id: string; 
   restaurantId: string;
-  userId?: string; 
+  userId?: string | null; // Allow null for userId
   tableId?: string | null; 
   tableNumber?: string | null; 
   items: OrderItem[];
@@ -159,14 +159,16 @@ export interface Order {
   kitchenNotes?: string; 
   paymentMethod?: string;
   transactionId?: string;
-  groupId?: string; 
+  groupId?: string | null; // Allow null for groupId
   createdAt: Timestamp; 
   updatedAt: Timestamp; 
 }
 
-export interface ClientOrder extends Omit<Order, 'createdAt' | 'updatedAt'> {
+export interface ClientOrder extends Omit<Order, 'createdAt' | 'updatedAt' | 'userId' | 'groupId'> {
   createdAt: string; 
   updatedAt: string; 
+  userId?: string; // Keep userId optional in ClientOrder
+  groupId?: string; // Keep groupId optional in ClientOrder
 }
 
 export interface GroupCartItem extends OrderItem {
@@ -177,7 +179,7 @@ export interface GroupCartItem extends OrderItem {
 export interface TableGroupMember {
   uid: string | null; 
   name: string;
-  phone?: string | null; 
+  phone?: string | null; // Phone is optional for members
 }
 
 export interface TableGroup {
@@ -186,7 +188,7 @@ export interface TableGroup {
   tableId: string;
   tableNumber: string; 
   creatorName: string;
-  creatorPhone: string; 
+  creatorPhone: string; // Creator phone is required
   creatorUid?: string | null; 
   members: TableGroupMember[];
   status: 'active' | 'ordering' | 'locked' | 'ordered' | 'closed';
@@ -198,4 +200,11 @@ export interface TableGroup {
 export interface ClientTableGroup extends Omit<TableGroup, 'createdAt' | 'updatedAt'> {
   createdAt: string;
   updatedAt: string;
+}
+
+export interface PopularItem { // Type for popular items on dashboard
+  menuItemId: string;
+  menuItemName: string;
+  orderCount: number;
+  totalRevenue: number;
 }

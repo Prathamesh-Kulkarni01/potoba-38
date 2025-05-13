@@ -1,4 +1,3 @@
-
 // src/lib/firebase/tables.ts
 'use server';
 import {
@@ -17,6 +16,7 @@ import {
   collectionGroup,
   limit,
   setDoc, 
+  onSnapshot, // Added for real-time
 } from 'firebase/firestore';
 import { db } from './config';
 import type { Table, TableStatus } from '@/types';
@@ -28,10 +28,13 @@ export async function addTable(restaurantId: string, tableData: Omit<Table, 'id'
   const tablesCol = collection(db, getTablesCollectionPath(restaurantId));
   const nowTimestamp = Timestamp.now();
   
-  const newTableRef = doc(tablesCol);
+  const newTableRef = doc(tablesCol); // Generate ID upfront
   const tableId = newTableRef.id;
 
-  const finalQrCodeValue = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://6000-firebase-studio-1746809721561.cluster-ancjwrkgr5dvux4qug5rbzyc2y.cloudworkstations.dev'}/menu/table/${tableId}`;
+  // Ensure NEXT_PUBLIC_BASE_URL ends with a slash if it's not already present for consistency
+  const baseUrl = (process.env.NEXT_PUBLIC_BASE_URL || 'https://6000-firebase-studio-1746809721561.cluster-ancjwrkgr5dvux4qug5rbzyc2y.cloudworkstations.dev').replace(/\/$/, '');
+  const finalQrCodeValue = `${baseUrl}/menu/table/${tableId}`;
+
 
   const fullTableData: Omit<Table, 'id' | 'createdAt' | 'updatedAt'> & { createdAt: Timestamp; updatedAt: Timestamp } = {
     ...tableData, 
@@ -57,7 +60,6 @@ export async function addTable(restaurantId: string, tableData: Omit<Table, 'id'
   };
 }
 
-// This function is kept for one-time fetches if needed. Real-time updates use onSnapshot in the component.
 export async function getTables(restaurantId: string): Promise<Table[]> {
   if (!db) throw new Error("Firestore is not initialized.");
   const tablesCol = collection(db, getTablesCollectionPath(restaurantId));
@@ -68,6 +70,7 @@ export async function getTables(restaurantId: string): Promise<Table[]> {
     return { 
       id: docSnap.id, 
       ...data,
+      tableDocId: docSnap.id, // Ensure tableDocId is populated if it wasn't explicitly set during creation
       createdAt: convertFirebaseTimestampToString(data.createdAt as Timestamp),
       updatedAt: convertFirebaseTimestampToString(data.updatedAt as Timestamp)
     } as Table;
@@ -93,6 +96,9 @@ export async function getTable(restaurantId: string, tableId: string): Promise<T
 export async function getTableByDocIdFromGroup(tableDocIdToFind: string): Promise<{ table: Table; restaurantId: string } | null> {
   if (!db) throw new Error("Firestore is not initialized.");
   const tablesGroupRef = collectionGroup(db, 'tables');
+  // Query by tableDocId field instead of documentId() for collection group queries if you have this field.
+  // If you intend to query by the actual document ID in a collection group, Firestore syntax might differ or have limitations.
+  // For this to work effectively, ensure tableDocId is a field in your 'tables' documents and is indexed.
   const q = query(tablesGroupRef, where('tableDocId', '==', tableDocIdToFind), limit(1));
   
   const snapshot = await getDocs(q);
@@ -123,6 +129,9 @@ export async function updateTable(restaurantId: string, tableId: string, data: P
   const tableRef = doc(db, getTablesCollectionPath(restaurantId), tableId);
   
   const updateData: any = { ...data, updatedAt: serverTimestamp() };
+  // Prevent qrCodeValue or tableDocId from being accidentally changed during a general update
+  if (updateData.hasOwnProperty('qrCodeValue')) delete updateData.qrCodeValue;
+  if (updateData.hasOwnProperty('tableDocId')) delete updateData.tableDocId;
   
   await updateDoc(tableRef, updateData);
 }
@@ -133,3 +142,57 @@ export async function deleteTable(restaurantId: string, tableId: string): Promis
   await deleteDoc(tableRef);
 }
 
+// --- Dashboard Specific Data Fetching ---
+export interface TableOccupancy {
+  totalTables: number;
+  occupiedTables: number;
+  occupancyRate: number;
+}
+
+export async function getRestaurantTableOccupancy(restaurantId: string): Promise<TableOccupancy> {
+  if (!db) throw new Error("Firestore is not initialized.");
+  const tablesCol = collection(db, getTablesCollectionPath(restaurantId));
+  const snapshot = await getDocs(tablesCol);
+  
+  let occupiedCount = 0;
+  snapshot.forEach(docSnap => {
+    const table = docSnap.data() as Table;
+    if (table.status === 'occupied') {
+      occupiedCount++;
+    }
+  });
+  
+  const totalTables = snapshot.size;
+  const occupancyRate = totalTables > 0 ? (occupiedCount / totalTables) * 100 : 0;
+
+  return {
+    totalTables,
+    occupiedTables: occupiedCount,
+    occupancyRate,
+  };
+}
+
+// Real-time listener setup for a restaurant's tables
+export function listenToRestaurantTables(
+  restaurantId: string,
+  callback: (tables: Table[]) => void
+): () => void { // Returns an unsubscribe function
+  if (!db) throw new Error("Firestore is not initialized for real-time listener.");
+  
+  const tablesCol = collection(db, getTablesCollectionPath(restaurantId));
+  const q = query(tablesCol, orderBy('tableNumber', 'asc'));
+
+  const unsubscribe = onSnapshot(q, (snapshot) => {
+    const tables = snapshot.docs.map(docSnap => ({
+        id: docSnap.id,
+        ...docSnap.data(),
+        createdAt: convertFirebaseTimestampToString(docSnap.data().createdAt as Timestamp),
+        updatedAt: convertFirebaseTimestampToString(docSnap.data().updatedAt as Timestamp),
+      } as Table));
+    callback(tables);
+  }, (error) => {
+    console.error(`Error listening to tables for restaurant ${restaurantId}:`, error);
+  });
+
+  return unsubscribe;
+}

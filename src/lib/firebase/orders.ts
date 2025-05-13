@@ -1,4 +1,3 @@
-
 // src/lib/firebase/orders.ts
 'use server';
 
@@ -16,10 +15,17 @@ import {
   serverTimestamp,
   Timestamp,
   QueryConstraint, 
+  limit,
+  getCountFromServer,
+  onSnapshot, // Added for real-time
+  startAt,
+  endAt,
+  documentId,
 } from 'firebase/firestore';
 import { db } from './config';
-import type { Order, OrderStatus, OrderItem, ClientOrder } from '@/types';
+import type { Order, OrderStatus, OrderItem, ClientOrder, MenuItem } from '@/types';
 import { convertFirebaseTimestampToString, getOrdersCollectionPath } from './utils'; 
+import { startOfDay, endOfDay, subDays } from 'date-fns';
 
 const safeString = (value: any): string | undefined => typeof value === 'string' ? value : undefined;
 const safeNumber = (value: any): number | undefined => typeof value === 'number' && !isNaN(value) ? value : undefined;
@@ -27,7 +33,7 @@ const safeNumber = (value: any): number | undefined => typeof value === 'number'
 const toClientOrder = (docId: string, data: any): ClientOrder => {
     const orderBase: Omit<ClientOrder, 'id' | 'createdAt' | 'updatedAt'> = {
         restaurantId: data.restaurantId,
-        userId: data.userId || undefined, // Added userId
+        userId: data.userId || undefined, 
         tableId: data.tableId || null,
         tableNumber: data.tableNumber || null,
         items: data.items as OrderItem[],
@@ -35,7 +41,7 @@ const toClientOrder = (docId: string, data: any): ClientOrder => {
         totalAmount: data.totalAmount,
         status: data.status as OrderStatus,
         customerName: safeString(data.customerName),
-        customerPhoneNumber: safeString(data.customerPhoneNumber), // Added customerPhoneNumber
+        customerPhoneNumber: safeString(data.customerPhoneNumber), 
         customerWhatsapp: safeString(data.customerWhatsapp),
         taxAmount: safeNumber(data.taxAmount),
         serviceCharge: safeNumber(data.serviceCharge),
@@ -44,6 +50,7 @@ const toClientOrder = (docId: string, data: any): ClientOrder => {
         kitchenNotes: safeString(data.kitchenNotes),
         paymentMethod: safeString(data.paymentMethod),
         transactionId: safeString(data.transactionId),
+        groupId: safeString(data.groupId),
     };
 
     return {
@@ -69,9 +76,10 @@ export async function createOrder(restaurantId: string, orderData: Omit<Order, '
     updatedAt,
     tableId: orderData.tableId || null,
     tableNumber: orderData.tableNumber || null,
-    customerName: orderData.customerName || null, // Changed from undefined to null
-    customerPhoneNumber: orderData.customerPhoneNumber || null, // Changed from undefined to null
+    customerName: orderData.customerName || null, 
+    customerPhoneNumber: orderData.customerPhoneNumber || null,
     customerWhatsapp: orderData.customerWhatsapp || null,
+    groupId: orderData.groupId || null,
   };
 
   const docRef = await addDoc(ordersCol, dataToSave);
@@ -93,6 +101,7 @@ export async function getOrder(restaurantId: string, orderId: string): Promise<C
     }
     return null;
 }
+
 
 export async function getOrdersByRestaurant(
   restaurantId: string, 
@@ -159,12 +168,11 @@ export async function updateOrder(restaurantId: string, orderId: string, data: P
       delete updatePayload.createdAt; 
     }
     
-    // Ensure potentially undefined fields are explicitly set to null if that's desired
-    // or ensure they are present if required by your data model
-    if (updatePayload.customerName === undefined) updatePayload.customerName = null;
-    if (updatePayload.customerPhoneNumber === undefined) updatePayload.customerPhoneNumber = null;
-    if (updatePayload.customerWhatsapp === undefined) updatePayload.customerWhatsapp = null;
-    // ... any other optional fields that might be passed as undefined
+    updatePayload.customerName = data.customerName === undefined ? null : data.customerName;
+    updatePayload.customerPhoneNumber = data.customerPhoneNumber === undefined ? null : data.customerPhoneNumber;
+    updatePayload.customerWhatsapp = data.customerWhatsapp === undefined ? null : data.customerWhatsapp;
+    updatePayload.groupId = data.groupId === undefined ? null : data.groupId;
+
 
     const finalUpdateData = { ...updatePayload, updatedAt: serverTimestamp() };
     
@@ -193,3 +201,160 @@ export async function cancelOrder(restaurantId: string, orderId: string, cancell
   await updateDoc(orderRef, updateData);
 }
 
+// --- Dashboard Specific Data Fetching ---
+export interface RestaurantOrderSummary {
+  totalRevenue: number;
+  totalOrders: number;
+  averageOrderValue: number;
+  ordersLastPeriod?: ClientOrder[]; // Optional: raw orders for trend calculation if needed by client
+}
+
+export async function getRestaurantOrderSummary(
+  restaurantId: string,
+  periodInDays: 7 | 30
+): Promise<RestaurantOrderSummary> {
+  if (!db) throw new Error("Firestore is not initialized.");
+  const ordersCol = collection(db, getOrdersCollectionPath(restaurantId));
+  
+  const endDate = new Date();
+  const startDate = subDays(endDate, periodInDays -1); // -1 because we want to include today
+  
+  const q = query(
+    ordersCol,
+    where('createdAt', '>=', Timestamp.fromDate(startOfDay(startDate))),
+    where('createdAt', '<=', Timestamp.fromDate(endOfDay(endDate))),
+    where('status', 'in', ['completed', 'served', 'payment_pending']) // Consider only revenue-generating statuses
+  );
+
+  const snapshot = await getDocs(q);
+  let totalRevenue = 0;
+  const orders: ClientOrder[] = [];
+
+  snapshot.forEach(docSnap => {
+    const order = toClientOrder(docSnap.id, docSnap.data());
+    totalRevenue += order.totalAmount;
+    orders.push(order);
+  });
+
+  const totalOrders = snapshot.size;
+  const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+
+  return {
+    totalRevenue,
+    totalOrders,
+    averageOrderValue,
+    ordersLastPeriod: orders, // Return orders if client needs to process trends
+  };
+}
+
+export interface OrderStatusDistribution {
+  status: OrderStatus;
+  count: number;
+}
+export async function getRestaurantOrderStatusDistribution(
+  restaurantId: string,
+  periodInDays: 7 | 30
+): Promise<OrderStatusDistribution[]> {
+    if (!db) throw new Error("Firestore is not initialized.");
+    const ordersCol = collection(db, getOrdersCollectionPath(restaurantId));
+    const endDate = new Date();
+    const startDate = subDays(endDate, periodInDays -1);
+
+    const q = query(
+        ordersCol,
+        where('createdAt', '>=', Timestamp.fromDate(startOfDay(startDate))),
+        where('createdAt', '<=', Timestamp.fromDate(endOfDay(endDate)))
+    );
+
+    const snapshot = await getDocs(q);
+    const statusCounts: Record<OrderStatus, number> = {} as Record<OrderStatus, number>;
+
+    snapshot.forEach(docSnap => {
+        const order = docSnap.data() as Order;
+        statusCounts[order.status] = (statusCounts[order.status] || 0) + 1;
+    });
+    
+    return (Object.keys(statusCounts) as OrderStatus[]).map(status => ({
+        status,
+        count: statusCounts[status]
+    }));
+}
+
+
+export interface PopularItem {
+  menuItemId: string;
+  menuItemName: string;
+  orderCount: number;
+  totalRevenue: number;
+}
+export async function getPopularMenuItems(
+  restaurantId: string,
+  periodInDays: 7 | 30,
+  limitCount: number = 5
+): Promise<PopularItem[]> {
+  if (!db) throw new Error("Firestore is not initialized.");
+  const ordersCol = collection(db, getOrdersCollectionPath(restaurantId));
+  const endDate = new Date();
+  const startDate = subDays(endDate, periodInDays -1);
+
+  const q = query(
+    ordersCol,
+    where('createdAt', '>=', Timestamp.fromDate(startOfDay(startDate))),
+    where('createdAt', '<=', Timestamp.fromDate(endOfDay(endDate))),
+     where('status', 'in', ['completed', 'served', 'payment_pending'])
+  );
+
+  const snapshot = await getDocs(q);
+  const itemStats: Record<string, { name: string, count: number, revenue: number }> = {};
+
+  snapshot.forEach(docSnap => {
+    const order = docSnap.data() as Order;
+    order.items.forEach(item => {
+      if (!itemStats[item.menuItemId]) {
+        itemStats[item.menuItemId] = { name: item.menuItemName, count: 0, revenue: 0 };
+      }
+      itemStats[item.menuItemId].count += item.quantity;
+      itemStats[item.menuItemId].revenue += item.totalPrice;
+    });
+  });
+
+  return Object.entries(itemStats)
+    .map(([menuItemId, data]) => ({
+      menuItemId,
+      menuItemName: data.name,
+      orderCount: data.count,
+      totalRevenue: data.revenue,
+    }))
+    .sort((a, b) => b.orderCount - a.orderCount) // Sort by most ordered
+    .slice(0, limitCount);
+}
+
+// Real-time listener setup for a restaurant's orders
+export function listenToRestaurantOrders(
+  restaurantId: string,
+  callback: (orders: ClientOrder[]) => void,
+  periodInDays: 7 | 30 = 7 // Default to last 7 days for live dashboard
+): () => void { // Returns an unsubscribe function
+  if (!db) throw new Error("Firestore is not initialized for real-time listener.");
+  
+  const ordersCol = collection(db, getOrdersCollectionPath(restaurantId));
+  const endDate = new Date();
+  const startDate = subDays(endDate, periodInDays - 1);
+
+  const q = query(
+    ordersCol,
+    where('createdAt', '>=', Timestamp.fromDate(startOfDay(startDate))),
+    where('createdAt', '<=', Timestamp.fromDate(endOfDay(endDate))),
+    orderBy('createdAt', 'desc')
+  );
+
+  const unsubscribe = onSnapshot(q, (snapshot) => {
+    const orders = snapshot.docs.map(docSnap => toClientOrder(docSnap.id, docSnap.data()));
+    callback(orders);
+  }, (error) => {
+    console.error(`Error listening to orders for restaurant ${restaurantId}:`, error);
+    // Optionally, you could propagate this error to the UI
+  });
+
+  return unsubscribe;
+}

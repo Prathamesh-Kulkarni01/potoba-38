@@ -2,22 +2,38 @@
 'use client';
 
 import * as React from 'react'; 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useAuth } from '@/lib/auth/context';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ChefHat, Settings, UserCog, Users, Store, DollarSign, ShoppingCart, Star, LineChart as LineChartIcon, BookCopy, ShieldCheck, ScanText, ListOrdered, Briefcase, AreaChart, BarChart3, PieChart as PieChartIcon, Lightbulb, Clock, Users2, Table as TableIcon } from 'lucide-react';
+import { ChefHat, Settings, UserCog, Users, Store, DollarSign, ShoppingCart, Star, LineChart as LineChartIcon, BookCopy, ShieldCheck, ScanText, ListOrdered, Briefcase, AreaChart, BarChart3, PieChart as PieChartIcon, Lightbulb, Clock, Users2, Table as TableIcon, RefreshCw } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { getRestaurantsByOwner, getRestaurant } from '@/lib/firebase/firestore'; 
-import type { RestaurantProfile } from '@/types';
+import type { RestaurantProfile, ClientOrder, OrderStatus as OrderStatusType, Table as FirebaseTableType, PopularItem as PopularItemType } from '@/types';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, LineChart, Line, PieChart, Pie, Cell, Sector } from 'recharts';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import {
+  getRestaurantOrderSummary,
+  getRestaurantOrderStatusDistribution,
+  getPopularMenuItems,
+  listenToRestaurantOrders,
+  type RestaurantOrderSummary,
+  type OrderStatusDistribution,
+} from '@/lib/firebase/orders';
+import {
+  getRestaurantTableOccupancy,
+  listenToRestaurantTables,
+  type TableOccupancy,
+} from '@/lib/firebase/tables';
+import { format, parseISO, subDays, startOfDay, endOfDay, eachDayOfInterval } from 'date-fns';
+import { useToast } from '@/hooks/use-toast';
 
 
 function AdminDashboard() {
+  // ... (AdminDashboard implementation remains the same)
   return (
     <div className="space-y-6">
       <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
@@ -80,42 +96,6 @@ function AdminDashboard() {
   );
 }
 
-// Mock data for charts
-const salesLast7Days = [
-  { date: 'Mon', revenue: 120, orders: 15 }, { date: 'Tue', revenue: 150, orders: 20 },
-  { date: 'Wed', revenue: 130, orders: 18 }, { date: 'Thu', revenue: 180, orders: 25 },
-  { date: 'Fri', revenue: 220, orders: 30 }, { date: 'Sat', revenue: 300, orders: 40 },
-  { date: 'Sun', revenue: 250, orders: 35 },
-];
-const salesLast30Days = Array.from({ length: 30 }, (_, i) => ({
-  date: `Day ${i + 1}`,
-  revenue: Math.floor(Math.random() * 300) + 50,
-  orders: Math.floor(Math.random() * 30) + 5,
-}));
-
-const popularItemsData = [
-  { name: 'Paneer Tikka Masala', orders: 120, revenue: 12000 },
-  { name: 'Butter Chicken', orders: 95, revenue: 11400 },
-  { name: 'Dal Makhani', orders: 80, revenue: 6400 },
-  { name: 'Garlic Naan', orders: 150, revenue: 7500 },
-  { name: 'Mango Lassi', orders: 70, revenue: 3500 },
-];
-
-const orderStatusDistributionData = [
-  { name: 'Completed', value: 250, fill: 'hsl(var(--chart-1))' },
-  { name: 'Preparing', value: 45, fill: 'hsl(var(--chart-2))'  },
-  { name: 'Pending', value: 20, fill: 'hsl(var(--chart-3))'  },
-  { name: 'Cancelled', value: 15, fill: 'hsl(var(--chart-4))'  },
-];
-const CHART_COLORS = orderStatusDistributionData.map(d => d.fill);
-
-const peakHoursData = [
-  { hour: '9AM', orders: 10 }, { hour: '10AM', orders: 15 }, { hour: '11AM', orders: 25 },
-  { hour: '12PM', orders: 40 }, { hour: '1PM', orders: 55 }, { hour: '2PM', orders: 35 },
-  { hour: '5PM', orders: 30 }, { hour: '6PM', orders: 45 }, { hour: '7PM', orders: 60 },
-  { hour: '8PM', orders: 50 }, { hour: '9PM', orders: 30 },
-];
-
 interface DashboardMetricCardProps {
   title: string;
   value: string | number;
@@ -156,48 +136,195 @@ function DashboardMetricCard({ title, value, change, changeType = 'neutral', ico
   );
 }
 
+const CHART_COLORS = [
+  'hsl(var(--chart-1))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))',
+  'hsl(var(--chart-4))', 'hsl(var(--chart-5))', 'hsl(var(--primary))',
+  'hsl(var(--secondary))', 'hsl(var(--accent))',
+];
+
+interface SalesTrendDataPoint {
+  date: string;
+  revenue: number;
+  orders: number;
+}
 
 function OwnerDashboard() {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [currentRestaurantName, setCurrentRestaurantName] = useState<string | null>(null);
   const [selectedRestaurantId, setSelectedRestaurantId] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true); // For overall dashboard data
+  
+  const [isOverallLoading, setIsOverallLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const [dashboardMetrics, setDashboardMetrics] = useState<RestaurantOrderSummary & { tableOccupancy?: TableOccupancy } | null>(null);
+  const [salesTrendData, setSalesTrendData] = useState<SalesTrendDataPoint[]>([]);
+  const [popularItems, setPopularItems] = useState<PopularItemType[]>([]);
+  const [orderStatusDistribution, setOrderStatusDistribution] = useState<OrderStatusDistribution[]>([]);
+  const [peakHoursData, setPeakHoursData] = useState<{ hour: string; orders: number }[]>([]);
+  const [aiInsights, setAiInsights] = useState<string[]>([]);
+
   const [salesDataPeriod, setSalesDataPeriod] = useState<'7d' | '30d'>('7d');
+  const [liveOrders, setLiveOrders] = useState<ClientOrder[]>([]);
+  const [liveTables, setLiveTables] = useState<FirebaseTableType[]>([]);
 
   useEffect(() => {
-    setIsLoading(true);
     if (user?.uid && user.role === 'owner') {
       const storedRestaurantId = localStorage.getItem(`selectedRestaurant_${user.uid}`) || user.restaurantId;
-      setSelectedRestaurantId(storedRestaurantId);
-
       if (storedRestaurantId) {
-        getRestaurant(storedRestaurantId).then(restaurant => {
-          if (restaurant) {
-            setCurrentRestaurantName(restaurant.name);
-          }
-          // Simulate fetching data for this restaurant
-          setTimeout(() => setIsLoading(false), 1000);
-        });
+        setSelectedRestaurantId(storedRestaurantId);
       } else {
+        // If no stored ID and no primary restaurantId, fetch all owner's restaurants and pick first
         getRestaurantsByOwner(user.uid).then(restaurants => {
           if (restaurants.length > 0) {
             const firstRestaurantId = restaurants[0].id;
             setSelectedRestaurantId(firstRestaurantId);
-            setCurrentRestaurantName(restaurants[0].name);
             localStorage.setItem(`selectedRestaurant_${user.uid}`, firstRestaurantId);
+          } else {
+             setIsOverallLoading(false); // No restaurants to load data for
           }
-          setTimeout(() => setIsLoading(false), 1000);
         });
       }
-    } else {
-        setIsLoading(false);
+    } else if (user) { // Not an owner
+      setIsOverallLoading(false);
     }
   }, [user]);
 
+  const fetchDataForDashboard = useCallback(async (restaurantId: string, period: 7 | 30) => {
+    if (!restaurantId) return;
+    setIsRefreshing(true); // Indicate data refresh is starting
+    try {
+      const currentRestaurant = await getRestaurant(restaurantId);
+      setCurrentRestaurantName(currentRestaurant?.name || "Restaurant");
 
-  if (!selectedRestaurantId && user?.role === 'owner' && !isLoading) {
+      const [summary, statusDist, popular, occupancy] = await Promise.all([
+        getRestaurantOrderSummary(restaurantId, period),
+        getRestaurantOrderStatusDistribution(restaurantId, period),
+        getPopularMenuItems(restaurantId, period, 5),
+        getRestaurantTableOccupancy(restaurantId)
+      ]);
+
+      setDashboardMetrics({ ...summary, tableOccupancy: occupancy });
+      setPopularItems(popular);
+      setOrderStatusDistribution(statusDist.map((s, idx) => ({ ...s, fill: CHART_COLORS[idx % CHART_COLORS.length] })));
+      
+      // Process sales trend data
+      const periodInDays = period === 7 ? 7 : 30;
+      const endDate = new Date();
+      const startDate = subDays(endDate, periodInDays - 1);
+      const dateRange = eachDayOfInterval({ start: startOfDay(startDate), end: endOfDay(endDate) });
+
+      const dailyData: Record<string, { revenue: number; orders: number }> = {};
+      dateRange.forEach(day => {
+        dailyData[format(day, 'yyyy-MM-dd')] = { revenue: 0, orders: 0 };
+      });
+
+      summary.ordersLastPeriod?.forEach(order => {
+        const orderDateStr = format(parseISO(order.createdAt), 'yyyy-MM-dd');
+        if (dailyData[orderDateStr]) {
+          dailyData[orderDateStr].revenue += order.totalAmount;
+          dailyData[orderDateStr].orders += 1; // Assuming each order object is one order
+        }
+      });
+      
+      const trendData = dateRange.map(day => {
+        const dateStr = format(day, 'yyyy-MM-dd');
+        return {
+          date: format(day, periodInDays === 7 ? 'EEE' : 'd MMM'),
+          revenue: dailyData[dateStr]?.revenue || 0,
+          orders: dailyData[dateStr]?.orders || 0,
+        };
+      });
+      setSalesTrendData(trendData);
+      
+      // Mock Peak Hours from orders (can be refined)
+      const hourlyOrders: Record<number, number> = {};
+      summary.ordersLastPeriod?.forEach(order => {
+        const hour = parseISO(order.createdAt).getHours();
+        hourlyOrders[hour] = (hourlyOrders[hour] || 0) + 1;
+      });
+      const peakData = Object.entries(hourlyOrders).map(([hour, count]) => ({ hour: `${parseInt(hour)}:00`, orders: count})).sort((a,b) => parseInt(a.hour) - parseInt(b.hour));
+      setPeakHoursData(peakData.slice(0,12)); // Show up to 12 peak hour slots
+
+      // Generate simple AI insights
+      const insights = [];
+      if (summary.totalRevenue > 0) insights.push(`Total revenue for the last ${periodInDays} days: ₹${summary.totalRevenue.toLocaleString()}.`);
+      if (occupancy.occupancyRate > 70) insights.push(`Table occupancy is high at ${occupancy.occupancyRate.toFixed(0)}%. Consider optimizing table turnover.`);
+      if (popular.length > 0) insights.push(`${popular[0].menuItemName} is your top seller! Ensure stock levels are good.`);
+      setAiInsights(insights);
+
+    } catch (error) {
+      console.error("Error fetching dashboard data:", error);
+      toast({ variant: 'destructive', title: 'Error Fetching Data', description: 'Could not load dashboard insights.' });
+    } finally {
+      setIsOverallLoading(false);
+      setIsRefreshing(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    if (selectedRestaurantId) {
+      fetchDataForDashboard(selectedRestaurantId, salesDataPeriod === '7d' ? 7 : 30);
+    }
+  }, [selectedRestaurantId, salesDataPeriod, fetchDataForDashboard]);
+
+  // Real-time listeners for orders and tables to update relevant parts dynamically
+  useEffect(() => {
+    if (!selectedRestaurantId) return;
+
+    const unsubOrders = listenToRestaurantOrders(selectedRestaurantId, (updatedOrders) => {
+      setLiveOrders(updatedOrders);
+      // Potentially re-calculate some metrics if needed for very live updates, or rely on periodic fetchDataForDashboard
+      // For example, if an order status changes, you might want to re-fetch status distribution immediately.
+      // For now, let's assume the primary display is handled by fetchDataForDashboard and this is for more granular updates if we build them.
+      // For instance, total live orders might be:
+      // const newTotalOrders = updatedOrders.length;
+      // setDashboardMetrics(prev => prev ? {...prev, totalOrders: newTotalOrders} : null);
+    }, salesDataPeriod === '7d' ? 7 : 30);
+
+    const unsubTables = listenToRestaurantTables(selectedRestaurantId, (updatedTables) => {
+      setLiveTables(updatedTables);
+      const occupiedCount = updatedTables.filter(t => t.status === 'occupied').length;
+      const totalTables = updatedTables.length;
+      const occupancyRate = totalTables > 0 ? (occupiedCount / totalTables) * 100 : 0;
+      setDashboardMetrics(prev => prev ? {
+        ...prev, 
+        tableOccupancy: { totalTables, occupiedTables: occupiedCount, occupancyRate }
+      } : null);
+    });
+
+    return () => {
+      unsubOrders();
+      unsubTables();
+    };
+  }, [selectedRestaurantId, salesDataPeriod]);
+
+
+  if (!user || user.role !== 'owner') {
+    // This case should ideally be handled by the layout redirecting non-owners
     return (
-      <div className="space-y-6">
+        <div className="p-4">
+            <Card><CardHeader><CardTitle>Access Denied</CardTitle></CardHeader>
+            <CardContent><p>This dashboard is for restaurant owners.</p></CardContent></Card>
+        </div>
+    );
+  }
+  
+  if (isOverallLoading && !selectedRestaurantId) { // Still determining which restaurant to show
+    return (
+        <div className="p-4">
+            <Skeleton className="h-12 w-1/2 mb-4" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-32" />)}
+            </div>
+        </div>
+    );
+  }
+
+
+  if (!selectedRestaurantId && !isOverallLoading) { // Finished initial load, no restaurant selected/found
+    return (
+      <div className="space-y-6 p-4">
         <Card className="shadow-lg">
           <CardHeader>
             <CardTitle className="text-2xl font-semibold text-primary">Welcome, Restaurant Owner!</CardTitle>
@@ -215,65 +342,60 @@ function OwnerDashboard() {
       </div>
     );
   }
-
-  const currentSalesData = salesDataPeriod === '7d' ? salesLast7Days : salesLast30Days;
-  const totalRevenue = currentSalesData.reduce((sum, item) => sum + item.revenue, 0);
-  const totalOrders = currentSalesData.reduce((sum, item) => sum + item.orders, 0);
-  const averageOrderValue = totalOrders > 0 ? (totalRevenue / totalOrders) : 0;
+  
+  const isLoadingMetrics = isOverallLoading || isRefreshing;
 
 
   return (
     <div className="space-y-8">
       <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
-        <CardHeader>
-          <CardTitle className="text-2xl font-semibold text-primary flex items-center">
-            <Store className="mr-3 h-7 w-7" />
-            {currentRestaurantName ? `${currentRestaurantName} - Insights Dashboard` : "Restaurant Insights Dashboard"}
-          </CardTitle>
-          <CardDescription>Key metrics and performance overview for your restaurant. (Mock Data)</CardDescription>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle className="text-2xl font-semibold text-primary flex items-center">
+              <Store className="mr-3 h-7 w-7" />
+              {currentRestaurantName ? `${currentRestaurantName} - Insights` : <Skeleton className="h-7 w-48" />}
+            </CardTitle>
+            <CardDescription>Key metrics and performance overview for your restaurant.</CardDescription>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => fetchDataForDashboard(selectedRestaurantId!, salesDataPeriod === '7d' ? 7 : 30)} disabled={isRefreshing}>
+            <RefreshCw className={cn("mr-2 h-4 w-4", isRefreshing && "animate-spin")} />
+            Refresh
+          </Button>
         </CardHeader>
       </Card>
 
-      {/* Key Metrics Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <DashboardMetricCard
             title={`Revenue (${salesDataPeriod === '7d' ? 'Last 7 Days' : 'Last 30 Days'})`}
-            value={`₹${totalRevenue.toLocaleString()}`}
-            change="+12.5% vs prev."
-            changeType="positive"
+            value={dashboardMetrics ? `₹${dashboardMetrics.totalRevenue.toLocaleString()}` : '...'}
             icon={<DollarSign className="h-5 w-5 text-muted-foreground" />}
-            isLoading={isLoading}
+            isLoading={isLoadingMetrics}
             dataAiHint="revenue growth"
         />
         <DashboardMetricCard
             title={`Total Orders (${salesDataPeriod === '7d' ? 'Last 7 Days' : 'Last 30 Days'})`}
-            value={totalOrders}
-            change="+8.2% vs prev."
-            changeType="positive"
+            value={dashboardMetrics ? dashboardMetrics.totalOrders : '...'}
             icon={<ShoppingCart className="h-5 w-5 text-muted-foreground" />}
-            isLoading={isLoading}
+            isLoading={isLoadingMetrics}
             dataAiHint="order volume"
         />
         <DashboardMetricCard
             title="Avg. Order Value"
-            value={`₹${averageOrderValue.toFixed(2)}`}
-            change="-1.5% vs prev."
-            changeType="negative"
+            value={dashboardMetrics ? `₹${dashboardMetrics.averageOrderValue.toFixed(2)}` : '...'}
             icon={<DollarSign className="h-5 w-5 text-muted-foreground" />}
-            isLoading={isLoading}
+            isLoading={isLoadingMetrics}
             dataAiHint="average check size"
         />
          <DashboardMetricCard
             title="Active Tables"
-            value="8 / 15"
-            footerText="53% Occupancy"
+            value={dashboardMetrics?.tableOccupancy ? `${dashboardMetrics.tableOccupancy.occupiedTables} / ${dashboardMetrics.tableOccupancy.totalTables}` : '...'}
+            footerText={dashboardMetrics?.tableOccupancy ? `${dashboardMetrics.tableOccupancy.occupancyRate.toFixed(0)}% Occupancy` : undefined}
             icon={<TableIcon className="h-5 w-5 text-muted-foreground" />}
-            isLoading={isLoading}
+            isLoading={isLoadingMetrics}
             dataAiHint="table occupancy"
         />
       </div>
 
-      {/* Sales Trend and Popular Items */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-2 shadow-md">
           <CardHeader>
@@ -281,7 +403,7 @@ function OwnerDashboard() {
               <CardTitle className="text-lg flex items-center">
                   <LineChartIcon className="mr-2 h-5 w-5 text-accent" /> Sales Trend
               </CardTitle>
-              <Tabs defaultValue="7d" onValueChange={(value) => setSalesDataPeriod(value as '7d' | '30d')}>
+              <Tabs defaultValue={salesDataPeriod} onValueChange={(value) => setSalesDataPeriod(value as '7d' | '30d')}>
                 <TabsList className="grid w-full grid-cols-2 h-8 text-xs">
                   <TabsTrigger value="7d" className="h-6 px-2 text-xs">7 Days</TabsTrigger>
                   <TabsTrigger value="30d" className="h-6 px-2 text-xs">30 Days</TabsTrigger>
@@ -290,9 +412,9 @@ function OwnerDashboard() {
             </div>
           </CardHeader>
           <CardContent>
-            {isLoading ? <Skeleton className="h-[300px] w-full" /> : (
+            {isLoadingMetrics || salesTrendData.length === 0 ? <Skeleton className="h-[300px] w-full" /> : (
             <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={currentSalesData}>
+                <LineChart data={salesTrendData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.5)" />
                     <XAxis dataKey="date" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
                     <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
@@ -312,14 +434,14 @@ function OwnerDashboard() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            {isLoading ? Array.from({length: 5}).map((_, i) => <Skeleton key={i} className="h-10 w-full" />) :
-            popularItemsData.map(item => (
-                <div key={item.name} className="flex justify-between items-center p-2 bg-muted/30 hover:bg-muted/50 rounded-md text-sm">
-                    <span className="font-medium text-foreground truncate max-w-[60%]">{item.name}</span>
-                    <span className="text-xs text-muted-foreground text-right">{item.orders} orders <br/> ₹{item.revenue.toLocaleString()}</span>
+            {isLoadingMetrics || popularItems.length === 0 ? Array.from({length: 5}).map((_, i) => <Skeleton key={i} className="h-10 w-full" />) :
+            popularItems.map(item => (
+                <div key={item.menuItemId} className="flex justify-between items-center p-2 bg-muted/30 hover:bg-muted/50 rounded-md text-sm">
+                    <span className="font-medium text-foreground truncate max-w-[60%]">{item.menuItemName}</span>
+                    <span className="text-xs text-muted-foreground text-right">{item.orderCount} orders <br/> ₹{item.totalRevenue.toLocaleString()}</span>
                 </div>
             ))}
-             {!isLoading && (
+             {!isLoadingMetrics && selectedRestaurantId && (
                 <Button variant="outline" size="sm" className="w-full mt-4" asChild>
                     <Link href={`/dashboard/menu-management/${selectedRestaurantId}`}>View Full Menu</Link>
                 </Button>
@@ -328,7 +450,6 @@ function OwnerDashboard() {
         </Card>
       </div>
 
-      {/* Order Status and Peak Hours */}
        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Card className="shadow-md">
                 <CardHeader>
@@ -337,16 +458,16 @@ function OwnerDashboard() {
                     </CardTitle>
                 </CardHeader>
                 <CardContent>
-                    {isLoading ? <Skeleton className="h-[250px] w-full" /> : (
+                    {isLoadingMetrics || orderStatusDistribution.length === 0 ? <Skeleton className="h-[250px] w-full" /> : (
                     <ResponsiveContainer width="100%" height={250}>
                         <PieChart>
-                            <Pie data={orderStatusDistributionData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} labelLine={false} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
-                                {orderStatusDistributionData.map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={entry.fill} stroke={entry.fill} />
+                            <Pie data={orderStatusDistribution} dataKey="count" nameKey="status" cx="50%" cy="50%" outerRadius={80} labelLine={false} label={({ status, percent }) => `${(orderStatusConfig[status as OrderStatusType]?.shortLabel || status)} ${(percent * 100).toFixed(0)}%`}>
+                                {orderStatusDistribution.map((entry, index) => (
+                                    <Cell key={`cell-${index}`} fill={entry.fill || CHART_COLORS[index % CHART_COLORS.length]} stroke={entry.fill || CHART_COLORS[index % CHART_COLORS.length]} />
                                 ))}
                             </Pie>
-                            <RechartsTooltip contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }} itemStyle={{ color: 'hsl(var(--foreground))' }}/>
-                            <Legend wrapperStyle={{fontSize: "12px"}} />
+                            <RechartsTooltip contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }} itemStyle={{ color: 'hsl(var(--foreground))' }} formatter={(value, name) => [value, orderStatusConfig[name as OrderStatusType]?.label || name]}/>
+                            <Legend wrapperStyle={{fontSize: "12px"}} formatter={(value) => orderStatusConfig[value as OrderStatusType]?.label || value} />
                         </PieChart>
                     </ResponsiveContainer>
                     )}
@@ -359,7 +480,7 @@ function OwnerDashboard() {
                     </CardTitle>
                 </CardHeader>
                 <CardContent>
-                     {isLoading ? <Skeleton className="h-[250px] w-full" /> : (
+                     {isLoadingMetrics || peakHoursData.length === 0 ? <Skeleton className="h-[250px] w-full" /> : (
                     <ResponsiveContainer width="100%" height={250}>
                         <BarChart data={peakHoursData}>
                             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.5)"/>
@@ -374,7 +495,6 @@ function OwnerDashboard() {
             </Card>
         </div>
 
-      {/* AI Insights */}
       <Card className="shadow-md bg-gradient-to-r from-primary/5 via-accent/5 to-secondary/5 border-primary/20">
         <CardHeader>
             <CardTitle className="text-lg flex items-center text-primary">
@@ -382,11 +502,11 @@ function OwnerDashboard() {
             </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
-             {isLoading ? <> <Skeleton className="h-6 w-3/4"/> <Skeleton className="h-6 w-full"/> <Skeleton className="h-6 w-2/3"/> </> : <>
-            <p><strong className="text-foreground">Sales Forecast:</strong> Based on recent performance, next week's sales are projected to be around ₹{ (totalRevenue * 1.05).toLocaleString() }. Consider stocking up on popular items.</p>
-            <p><strong className="text-foreground">Peak Hour Alert:</strong> 7 PM is consistently your busiest hour. Ensure adequate staffing during this time to maintain service quality.</p>
-            <p><strong className="text-foreground">Menu Opportunity:</strong> "Mango Lassi" is gaining popularity quickly. Consider promoting it or creating a combo offer.</p>
-            </>}
+             {isLoadingMetrics || aiInsights.length === 0 ? <> <Skeleton className="h-6 w-3/4"/> <Skeleton className="h-6 w-full"/> <Skeleton className="h-6 w-2/3"/> </> : 
+                aiInsights.map((insight, idx) => (
+                    <p key={idx}><strong className="text-foreground">{insight.split(':')[0]}:</strong>{insight.split(':')[1]}</p>
+                ))
+            }
         </CardContent>
       </Card>
     </div>
@@ -395,6 +515,7 @@ function OwnerDashboard() {
 
 
 function UserDashboard() {
+  // ... (UserDashboard implementation remains the same)
   const { user } = useAuth();
   const restaurantContextId = user?.restaurantId || 'default'; 
 
@@ -421,7 +542,7 @@ function UserDashboard() {
           <DashboardNavigationCard
             title="Meal Planner"
             description="Organize your weekly meals effortlessly."
-            icon={<ChefHat className="h-8 w-8 text-accent" />} // Changed from SquareMenu to ChefHat for user context
+            icon={<ChefHat className="h-8 w-8 text-accent" />} 
             actionText="Plan Meals"
             actionHref={user?.restaurantId ? `/dashboard/meal-planner/${user.restaurantId}` : '/dashboard/meal-planner/default'}
             imageUrl="https://picsum.photos/seed/mealplanner/400/200"
@@ -430,7 +551,7 @@ function UserDashboard() {
           <DashboardNavigationCard
             title="My Profile"
             description="Update your preferences and personal information."
-            icon={<UserCog className="h-8 w-8 text-accent" />} // Changed from ChefHat to UserCog
+            icon={<UserCog className="h-8 w-8 text-accent" />} 
             actionText="View Profile"
             actionHref="/dashboard/profile"
             imageUrl="https://picsum.photos/seed/userprofile/400/200"
@@ -475,9 +596,16 @@ function DashboardNavigationCard({ title, description, icon, actionText, actionH
 
 
 export default function DashboardPage() {
-  const { user, role } = useAuth();
+  const { user, role, initialLoading } = useAuth();
 
-  if (!user) return null;
+  if (initialLoading || !user) { // Added !user check to ensure user object is available before deciding role
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <LoadingSpinner className="h-12 w-12 text-primary"/>
+      </div>
+    );
+  }
+
 
   let dashboardComponent;
   if (role === 'admin') {
@@ -501,4 +629,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
