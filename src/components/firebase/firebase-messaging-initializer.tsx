@@ -5,14 +5,32 @@ import { getToken, onMessage } from 'firebase/messaging';
 import { messaging } from '@/lib/firebase/config'; // Ensure messaging is exported from config
 import { useToast } from '@/hooks/use-toast';
 
-// IMPORTANT: Replace with your VAPID key from Firebase Console
-// Project settings > Cloud Messaging > Web configuration > Key pair
-const VAPID_KEY = "YOUR_VAPID_KEY_HERE"; // TODO: User needs to replace this
+// =====================================================================================
+// IMPORTANT: CRITICAL PUSH NOTIFICATION SETUP REQUIRED
+// =====================================================================================
+// REPLACE "YOUR_VAPID_KEY_HERE" WITH YOUR ACTUAL VAPID KEY FROM THE FIREBASE CONSOLE.
+// You can find this in: Firebase Console -> Project Settings -> Cloud Messaging tab -> Web configuration -> Web Push certificates.
+// Generate a key pair if you haven't already. Copy the PUBLIC key.
+//
+// PUSH NOTIFICATIONS WILL NOT WORK WITHOUT A VALID VAPID KEY.
+// =====================================================================================
+const VAPID_KEY = "YOUR_VAPID_KEY_HERE"; 
+// =====================================================================================
 
 export default function FirebaseMessagingInitializer() {
   const { toast } = useToast();
 
   useEffect(() => {
+    if (VAPID_KEY === "YOUR_VAPID_KEY_HERE") {
+      console.warn("FirebaseMessagingInitializer: VAPID_KEY is a placeholder. Push notifications will not work until it's replaced with a real key from your Firebase project.");
+      toast({
+        variant: "destructive",
+        title: "Push Notification Setup Required",
+        description: "VAPID key is missing. Please configure it in firebase-messaging-initializer.tsx.",
+        duration: 10000, // Show for longer
+      });
+    }
+    
     if (typeof window !== 'undefined' && 'serviceWorker' in navigator && messaging) {
       // Request permission and get token
       const requestNotificationPermission = async () => {

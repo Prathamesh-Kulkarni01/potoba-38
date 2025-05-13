@@ -4,14 +4,15 @@ importScripts('https://www.gstatic.com/firebasejs/10.12.3/firebase-app-compat.js
 importScripts('https://www.gstatic.com/firebasejs/10.12.3/firebase-messaging-compat.js');
 
 // Initialize Firebase
-// IMPORTANT: Replace with your actual Firebase config
+// IMPORTANT: This config should ideally match your main app's Firebase config.
 const firebaseConfig = {
   apiKey: "AIzaSyAU8FrdgZgvtbGvvd0pXugKohODjlo0CXI",
   authDomain: "app1-65be0.firebaseapp.com",
   projectId: "app1-65be0",
-  storageBucket: "app1-65be0.appspot.com",
+  storageBucket: "app1-65be0.firebasestorage.app", // Updated to match user's explicit config
   messagingSenderId: "1081840443655", // This ID is crucial for FCM
   appId: "1:1081840443655:web:b16feb9b7b4e406c8365a2",
+  // databaseURL is not typically needed for FCM in SW, but can be added if other Firebase services are used here
 };
 
 firebase.initializeApp(firebaseConfig);

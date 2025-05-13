@@ -6,9 +6,9 @@ import { getMessaging, Messaging } from 'firebase/messaging';
 const firebaseConfig = {
   apiKey: "AIzaSyAU8FrdgZgvtbGvvd0pXugKohODjlo0CXI",
   authDomain: "app1-65be0.firebaseapp.com",
-  databaseURL: "https://app1-65be0.firebaseio.com", // Added for completeness, though not directly used by Firestore web SDK typically
+  databaseURL: "https://app1-65be0.firebaseio.com",
   projectId: "app1-65be0",
-  storageBucket: "app1-65be0.appspot.com", // Corrected from firebasestorage.app
+  storageBucket: "app1-65be0.firebasestorage.app", // Ensured this matches user's explicit instruction
   messagingSenderId: "1081840443655",
   appId: "1:1081840443655:web:b16feb9b7b4e406c8365a2",
 };
