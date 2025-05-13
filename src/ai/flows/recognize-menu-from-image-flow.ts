@@ -27,7 +27,7 @@ const RecognizedCategorySchema = z.object({
   items: z.array(RecognizedMenuItemSchema).describe("A list of menu items found within this category or as standalone items if no category is detected for them."),
 });
 
-export const RecognizeMenuOutputSchema = z.object({
+const RecognizeMenuOutputSchema = z.object({
   rawText: z.string().optional().describe("The full raw text transcribed from the menu image. This can be useful for debugging or if structured parsing fails."),
   structuredItems: z.array(RecognizedCategorySchema).optional().describe("An array of recognized categories, each containing its items. Items without a clear category might be grouped under an 'Uncategorized' category or listed directly."),
 });
@@ -86,3 +86,4 @@ const recognizeMenuFlow = ai.defineFlow(
     return output;
   }
 );
+
