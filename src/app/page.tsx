@@ -27,6 +27,7 @@ export default function HomePage() {
     }
   }, [user, initialLoading, authContextLoading, router]);
 
+ 
   // Show loader if initial auth check is happening, or subsequent auth context processing (like profile fetch) is ongoing.
   // The AuthProvider itself shows an AppLoadingScreen during initialLoadingState.
   // This one will show if AuthProvider is done with initial but this page's specific logic is waiting for authContextLoading.

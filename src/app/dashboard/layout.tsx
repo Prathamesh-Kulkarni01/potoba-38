@@ -34,6 +34,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import type { LucideIcon } from 'lucide-react';
+import PWAInstaller from '@/components/pwa/PWAInstaller';
 
 
 interface NavItem {
@@ -289,6 +290,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     );
   };
 
+
   return (
     <>
       {!isMobile ? (
@@ -411,6 +413,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           <BottomNavigationBar navItems={bottomNavLinks} />
         </div>
       )}
+       <PWAInstaller/>
     </>
   );
 }
