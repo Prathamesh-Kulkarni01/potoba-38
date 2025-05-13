@@ -413,7 +413,20 @@ function OwnerDashboard() {
             dataAiHint="table occupancy"
         />
       </div>
-
+      <Card className="shadow-md bg-gradient-to-r from-primary/5 via-accent/5 to-secondary/5 border-primary/20">
+        <CardHeader>
+            <CardTitle className="text-lg flex items-center text-primary">
+                <Lightbulb className="mr-2 h-5 w-5"/> AI-Powered Suggestions
+            </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm">
+             {isLoadingMetrics || aiInsights.length === 0 ? <> <Skeleton className="h-6 w-3/4"/> <Skeleton className="h-6 w-full"/> <Skeleton className="h-6 w-2/3"/> </> : 
+                aiInsights.map((insight, idx) => (
+                    <p key={idx}><strong className="text-foreground">{insight.split(':')[0]}:</strong>{insight.split(':')[1]}</p>
+                ))
+            }
+        </CardContent>
+      </Card>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-2 shadow-md">
           <CardHeader>
@@ -513,20 +526,7 @@ function OwnerDashboard() {
             </Card>
         </div>
 
-      <Card className="shadow-md bg-gradient-to-r from-primary/5 via-accent/5 to-secondary/5 border-primary/20">
-        <CardHeader>
-            <CardTitle className="text-lg flex items-center text-primary">
-                <Lightbulb className="mr-2 h-5 w-5"/> AI-Powered Suggestions
-            </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3 text-sm">
-             {isLoadingMetrics || aiInsights.length === 0 ? <> <Skeleton className="h-6 w-3/4"/> <Skeleton className="h-6 w-full"/> <Skeleton className="h-6 w-2/3"/> </> : 
-                aiInsights.map((insight, idx) => (
-                    <p key={idx}><strong className="text-foreground">{insight.split(':')[0]}:</strong>{insight.split(':')[1]}</p>
-                ))
-            }
-        </CardContent>
-      </Card>
+     
     </div>
   );
 }
@@ -635,12 +635,12 @@ export default function DashboardPage() {
 
   return (
     <div className="container mx-auto py-8 px-2 md:px-4">
-      <h1 className="text-3xl md:text-4xl font-bold mb-2">
+      {/* <h1 className="text-3xl md:text-4xl font-bold mb-2">
         Welcome to Potoba, <span className="text-primary">{user.displayName || user.email?.split('@')[0] || 'User'}</span>!
       </h1>
       <p className="text-md md:text-lg text-muted-foreground mb-8">
         You are logged in as a{role === 'admin' || role === 'owner' ? 'n' : ''} <span className="font-semibold text-accent">{role}</span>.
-      </p>
+      </p> */}
 
       {dashboardComponent}
     </div>
