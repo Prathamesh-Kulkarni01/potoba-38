@@ -6,14 +6,14 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useAuth } from '@/lib/auth/context';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ChefHat, Settings, UserCog, Users, Store, DollarSign, ShoppingCart, Star, LineChart as LineChartIcon, BookCopy, ShieldCheck, ScanText, ListOrdered, Briefcase, AreaChart, BarChart3, PieChart as PieChartIcon, Lightbulb, Clock, Users2, Table as TableIcon, RefreshCw } from 'lucide-react';
+import { ChefHat, Settings, UserCog, Users, Store, DollarSign, ShoppingCart, Star, LineChart as LineChartIcon, BookCopy, ShieldCheck, ScanText, ListOrdered, Briefcase, AreaChart, BarChart3, PieChart as PieChartIcon, Lightbulb, Clock, Users2, Table as TableIcon, RefreshCw, Hourglass, Utensils, CheckCircle, XCircle } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { getRestaurantsByOwner, getRestaurant } from '@/lib/firebase/firestore'; 
 import type { RestaurantProfile, ClientOrder, OrderStatus as OrderStatusType, Table as FirebaseTableType, PopularItem as PopularItemType } from '@/types';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, LineChart, Line, PieChart, Pie, Cell, Sector } from 'recharts';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Skeleton } from '@/components/ui/skeleton';
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from '@/lib/utils';
 import {
   getRestaurantOrderSummary,
@@ -148,6 +148,20 @@ interface SalesTrendDataPoint {
   orders: number;
 }
 
+const orderStatusConfig: Record<OrderStatusType, { label: string; icon?: React.ElementType, shortLabel?: string }> = {
+  pending_customer_confirmation: { label: 'Pending Customer Confirmation', shortLabel: 'Pending Cust.', icon: Hourglass },
+  pending_kitchen: { label: 'Pending Kitchen Acceptance', shortLabel: 'Pending Kitchen', icon: Hourglass },
+  confirmed_by_kitchen: { label: 'Kitchen Confirmed', shortLabel: 'Kitchen Confirmed', icon: Utensils },
+  preparing: { label: 'Preparing', shortLabel: 'Preparing', icon: Utensils },
+  ready_for_pickup: { label: 'Ready for Pickup', shortLabel: 'Ready Pickup', icon: ShoppingCart },
+  served: { label: 'Served', shortLabel: 'Served', icon: CheckCircle },
+  payment_pending: { label: 'Payment Pending', shortLabel: 'Payment Pend.', icon: Clock },
+  completed: { label: 'Completed', shortLabel: 'Completed', icon: CheckCircle },
+  cancelled_by_customer: { label: 'Cancelled by Customer', shortLabel: 'Cancelled (Cust)', icon: XCircle },
+  cancelled_by_restaurant: { label: 'Cancelled by Restaurant', shortLabel: 'Cancelled (Rest)', icon: XCircle },
+};
+
+
 function OwnerDashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -272,11 +286,11 @@ function OwnerDashboard() {
   
     const setupListeners = async () => {
       try {
-        unsubOrders = await listenToRestaurantOrders(selectedRestaurantId, (updatedOrders) => {
+        unsubOrders = listenToRestaurantOrders(selectedRestaurantId, (updatedOrders) => {
           setLiveOrders(updatedOrders);
         }, salesDataPeriod === '7d' ? 7 : 30);
   
-        unsubTables = await listenToRestaurantTables(selectedRestaurantId, (updatedTables) => {
+        unsubTables = listenToRestaurantTables(selectedRestaurantId, (updatedTables) => {
           setLiveTables(updatedTables);
           const occupiedCount = updatedTables.filter(t => t.status === 'occupied').length;
           const totalTables = updatedTables.length;
@@ -519,7 +533,6 @@ function OwnerDashboard() {
 
 
 function UserDashboard() {
-  // ... (UserDashboard implementation remains the same)
   const { user } = useAuth();
   const restaurantContextId = user?.restaurantId || 'default'; 
 
