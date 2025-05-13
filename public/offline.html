@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Offline - Potoba</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #f9f9f9;
+            color: #333;
+            text-align: center;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+        }
+        h1 {
+            font-size: 2.5em;
+            color: #FFB347; /* Primary Orange */
+            margin-bottom: 0.5em;
+        }
+        p {
+            font-size: 1.1em;
+            line-height: 1.6;
+            margin-bottom: 1.5em;
+            color: #555;
+        }
+        .icon {
+            font-size: 4em; /* Adjust as needed */
+            margin-bottom: 0.5em;
+            color: #FFB347;
+        }
+        a {
+            color: #1abc9c; /* Teal accent */
+            text-decoration: none;
+            font-weight: bold;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="icon">🍲</div> {/* Pot icon or a relevant emoji */}
+        <h1>You're Offline</h1>
+        <p>It looks like you're not connected to the internet. Don't worry, Potoba has saved some data for you, but full functionality will resume once you're back online.</p>
+        <p>Please check your connection and <a href="javascript:location.reload();">try again</a>.</p>
+    </div>
+</body>
+</html>
