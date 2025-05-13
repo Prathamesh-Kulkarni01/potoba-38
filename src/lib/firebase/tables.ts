@@ -1,5 +1,5 @@
 // src/lib/firebase/tables.ts
-'use server';
+// 'use server'; // This directive should NOT be here if onSnapshot is used for client-side listeners
 import {
   collection,
   addDoc,
@@ -16,7 +16,7 @@ import {
   collectionGroup,
   limit,
   setDoc, 
-  onSnapshot, // Added for real-time
+  onSnapshot,
 } from 'firebase/firestore';
 import { db } from './config';
 import type { Table, TableStatus } from '@/types';
@@ -28,10 +28,9 @@ export async function addTable(restaurantId: string, tableData: Omit<Table, 'id'
   const tablesCol = collection(db, getTablesCollectionPath(restaurantId));
   const nowTimestamp = Timestamp.now();
   
-  const newTableRef = doc(tablesCol); // Generate ID upfront
+  const newTableRef = doc(tablesCol); 
   const tableId = newTableRef.id;
 
-  // Ensure NEXT_PUBLIC_BASE_URL ends with a slash if it's not already present for consistency
   const baseUrl = (process.env.NEXT_PUBLIC_BASE_URL || 'https://6000-firebase-studio-1746809721561.cluster-ancjwrkgr5dvux4qug5rbzyc2y.cloudworkstations.dev').replace(/\/$/, '');
   const finalQrCodeValue = `${baseUrl}/menu/table/${tableId}`;
 
@@ -70,7 +69,7 @@ export async function getTables(restaurantId: string): Promise<Table[]> {
     return { 
       id: docSnap.id, 
       ...data,
-      tableDocId: docSnap.id, // Ensure tableDocId is populated if it wasn't explicitly set during creation
+      tableDocId: docSnap.id, 
       createdAt: convertFirebaseTimestampToString(data.createdAt as Timestamp),
       updatedAt: convertFirebaseTimestampToString(data.updatedAt as Timestamp)
     } as Table;
@@ -96,9 +95,6 @@ export async function getTable(restaurantId: string, tableId: string): Promise<T
 export async function getTableByDocIdFromGroup(tableDocIdToFind: string): Promise<{ table: Table; restaurantId: string } | null> {
   if (!db) throw new Error("Firestore is not initialized.");
   const tablesGroupRef = collectionGroup(db, 'tables');
-  // Query by tableDocId field instead of documentId() for collection group queries if you have this field.
-  // If you intend to query by the actual document ID in a collection group, Firestore syntax might differ or have limitations.
-  // For this to work effectively, ensure tableDocId is a field in your 'tables' documents and is indexed.
   const q = query(tablesGroupRef, where('tableDocId', '==', tableDocIdToFind), limit(1));
   
   const snapshot = await getDocs(q);
@@ -129,7 +125,6 @@ export async function updateTable(restaurantId: string, tableId: string, data: P
   const tableRef = doc(db, getTablesCollectionPath(restaurantId), tableId);
   
   const updateData: any = { ...data, updatedAt: serverTimestamp() };
-  // Prevent qrCodeValue or tableDocId from being accidentally changed during a general update
   if (updateData.hasOwnProperty('qrCodeValue')) delete updateData.qrCodeValue;
   if (updateData.hasOwnProperty('tableDocId')) delete updateData.tableDocId;
   
@@ -173,26 +168,27 @@ export async function getRestaurantTableOccupancy(restaurantId: string): Promise
 }
 
 // Real-time listener setup for a restaurant's tables
-export function listenToRestaurantTables(
+export async function listenToRestaurantTables(
   restaurantId: string,
   callback: (tables: Table[]) => void
-): () => void { // Returns an unsubscribe function
+): Promise<() => void> { 
   if (!db) throw new Error("Firestore is not initialized for real-time listener.");
   
   const tablesCol = collection(db, getTablesCollectionPath(restaurantId));
   const q = query(tablesCol, orderBy('tableNumber', 'asc'));
 
-  const unsubscribe = onSnapshot(q, (snapshot) => {
-    const tables = snapshot.docs.map(docSnap => ({
-        id: docSnap.id,
-        ...docSnap.data(),
-        createdAt: convertFirebaseTimestampToString(docSnap.data().createdAt as Timestamp),
-        updatedAt: convertFirebaseTimestampToString(docSnap.data().updatedAt as Timestamp),
-      } as Table));
-    callback(tables);
-  }, (error) => {
-    console.error(`Error listening to tables for restaurant ${restaurantId}:`, error);
+  return new Promise((resolve) => {
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const tables = snapshot.docs.map(docSnap => ({
+          id: docSnap.id,
+          ...docSnap.data(),
+          createdAt: convertFirebaseTimestampToString(docSnap.data().createdAt as Timestamp),
+          updatedAt: convertFirebaseTimestampToString(docSnap.data().updatedAt as Timestamp),
+        } as Table));
+      callback(tables);
+    }, (error) => {
+      console.error(`Error listening to tables for restaurant ${restaurantId}:`, error);
+    });
+    resolve(unsubscribe); 
   });
-
-  return unsubscribe;
 }

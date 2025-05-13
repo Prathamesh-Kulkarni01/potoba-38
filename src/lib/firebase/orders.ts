@@ -1,5 +1,7 @@
 // src/lib/firebase/orders.ts
-'use server';
+// Removed 'use server' directive as listenToRestaurantOrders uses onSnapshot (client-side listener)
+// and server actions must be async. If other functions in this file were intended as server actions
+// for form submissions, they might need to be refactored or this file split.
 
 import {
   collection,
@@ -17,7 +19,7 @@ import {
   QueryConstraint, 
   limit,
   getCountFromServer,
-  onSnapshot, // Added for real-time
+  onSnapshot, 
   startAt,
   endAt,
   documentId,
@@ -206,7 +208,7 @@ export interface RestaurantOrderSummary {
   totalRevenue: number;
   totalOrders: number;
   averageOrderValue: number;
-  ordersLastPeriod?: ClientOrder[]; // Optional: raw orders for trend calculation if needed by client
+  ordersLastPeriod?: ClientOrder[]; 
 }
 
 export async function getRestaurantOrderSummary(
@@ -217,13 +219,13 @@ export async function getRestaurantOrderSummary(
   const ordersCol = collection(db, getOrdersCollectionPath(restaurantId));
   
   const endDate = new Date();
-  const startDate = subDays(endDate, periodInDays -1); // -1 because we want to include today
+  const startDate = subDays(endDate, periodInDays -1); 
   
   const q = query(
     ordersCol,
     where('createdAt', '>=', Timestamp.fromDate(startOfDay(startDate))),
     where('createdAt', '<=', Timestamp.fromDate(endOfDay(endDate))),
-    where('status', 'in', ['completed', 'served', 'payment_pending']) // Consider only revenue-generating statuses
+    where('status', 'in', ['completed', 'served', 'payment_pending']) 
   );
 
   const snapshot = await getDocs(q);
@@ -243,7 +245,7 @@ export async function getRestaurantOrderSummary(
     totalRevenue,
     totalOrders,
     averageOrderValue,
-    ordersLastPeriod: orders, // Return orders if client needs to process trends
+    ordersLastPeriod: orders, 
   };
 }
 
@@ -325,7 +327,7 @@ export async function getPopularMenuItems(
       orderCount: data.count,
       totalRevenue: data.revenue,
     }))
-    .sort((a, b) => b.orderCount - a.orderCount) // Sort by most ordered
+    .sort((a, b) => b.orderCount - a.orderCount) 
     .slice(0, limitCount);
 }
 
@@ -333,8 +335,8 @@ export async function getPopularMenuItems(
 export function listenToRestaurantOrders(
   restaurantId: string,
   callback: (orders: ClientOrder[]) => void,
-  periodInDays: 7 | 30 = 7 // Default to last 7 days for live dashboard
-): () => void { // Returns an unsubscribe function
+  periodInDays: 7 | 30 = 7 
+): () => void { 
   if (!db) throw new Error("Firestore is not initialized for real-time listener.");
   
   const ordersCol = collection(db, getOrdersCollectionPath(restaurantId));

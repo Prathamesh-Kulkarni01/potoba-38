@@ -174,25 +174,24 @@ function OwnerDashboard() {
       if (storedRestaurantId) {
         setSelectedRestaurantId(storedRestaurantId);
       } else {
-        // If no stored ID and no primary restaurantId, fetch all owner's restaurants and pick first
         getRestaurantsByOwner(user.uid).then(restaurants => {
           if (restaurants.length > 0) {
             const firstRestaurantId = restaurants[0].id;
             setSelectedRestaurantId(firstRestaurantId);
             localStorage.setItem(`selectedRestaurant_${user.uid}`, firstRestaurantId);
           } else {
-             setIsOverallLoading(false); // No restaurants to load data for
+             setIsOverallLoading(false); 
           }
         });
       }
-    } else if (user) { // Not an owner
+    } else if (user) { 
       setIsOverallLoading(false);
     }
   }, [user]);
 
   const fetchDataForDashboard = useCallback(async (restaurantId: string, period: 7 | 30) => {
     if (!restaurantId) return;
-    setIsRefreshing(true); // Indicate data refresh is starting
+    setIsRefreshing(true); 
     try {
       const currentRestaurant = await getRestaurant(restaurantId);
       setCurrentRestaurantName(currentRestaurant?.name || "Restaurant");
@@ -208,7 +207,6 @@ function OwnerDashboard() {
       setPopularItems(popular);
       setOrderStatusDistribution(statusDist.map((s, idx) => ({ ...s, fill: CHART_COLORS[idx % CHART_COLORS.length] })));
       
-      // Process sales trend data
       const periodInDays = period === 7 ? 7 : 30;
       const endDate = new Date();
       const startDate = subDays(endDate, periodInDays - 1);
@@ -223,7 +221,7 @@ function OwnerDashboard() {
         const orderDateStr = format(parseISO(order.createdAt), 'yyyy-MM-dd');
         if (dailyData[orderDateStr]) {
           dailyData[orderDateStr].revenue += order.totalAmount;
-          dailyData[orderDateStr].orders += 1; // Assuming each order object is one order
+          dailyData[orderDateStr].orders += 1; 
         }
       });
       
@@ -237,16 +235,14 @@ function OwnerDashboard() {
       });
       setSalesTrendData(trendData);
       
-      // Mock Peak Hours from orders (can be refined)
       const hourlyOrders: Record<number, number> = {};
       summary.ordersLastPeriod?.forEach(order => {
         const hour = parseISO(order.createdAt).getHours();
         hourlyOrders[hour] = (hourlyOrders[hour] || 0) + 1;
       });
       const peakData = Object.entries(hourlyOrders).map(([hour, count]) => ({ hour: `${parseInt(hour)}:00`, orders: count})).sort((a,b) => parseInt(a.hour) - parseInt(b.hour));
-      setPeakHoursData(peakData.slice(0,12)); // Show up to 12 peak hour slots
+      setPeakHoursData(peakData.slice(0,12)); 
 
-      // Generate simple AI insights
       const insights = [];
       if (summary.totalRevenue > 0) insights.push(`Total revenue for the last ${periodInDays} days: ₹${summary.totalRevenue.toLocaleString()}.`);
       if (occupancy.occupancyRate > 70) insights.push(`Table occupancy is high at ${occupancy.occupancyRate.toFixed(0)}%. Consider optimizing table turnover.`);
@@ -268,40 +264,48 @@ function OwnerDashboard() {
     }
   }, [selectedRestaurantId, salesDataPeriod, fetchDataForDashboard]);
 
-  // Real-time listeners for orders and tables to update relevant parts dynamically
   useEffect(() => {
     if (!selectedRestaurantId) return;
-
-    const unsubOrders = listenToRestaurantOrders(selectedRestaurantId, (updatedOrders) => {
-      setLiveOrders(updatedOrders);
-      // Potentially re-calculate some metrics if needed for very live updates, or rely on periodic fetchDataForDashboard
-      // For example, if an order status changes, you might want to re-fetch status distribution immediately.
-      // For now, let's assume the primary display is handled by fetchDataForDashboard and this is for more granular updates if we build them.
-      // For instance, total live orders might be:
-      // const newTotalOrders = updatedOrders.length;
-      // setDashboardMetrics(prev => prev ? {...prev, totalOrders: newTotalOrders} : null);
-    }, salesDataPeriod === '7d' ? 7 : 30);
-
-    const unsubTables = listenToRestaurantTables(selectedRestaurantId, (updatedTables) => {
-      setLiveTables(updatedTables);
-      const occupiedCount = updatedTables.filter(t => t.status === 'occupied').length;
-      const totalTables = updatedTables.length;
-      const occupancyRate = totalTables > 0 ? (occupiedCount / totalTables) * 100 : 0;
-      setDashboardMetrics(prev => prev ? {
-        ...prev, 
-        tableOccupancy: { totalTables, occupiedTables: occupiedCount, occupancyRate }
-      } : null);
-    });
-
-    return () => {
-      unsubOrders();
-      unsubTables();
+  
+    let unsubOrders: (() => void) | null = null;
+    let unsubTables: (() => void) | null = null;
+  
+    const setupListeners = async () => {
+      try {
+        unsubOrders = await listenToRestaurantOrders(selectedRestaurantId, (updatedOrders) => {
+          setLiveOrders(updatedOrders);
+        }, salesDataPeriod === '7d' ? 7 : 30);
+  
+        unsubTables = await listenToRestaurantTables(selectedRestaurantId, (updatedTables) => {
+          setLiveTables(updatedTables);
+          const occupiedCount = updatedTables.filter(t => t.status === 'occupied').length;
+          const totalTables = updatedTables.length;
+          const occupancyRate = totalTables > 0 ? (occupiedCount / totalTables) * 100 : 0;
+          setDashboardMetrics(prev => {
+            // Ensure prev is not null before spreading
+            const currentPrev = prev || { totalRevenue: 0, totalOrders: 0, averageOrderValue: 0 };
+            return {
+              ...currentPrev, 
+              tableOccupancy: { totalTables, occupiedTables: occupiedCount, occupancyRate }
+            };
+          });
+        });
+      } catch (error) {
+        console.error("Error setting up listeners:", error);
+        toast({ variant: "destructive", title: "Listener Error", description: "Could not set up live data updates." });
+      }
     };
-  }, [selectedRestaurantId, salesDataPeriod]);
+  
+    setupListeners();
+  
+    return () => {
+      if (unsubOrders) unsubOrders();
+      if (unsubTables) unsubTables();
+    };
+  }, [selectedRestaurantId, salesDataPeriod, toast]);
 
 
   if (!user || user.role !== 'owner') {
-    // This case should ideally be handled by the layout redirecting non-owners
     return (
         <div className="p-4">
             <Card><CardHeader><CardTitle>Access Denied</CardTitle></CardHeader>
@@ -310,7 +314,7 @@ function OwnerDashboard() {
     );
   }
   
-  if (isOverallLoading && !selectedRestaurantId) { // Still determining which restaurant to show
+  if (isOverallLoading && !selectedRestaurantId) { 
     return (
         <div className="p-4">
             <Skeleton className="h-12 w-1/2 mb-4" />
@@ -322,7 +326,7 @@ function OwnerDashboard() {
   }
 
 
-  if (!selectedRestaurantId && !isOverallLoading) { // Finished initial load, no restaurant selected/found
+  if (!selectedRestaurantId && !isOverallLoading) { 
     return (
       <div className="space-y-6 p-4">
         <Card className="shadow-lg">
@@ -580,7 +584,7 @@ function DashboardNavigationCard({ title, description, icon, actionText, actionH
       <Image src={imageUrl} alt={title} width={small ? 300 : 400} height={small ? 150 : 200} className={`w-full ${small ? 'h-32' : 'h-40'} object-cover`} data-ai-hint={dataAiHint}/>
       <CardHeader className={small ? 'p-3' : 'p-6'}>
         <div className={`flex items-center gap-3 ${small ? 'mb-1' : 'mb-2'}`}>
-          {React.cloneElement(icon as React.ReactElement, small ? {className: "h-6 w-6 text-accent"} : {className: (icon as React.ReactElement).props.className || "h-8 w-8 text-accent"})}
+          {React.cloneElement(icon as React.ReactElement, { className: cn( (icon as React.ReactElement).props.className || "h-8 w-8 text-accent", small ? "h-6 w-6" : "") })}
           <CardTitle className={small ? 'text-md' : 'text-xl'}>{title}</CardTitle>
         </div>
         <CardDescription className={small ? 'text-xs leading-snug' : ''}>{description}</CardDescription>
@@ -598,7 +602,7 @@ function DashboardNavigationCard({ title, description, icon, actionText, actionH
 export default function DashboardPage() {
   const { user, role, initialLoading } = useAuth();
 
-  if (initialLoading || !user) { // Added !user check to ensure user object is available before deciding role
+  if (initialLoading || !user) { 
     return (
       <div className="flex h-screen items-center justify-center">
         <LoadingSpinner className="h-12 w-12 text-primary"/>
