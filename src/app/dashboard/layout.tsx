@@ -1,3 +1,4 @@
+// src/app/dashboard/layout.tsx
 'use client';
 
 import { useEffect, type ReactNode, useState, useCallback } from 'react';
@@ -5,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useAuth, type UserRole } from '@/lib/auth/context';
-import LoadingSpinner from '@/components/shared/loading-spinner';
+import AppLoadingScreen from '@/components/shared/app-loading-screen'; // Changed import
 import UserNav from '@/components/dashboard/user-nav';
 import {
   SidebarProvider,
@@ -26,7 +27,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button';
 import BottomNavigationBar, { type BottomNavItem } from '@/components/dashboard/bottom-navigation-bar';
 import { useIsMobile as useIsMobileDirect } from '@/hooks/use-mobile';
-import { LayoutDashboard, Users, Utensils, ChefHat, Settings, ShieldCheck, Store, PlusCircle, BookCopy, ListOrdered, Briefcase, ExternalLink, Table, List, Settings2, CookingPot, ChevronDown, LogOut, ChevronsLeftRight, SquareMenu } from 'lucide-react';
+import { LayoutDashboard, Users, Utensils, ChefHat, Settings, ShieldCheck, Store, PlusCircle, BookCopy, ListOrdered, Briefcase, ExternalLink, Table, List, Settings2, CookingPot, ChevronDown, LogOut, ChevronsLeftRight, SquareMenuIcon } from 'lucide-react'; // Changed to SquareMenuIcon
 import type { RestaurantProfile } from '@/types';
 import { getRestaurantsByOwner, updateUserProfile } from '@/lib/firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
@@ -34,12 +35,6 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { cn } from '@/lib/utils';
 import type { LucideIcon } from 'lucide-react';
 
-
-const FullScreenLoader = () => (
-  <div className="flex h-screen items-center justify-center bg-background">
-    <LoadingSpinner className="h-12 w-12 text-primary" />
-  </div>
-);
 
 interface NavItem {
   href?: string;
@@ -51,8 +46,8 @@ interface NavItem {
   rel?: string;
   children?: NavItem[];
   isHeader?: boolean;
-  badgeCount?: number; // For notification badges
-  isGroup?: boolean; // True if this item is a collapsible group trigger
+  badgeCount?: number; 
+  isGroup?: boolean; 
 }
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
@@ -66,7 +61,6 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   const [selectedRestaurantId, setSelectedRestaurantId] = useState<string | null>(null);
   const [restaurantsLoading, setRestaurantsLoading] = useState(false);
 
-  // Collapsible menu states
   const [openCollapsibles, setOpenCollapsibles] = useState<Record<string, boolean>>({});
 
   const toggleCollapsible = (label: string) => {
@@ -118,7 +112,6 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (selectedRestaurantId && user?.uid) {
       localStorage.setItem(`selectedRestaurant_${user.uid}`, selectedRestaurantId);
-      // Update user profile with the last selected restaurant if it's different
       if (user.restaurantId !== selectedRestaurantId) {
         updateUserProfile(user.uid, { restaurantId: selectedRestaurantId })
           .catch(err => console.error("Failed to update last selected restaurant for user:", err));
@@ -134,12 +127,15 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     setSelectedRestaurantId(restaurantId);
   };
 
-  if (initialLoading || authContextLoading || (authContextRole === 'owner' && restaurantsLoading && ownedRestaurants.length === 0 && !pathname.endsWith('/create-restaurant'))) {
-    return <FullScreenLoader />;
+  // AuthProvider shows initial loading screen. This handles subsequent loading states specific to dashboard.
+  if (authContextLoading || (authContextRole === 'owner' && restaurantsLoading && ownedRestaurants.length === 0 && !pathname.endsWith('/create-restaurant') && !pathname.endsWith('/subscription') && !pathname.endsWith('/restaurant-setup'))) {
+    return <AppLoadingScreen message="Loading dashboard..." />;
   }
 
   if (!user || !authContextRole || (authContextRole === 'owner' && user.onboardingComplete === false)) {
-    return <FullScreenLoader />;
+    // This case should ideally be handled by useEffect redirecting.
+    // If it's reached, it means redirection is pending or failed.
+    return <AppLoadingScreen message="Preparing your space..." />;
   }
 
   const commonNavItems: NavItem[] = [
@@ -155,17 +151,17 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     return [
       { href: `/dashboard/restaurant/${currentRestaurantId}`, label: 'Overview', icon: Store, roles: ['owner'], hint: "restaurant details" },
       { href: `/dashboard/menu-management/${currentRestaurantId}`, label: 'Menu', icon: BookCopy, roles: ['owner'], hint: "manage menu" },
-      { href: `/dashboard/table-management/${currentRestaurantId}`, label: 'Tables', icon: Briefcase, roles: ['owner'], hint: "manage tables", badgeCount: 2 /* Placeholder */ },
-      { href: `/dashboard/orders/${currentRestaurantId}`, label: 'Orders', icon: ListOrdered, roles: ['owner', 'staff'], hint: "view orders", badgeCount: 5 /* Placeholder */ },
-      { href: `/dashboard/restaurant/${currentRestaurantId}/kitchen`, label: 'KOT', icon: CookingPot, roles: ['owner', 'kitchen'], hint: "kitchen order tickets", badgeCount: 3 /* Placeholder */ },
+      { href: `/dashboard/table-management/${currentRestaurantId}`, label: 'Tables', icon: Briefcase, roles: ['owner'], hint: "manage tables", badgeCount: 2 },
+      { href: `/dashboard/orders/${currentRestaurantId}`, label: 'Orders', icon: ListOrdered, roles: ['owner', 'staff'], hint: "view orders", badgeCount: 5 },
+      { href: `/dashboard/restaurant/${currentRestaurantId}/kitchen`, label: 'KOT', icon: CookingPot, roles: ['owner', 'kitchen'], hint: "kitchen order tickets", badgeCount: 3 },
       { href: `/dashboard/staff/${currentRestaurantId}`, label: 'Staff', icon: Users, roles: ['owner'], hint: "manage staff" },
-      { href: `/dashboard/restaurant/${currentRestaurantId}/settings`, label: 'Restaurant Settings', icon: Settings, roles: ['owner'], hint: "specific settings" },
+      
       {
-        label: 'Manage', icon: Store, roles: ['owner'], hint: "manage restaurant", isGroup: false,
+        label: 'Manage Restaurant', icon: Store, roles: ['owner'], hint: "manage specific restaurant settings and operations", isGroup: true,
         children: [
+          { href: `/dashboard/restaurant/${currentRestaurantId}/settings`, label: 'Restaurant Settings', icon: Settings, roles: ['owner'], hint: "specific settings" },
           { href: `/dashboard/recipes/${currentRestaurantId}`, label: 'Recipes (Old)', icon: Utensils, roles: ['owner', 'staff'], hint: "food recipes" },
-          { href: `/dashboard/meal-planner/${currentRestaurantId}`, label: 'Meal Planner', icon: SquareMenu, roles: ['owner', 'staff'], hint: "meal plan" },
-
+          { href: `/dashboard/meal-planner/${currentRestaurantId}`, label: 'Meal Planner', icon: SquareMenuIcon, roles: ['owner', 'staff'], hint: "meal plan" },
         ],
       },
     ]
@@ -178,7 +174,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         { href: '/dashboard/admin/users', label: 'All Users', icon: Users, roles: ['admin'], hint: "users list" },
         { href: '/dashboard/admin/restaurants', label: 'All Restaurants', icon: Store, roles: ['admin'], hint: "platform restaurants" },
         { href: '/dashboard/admin/analytics', label: 'Platform Analytics', icon: LayoutDashboard, roles: ['admin'], hint: "admin analytics" },
-        { href: '/dashboard/admin/content', label: 'Content Moderation', icon: SquareMenu, roles: ['admin'], hint: "admin content" },
+        { href: '/dashboard/admin/content', label: 'Content Moderation', icon: SquareMenuIcon, roles: ['admin'], hint: "admin content" },
         { href: '/dashboard/admin/settings', label: 'Platform Settings', icon: Settings, roles: ['admin'], hint: "admin settings" },
       ]
     }
@@ -186,10 +182,9 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
   const settingsNavItems: NavItem[] = [
     {
-      label: 'Settings', icon: Settings2, roles: ['owner', 'staff', 'admin', 'user'], hint: 'App and Profile Settings', isGroup: true,
+      label: 'General Settings', icon: Settings2, roles: ['owner', 'staff', 'admin', 'user'], hint: 'App and Profile Settings', isGroup: true,
       children: [
-        { href: ' /dashboard/restaurant/${currentRestaurantId}/settings', label: 'Customise', icon: ChefHat, roles: ['owner', 'staff', 'admin',], hint: "Customise Setting" },
-        { href: '/dashboard/profile', label: 'My Profile', icon: ChefHat, roles: ['staff', 'user'], hint: "user profile" },
+        { href: '/dashboard/profile', label: 'My Profile', icon: ChefHat, roles: ['owner', 'staff', 'user', 'admin'], hint: "user profile" },
         { href: '/dashboard/settings/theme', label: 'Theme & Branding', icon: Settings, roles: ['owner', 'admin'], hint: "theme settings" },
       ]
     }
@@ -252,7 +247,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
               <Collapsible open={openCollapsibles[item.label] || false} onOpenChange={() => toggleCollapsible(item.label)}>
                 <CollapsibleTrigger asChild >
                   <SidebarMenuButton
-                    isActive={false}
+                    isActive={item.children.some(child => child.href && pathname.startsWith(child.href.split('[')[0].replace(/\/(undefined|null)$/, '')))}
                     variant='ghost'
                     className="justify-between w-full"
                     tooltip={{ children: item.label, "data-ai-hint": item.hint, side: "right", align: "center" }}
@@ -357,7 +352,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             </SidebarFooter>
           </Sidebar>
           <SidebarInset>
-            <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b bg-background/80 px-4 backdrop-blur-md sm:px-6">
+            <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b bg-background/80 px-4 backdrop-blur-md sm:px-6">
               <div className="flex items-center">
                 <SidebarTrigger className="md:hidden" />
                 {authContextRole === 'owner' && (
@@ -368,7 +363,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
               </div>
               <UserNav />
             </header>
-            <main className="flex-1 p-6 bg-background">
+            <main className="flex-1 p-6 bg-background overflow-y-auto">
               {children}
             </main>
           </SidebarInset>
@@ -410,7 +405,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
               <UserNav />
             </div>
           </header>
-          <main className="flex-1 bg-background max-h-dvh overflow-y-auto p-4 pt-6 ">
+          <main className="flex-1 bg-background max-h-[calc(100dvh-theme(spacing.16)-theme(spacing.16))] overflow-y-auto p-4 pt-6 "> {/* Adjusted max-h */}
             {children}
           </main>
           <BottomNavigationBar navItems={bottomNavLinks} />

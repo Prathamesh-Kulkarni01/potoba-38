@@ -1,16 +1,10 @@
-
+// src/app/onboarding/layout.tsx
 'use client';
 import { useEffect, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth/context';
-import LoadingSpinner from '@/components/shared/loading-spinner';
+import AppLoadingScreen from '@/components/shared/app-loading-screen'; // Changed import
 import Image from 'next/image'; 
-
-const FullScreenLoader = () => (
-  <div className="flex h-screen items-center justify-center bg-background">
-    <LoadingSpinner className="h-12 w-12 text-primary" />
-  </div>
-);
 
 export default function OnboardingLayout({ children }: { children: ReactNode }) {
   const { user, initialLoading, loading: authContextLoading } = useAuth();
@@ -43,20 +37,23 @@ export default function OnboardingLayout({ children }: { children: ReactNode }) 
   }, [user, initialLoading, authContextLoading, router]);
 
 
+  // AuthProvider handles the initialLoading screen.
+  // This handles loading specific to onboarding context or redirection logic.
   if (initialLoading || authContextLoading) {
-    return <FullScreenLoader />; 
+    return <AppLoadingScreen message="Preparing onboarding..." />; 
   }
 
-  if (!user) {
-    return <FullScreenLoader />;
+  if (!user) { // Should be caught by useEffect, but as a safeguard
+    return <AppLoadingScreen message="Verifying session..." />;
   }
 
+  // If user is an owner and needs onboarding, show the layout
   if (user.role === 'owner' && user.onboardingComplete === false) {
     return (
       <div className="flex min-h-screen flex-col items-center bg-gradient-to-br from-background to-muted/50 pt-8 sm:pt-16 px-4">
         <div className="mb-8 text-center">
           <Image 
-              src="/public/images/logo.png"
+              src="/public/images/logo.png" // Make sure this path is correct or use relative path if image is in public
               alt="Potoba Logo" 
               width={80} 
               height={80} 
@@ -77,5 +74,7 @@ export default function OnboardingLayout({ children }: { children: ReactNode }) 
     );
   }
   
-  return <FullScreenLoader />;
+  // If user is already onboarded or not an owner, they will be redirected by useEffect.
+  // Show loader during this redirection phase.
+  return <AppLoadingScreen message="Finalizing setup..." />;
 }
