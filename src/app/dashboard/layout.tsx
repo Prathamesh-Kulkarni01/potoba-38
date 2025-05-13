@@ -296,7 +296,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           <Sidebar>
             <SidebarHeader className="p-4">
               <Link href="/dashboard" className="flex items-center gap-2">
-                <Image src="/public/images/logo.png" alt="App Logo" width={40} height={40} className="rounded-md" data-ai-hint="modern logo" />
+                <Image src="/images/logo.png" alt="App Logo" width={40} height={40} className="rounded-md" data-ai-hint="modern logo" />
                 <h1 className="text-2xl font-bold text-sidebar-primary group-data-[collapsible=icon]:hidden">Potoba</h1>
               </Link>
             </SidebarHeader>
@@ -372,7 +372,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         <div className="flex min-h-screen flex-col">
           <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b bg-background/80 px-4 backdrop-blur-md sm:px-6">
             <Link href="/dashboard" className="flex items-center gap-2">
-              <Image src="/public/images/logo.png" alt="App Logo" width={32} height={32} className="rounded-md" data-ai-hint="modern logo" />
+              <Image src="/images/logo.png" alt="App Logo" width={32} height={32} className="rounded-md" data-ai-hint="modern logo" />
               <h1 className="text-xl font-bold text-primary">Potoba</h1>
             </Link>
             <div className="flex items-center gap-2">

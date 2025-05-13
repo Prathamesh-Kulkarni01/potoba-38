@@ -53,7 +53,7 @@ export default function OnboardingLayout({ children }: { children: ReactNode }) 
       <div className="flex min-h-screen flex-col items-center bg-gradient-to-br from-background to-muted/50 pt-8 sm:pt-16 px-4">
         <div className="mb-8 text-center">
           <Image 
-              src="/public/images/logo.png" // Make sure this path is correct or use relative path if image is in public
+              src="/images/logo.png" // Make sure this path is correct or use relative path if image is in public
               alt="Potoba Logo" 
               width={80} 
               height={80} 
