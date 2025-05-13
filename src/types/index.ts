@@ -1,3 +1,4 @@
+
 import type { User as FirebaseUser } from 'firebase/auth';
 import type { Timestamp } from 'firebase/firestore';
 
@@ -7,19 +8,19 @@ export interface AuthUser extends FirebaseUser {
   role: UserRole | null;
   restaurantId: string | null;
   onboardingComplete: boolean;
-  isAnonymous: boolean; // Added for anonymous auth
-  phoneNumber: string | null; // Fixed: not optional
+  isAnonymous: boolean; 
+  phoneNumber: string | null; 
 }
 
 export interface UserProfile {
   uid: string;
-  email: string | null; // Email might be null for phone-verified anonymous users initially
+  email: string | null; 
   role: UserRole;
   restaurantId: string | null; 
   onboardingComplete: boolean; 
   createdAt: Timestamp;
-  phoneNumber: string | null; // Fixed: not optional
-  isAnonymous?: boolean; // Could be useful to track origin
+  phoneNumber: string | null; 
+  isAnonymous?: boolean; 
 }
 
 export interface RestaurantProfile {
@@ -77,7 +78,7 @@ export interface AvailabilityRule {
 
 export interface MenuItem {
   id: string; 
-  itemIdString: string; 
+  itemIdString: string; // New field: Stores the document ID for easier collection group queries
   restaurantId: string;
   categoryId: string;
   subcategoryId?: string | null; 
@@ -139,7 +140,7 @@ export interface OrderItem {
 export interface Order {
   id: string; 
   restaurantId: string;
-  userId?: string; // ID of the authenticated user (anonymous or permanent)
+  userId?: string; 
   tableId?: string | null; 
   tableNumber?: string | null; 
   items: OrderItem[];
@@ -150,12 +151,13 @@ export interface Order {
   totalAmount: number; 
   status: OrderStatus;
   customerName?: string | null; 
-  customerPhoneNumber?: string | null; // Store verified phone number here
+  customerPhoneNumber?: string | null; 
   customerWhatsapp?: string | null; 
   customerNotes?: string; 
   kitchenNotes?: string; 
   paymentMethod?: string;
   transactionId?: string;
+  groupId?: string; // Added for group orders
   createdAt: Timestamp; 
   updatedAt: Timestamp; 
 }
@@ -171,14 +173,22 @@ export interface GroupCartItem extends OrderItem {
   addedByName?: string; // Optional: display name of user who added
 }
 
+export interface TableGroupMember {
+  uid: string | null; // Can be null if user is not fully authenticated yet (e.g. just name/phone)
+  name: string;
+  phone?: string | null; // Optional for anonymous, might be required later
+  // Add any other relevant member details
+}
+
 export interface TableGroup {
   id: string; // This will be the 4-digit code
   restaurantId: string;
   tableId: string;
-  tableNumber: string; // For convenience
+  tableNumber: string; 
   creatorName: string;
-  creatorPhone: string;
-  members: { name: string; phone: string }[];
+  creatorPhone: string; 
+  creatorUid?: string | null; 
+  members: TableGroupMember[];
   status: 'active' | 'ordering' | 'locked' | 'ordered' | 'closed';
   cartItems: GroupCartItem[];
   createdAt: Timestamp;
@@ -189,4 +199,3 @@ export interface ClientTableGroup extends Omit<TableGroup, 'createdAt' | 'update
   createdAt: string;
   updatedAt: string;
 }
-

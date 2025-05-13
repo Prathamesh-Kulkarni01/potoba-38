@@ -18,7 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogTrigger } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle, Search, Edit3, Trash2, Utensils, AlertTriangle, GripVertical } from 'lucide-react';
+import { PlusCircle, Search, Edit3, Trash2, Utensils, AlertTriangle, GripVertical, ArrowDownUp } from 'lucide-react';
 import Image from 'next/image';
 import { Timestamp } from 'firebase/firestore';
 import { Badge } from '@/components/ui/badge';
@@ -27,14 +27,9 @@ import CategoryForm from '@/components/menu/category-form';
 import SubcategoryForm from '@/components/menu/subcategory-form';
 import MenuItemForm, { type MenuItemFormValues } from '@/components/menu/menu-item-form';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
-import { ScrollArea } from '@/components/ui/scroll-area';
-
-// Dummy Data (using actual types from @/types) - Will be replaced by Firestore data
-const createDummyCategories = (restaurantId: string): MenuCategory[] => [
-  // ... (keep dummy data for initial structure if needed, but will be fetched)
-];
-// ... (dummy subcategories and menu items)
-
+import ImportExportActionsDialog from '@/components/menu/import-export-actions-dialog';
+import ImportMenuImageDialog from '@/components/menu/import-menu-image-dialog';
+// import ImportMenuCsvDialog from '@/components/menu/import-menu-csv-dialog'; // Placeholder for CSV import
 
 interface MenuItemDisplayCardProps {
   item: MenuItem;
@@ -63,7 +58,7 @@ const MenuItemDisplayCard = ({ item, onEdit, onDelete, isOwner }: MenuItemDispla
       <p className="text-xs text-muted-foreground mb-1 h-10 overflow-y-auto">{item.description}</p>
       {item.dietaryTags && item.dietaryTags.length > 0 && (
         <div className="flex flex-wrap gap-1 mt-1">
-          {item.dietaryTags.map(tag => <Badge key={tag} variant="outline" className="text-xs">{tag}</Badge>)}
+          {item.dietaryTags.map(tag => <Badge key={tag} variant="outline" clascreateDummyCategoriessName="text-xs">{tag}</Badge>)}
         </div>
       )}
     </CardContent>
@@ -117,6 +112,10 @@ export default function MenuManagementPage() {
     description: string;
   } | null>(null);
 
+  const [showImportExportDialog, setShowImportExportDialog] = useState(false);
+  const [showImportImageDialog, setShowImportImageDialog] = useState(false);
+  const [showImportCsvDialog, setShowImportCsvDialog] = useState(false); // Placeholder state
+
   const fetchData = useCallback(async () => {
     if (!restaurantId || !user) return;
     setPageLoading(true);
@@ -124,8 +123,8 @@ export default function MenuManagementPage() {
       const [restaurantData, fetchedCategories, fetchedSubcategories, fetchedMenuItems] = await Promise.all([
         getRestaurant(restaurantId),
         getMenuCategories(restaurantId),
-        getMenuSubcategories(restaurantId), // Fetch all for the restaurant
-        getMenuItems(restaurantId) // Fetch all for the restaurant
+        getMenuSubcategories(restaurantId), 
+        getMenuItems(restaurantId) 
       ]);
 
       if (restaurantData && (restaurantData.ownerId === user.uid || role === 'staff')) {
@@ -185,7 +184,7 @@ export default function MenuManagementPage() {
         await addMenuCategory(restaurantId, values);
         toast({ title: "Category Added", description: `${values.name} has been added.` });
       }
-      fetchData(); // Refetch all data
+      fetchData(); 
       setIsCategoryModalOpen(false);
       setEditingCategory(null);
     } catch (error: any) {
@@ -231,7 +230,7 @@ export default function MenuManagementPage() {
 
     setFormSubmitting(true);
     try {
-      const itemDataToSave = { ...values }; // dietaryTags and allergenInfo already transformed by Zod
+      const itemDataToSave = { ...values };
 
       if (itemIdToUpdate) {
         await updateMenuItem(restaurantId, targetCategoryId, targetSubcategoryId, itemIdToUpdate, itemDataToSave);
@@ -290,6 +289,11 @@ export default function MenuManagementPage() {
       setFormSubmitting(false);
     }
   };
+  
+  const handleExportMenu = () => {
+    // Placeholder for export functionality
+    toast({ title: "Export Menu", description: "Export functionality coming soon!" });
+  };
 
 
   if (authLoading || pageLoading) {
@@ -313,22 +317,31 @@ export default function MenuManagementPage() {
               <Input placeholder="Search menu items..." className="pl-10 w-full" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
             </div>
             {isOwner && (
-              <Dialog open={isCategoryModalOpen} onOpenChange={setIsCategoryModalOpen}>
-                <DialogTrigger asChild>
-                  <Button className="w-full md:w-auto bg-accent hover:bg-accent/90 text-accent-foreground" onClick={() => { setEditingCategory(null); setIsCategoryModalOpen(true); }}>
-                    <PlusCircle className="mr-2 h-4 w-4" /> Add New Category
-                  </Button>
-                </DialogTrigger>
-                {isCategoryModalOpen && (
-                  <CategoryForm
-                    restaurantId={restaurantId}
-                    category={editingCategory}
-                    onSubmit={handleCategorySubmit}
-                    onClose={() => { setIsCategoryModalOpen(false); setEditingCategory(null); }}
-                    isLoading={formSubmitting}
-                  />
-                )}
-              </Dialog>
+              <div className="flex gap-2 w-full md:w-auto">
+                <Button 
+                  variant="outline" 
+                  className="flex-1 md:flex-initial"
+                  onClick={() => setShowImportExportDialog(true)}
+                >
+                  <ArrowDownUp className="mr-2 h-4 w-4" /> Import/Export
+                </Button>
+                <Dialog open={isCategoryModalOpen} onOpenChange={setIsCategoryModalOpen}>
+                  <DialogTrigger asChild>
+                    <Button className="flex-1 md:flex-initial bg-accent hover:bg-accent/90 text-accent-foreground" onClick={() => { setEditingCategory(null); setIsCategoryModalOpen(true); }}>
+                      <PlusCircle className="mr-2 h-4 w-4" /> Add New Category
+                    </Button>
+                  </DialogTrigger>
+                  {isCategoryModalOpen && (
+                    <CategoryForm
+                      restaurantId={restaurantId}
+                      category={editingCategory}
+                      onSubmit={handleCategorySubmit}
+                      onClose={() => { setIsCategoryModalOpen(false); setEditingCategory(null); }}
+                      isLoading={formSubmitting}
+                    />
+                  )}
+                </Dialog>
+              </div>
             )}
           </div>
 
@@ -489,7 +502,6 @@ export default function MenuManagementPage() {
         </CardContent>
       </Card>
 
-      {/* Edit Category Modal (shared for edit) */}
       {isCategoryModalOpen && editingCategory && (
         <Dialog open={isCategoryModalOpen} onOpenChange={setIsCategoryModalOpen}>
           <CategoryForm
@@ -502,7 +514,6 @@ export default function MenuManagementPage() {
         </Dialog>
       )}
 
-      {/* Edit Subcategory Modal (shared for edit) */}
       {isSubcategoryModalOpen && editingSubcategory && (
         <Dialog open={isSubcategoryModalOpen} onOpenChange={(isOpen) => { if (!isOpen) { setIsSubcategoryModalOpen(false); setEditingSubcategory(null); setParentCategoryIdForNewSub(null); } }}>
           <SubcategoryForm
@@ -516,7 +527,6 @@ export default function MenuManagementPage() {
         </Dialog>
       )}
 
-      {/* Edit Menu Item Modal (shared for edit) */}
       {isMenuItemModalOpen && editingMenuItem && (
         <Dialog open={isMenuItemModalOpen} onOpenChange={(isOpen) => { if (!isOpen) { setIsMenuItemModalOpen(false); setEditingMenuItem(null); setParentCategoryForItem(null); setParentSubcategoryForItem(null); } }}>
           <MenuItemForm
@@ -541,6 +551,41 @@ export default function MenuManagementPage() {
           isLoading={formSubmitting}
         />
       )}
+
+      <ImportExportActionsDialog
+        isOpen={showImportExportDialog}
+        onClose={() => setShowImportExportDialog(false)}
+        onImportImage={() => {
+          setShowImportExportDialog(false);
+          setShowImportImageDialog(true);
+        }}
+        onImportCsv={() => {
+          setShowImportExportDialog(false);
+          setShowImportCsvDialog(true); // You'll create this dialog component
+          toast({title: "Import CSV", description: "CSV import coming soon!"});
+        }}
+        onExportMenu={handleExportMenu}
+      />
+      
+      <ImportMenuImageDialog
+        isOpen={showImportImageDialog}
+        onClose={() => setShowImportImageDialog(false)}
+        restaurantId={restaurantId}
+        onImportSuccess={() => {
+          fetchData(); // Refresh menu data after successful import
+          setShowImportImageDialog(false);
+        }}
+      />
+
+      {/* {showImportCsvDialog && (
+        <ImportMenuCsvDialog
+            isOpen={showImportCsvDialog}
+            onClose={() => setShowImportCsvDialog(false)}
+            restaurantId={restaurantId}
+            onImportSuccess={fetchData}
+        />
+      )} */}
+
     </div>
   );
 }

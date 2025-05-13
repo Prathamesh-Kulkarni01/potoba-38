@@ -1,8 +1,7 @@
 
 // src/app/site/[restaurantId]/item/[itemId]/page.tsx
 import { getRestaurant } from '@/lib/firebase/firestore';
-// Changed import to relative path to troubleshoot module resolution.
-import { getMenuItemByIdFromGroup, getMenuItems } from '../../../../../lib/firebase/menu';
+import { getMenuItemByIdFromGroup, getMenuItems } from '@/lib/firebase/menu';
 import type { RestaurantProfile, MenuItem } from '@/types';
 import { notFound } from 'next/navigation';
 import { convertFirebaseTimestampToString } from '@/lib/firebase/utils';
@@ -59,15 +58,13 @@ export default async function ItemPage({ params }: ItemPageProps) {
     notFound();
   }
 
-  // Step 1: Fetch the menu item
   const itemResult = await getMenuItemByIdFromGroup(itemId);
 
   if (!itemResult) {
-    console.error(`[ItemPage] Menu item not found for ID "${itemId}" using getMenuItemByIdFromGroup. This often indicates a missing Firestore index on the 'menuItems' collection group for the 'itemIdString' field, or the item genuinely does not exist with this ID. Triggering notFound().`);
+    console.error(`[ItemPage] Menu item not found for ID "${itemId}" using getMenuItemByIdFromGroup. This could be an issue with the item ID, Firestore index on 'menuItems' collection group (field 'itemIdString'), or data consistency. Triggering notFound().`);
     notFound();
   }
   
-  // Step 1.1: Validate restaurant ID match
   if (itemResult.restaurantId !== restaurantId) {
     console.error(`[ItemPage] Item's restaurantId "${itemResult.restaurantId}" does not match current page's restaurantId "${restaurantId}". This indicates a mismatch or incorrect link. Triggering notFound().`);
     notFound();
@@ -76,7 +73,6 @@ export default async function ItemPage({ params }: ItemPageProps) {
   const menuItem = stringifyItemTimestamps(itemResult.menuItem) as MenuItem & { createdAt: string; updatedAt: string };
   console.log(`[ItemPage] Successfully fetched menu item: ${menuItem.name}`);
 
-  // Step 2: Fetch the restaurant details
   console.log(`[ItemPage] Fetching restaurant details for ID: ${restaurantId}`);
   const restaurantDataResult = await getRestaurant(restaurantId);
   if (!restaurantDataResult) {
@@ -86,7 +82,6 @@ export default async function ItemPage({ params }: ItemPageProps) {
   const restaurant = stringifyItemTimestamps(restaurantDataResult) as RestaurantProfile & { createdAt: string; updatedAt: string };
   console.log(`[ItemPage] Successfully fetched restaurant: ${restaurant.name}`);
 
-  // Step 3: Fetch related items (cross-sell)
   console.log(`[ItemPage] Fetching all menu items for restaurant ID: ${restaurantId} for cross-sell suggestions.`);
   const allRestaurantItemsData = await getMenuItems(restaurantId); 
   const frequentlyBoughtTogetherItems = allRestaurantItemsData

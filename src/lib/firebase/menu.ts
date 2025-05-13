@@ -17,7 +17,7 @@ import {
   collectionGroup,
   limit,
   setDoc, 
-  documentId,
+  documentId, // Keep for potential direct doc ID queries if needed elsewhere
 } from 'firebase/firestore';
 import { db } from './config';
 import type { MenuCategory, MenuSubcategory, MenuItem, MenuItemVariant, AvailabilityRule } from '@/types';
@@ -94,9 +94,6 @@ export async function getMenuSubcategories(restaurantId: string, categoryId?: st
      q = query(subcategoriesCol, orderBy('order', 'asc'), orderBy('name', 'asc'));
   } else {
     const allSubcategoriesCol = collectionGroup(db, 'menuSubcategories');
-    // Ensure restaurantId is part of the subcategory document for this to work efficiently.
-    // If not, this query might be slow or require a composite index on (restaurantId, order, name) for 'menuSubcategories' collection group.
-    // Assuming subcategory documents contain restaurantId:
     q = query(allSubcategoriesCol, where('restaurantId', '==', restaurantId), orderBy('categoryId'), orderBy('order', 'asc'), orderBy('name', 'asc'));
   }
   
@@ -111,7 +108,7 @@ export async function addMenuSubcategory(restaurantId: string, categoryId: strin
   const updatedAt = serverTimestamp();
   const docRef = await addDoc(subcategoriesCol, {
     ...subcategoryData,
-    restaurantId, // Store restaurantId for collection group queries
+    restaurantId, 
     categoryId,
     createdAt,
     updatedAt,
@@ -152,8 +149,6 @@ export async function getMenuItems(restaurantId: string): Promise<MenuItem[]> {
   if (!db) throw new Error("Firestore is not initialized.");
   
   const itemsColGroup = collectionGroup(db, 'menuItems');
-  // Ensure restaurantId is part of the menuItem document for this to work efficiently.
-  // This query requires a composite index: (restaurantId, categoryId, subcategoryId, order, name) on the 'menuItems' collection group.
   const q = query(itemsColGroup, where('restaurantId', '==', restaurantId), orderBy('categoryId'), orderBy('subcategoryId'), orderBy('order', 'asc'), orderBy('name', 'asc'));
   
   const snapshot = await getDocs(q);
@@ -166,41 +161,29 @@ export async function getMenuItems(restaurantId: string): Promise<MenuItem[]> {
   );
 }
 
-// Function to get a single menu item by its ID using collectionGroup query
-// This function assumes that `itemIdValue` is the actual document ID of the menu item.
-// And that each menu item document contains `restaurantId`, `categoryId`, and optionally `subcategoryId`.
 export async function getMenuItemByIdFromGroup(itemIdValue: string): Promise<{ menuItem: MenuItem, restaurantId: string, categoryId: string, subcategoryId: string | null } | null> {
   if (!db) throw new Error("Firestore is not initialized.");
-
   if (!itemIdValue || typeof itemIdValue !== 'string' || itemIdValue.trim() === '') {
-    console.error("getMenuItemByIdFromGroup: Invalid itemIdValue received:", itemIdValue);
+    console.error("[getMenuItemByIdFromGroup] Invalid itemIdValue received:", itemIdValue);
     return null;
   }
-
+  console.log(`[getMenuItemByIdFromGroup] Querying 'menuItems' collection group for itemIdString: "${itemIdValue}"`);
   const itemsGroupRef = collectionGroup(db, 'menuItems');
-  // Query for a document with a specific ID within the 'menuItems' collection group.
-  // Using where(documentId(), '==', itemIdValue) is the correct way if itemIdValue is the doc ID.
-  // However, if itemIdValue is a custom field like `itemIdString`, then use that field in where().
-  // Based on addMenuItem, we store itemIdString which is the doc ID.
+  // Query for a document where the 'itemIdString' field matches the provided itemIdValue
   const q = query(itemsGroupRef, where("itemIdString", "==", itemIdValue), limit(1));
   
   const snapshot = await getDocs(q);
-console.log("test1")
+
   if (snapshot.empty) {
-    console.log(`No menu item found with itemIdString: ${itemIdValue} in collection group 'menuItems'.`);
-    // Fallback: try querying by actual document ID, though less efficient across shards if not targeted.
-    // This path is usually not hit if itemIdString is correctly populated and indexed.
-    // For robust solution, ensure `itemIdString` is always populated.
-    // const directPathGuess = `restaurants/${SOME_RESTAURANT_ID}/menuCategories/${SOME_CATEGORY_ID}/menuItems/${itemIdValue}`; // this is hard to guess
+    console.log(`[getMenuItemByIdFromGroup] No menu item found with itemIdString: "${itemIdValue}". Ensure Firestore index on 'menuItems' collection group (field 'itemIdString' ASC) exists and item data is consistent (itemIdString field matches document ID).`);
     return null;
   }
-  console.log("test2")
+  
   const docSnap = snapshot.docs[0];
   const data = docSnap.data();
 
-   // Validate essential fields for constructing a valid MenuItem and returning context
    if (!data.restaurantId || !data.categoryId) {
-     console.error("MenuItem document is missing restaurantId or categoryId fields:", docSnap.id, data);
+     console.error("[getMenuItemByIdFromGroup] MenuItem document is missing restaurantId or categoryId fields:", docSnap.id, data);
      return null;
    }
   
@@ -208,7 +191,7 @@ console.log("test1")
     menuItem: { id: docSnap.id, ...data, createdAt: data.createdAt as Timestamp, updatedAt: data.updatedAt as Timestamp } as MenuItem,
     restaurantId: data.restaurantId, 
     categoryId: data.categoryId,     
-    subcategoryId: data.subcategoryId || null // Ensure this aligns with MenuItem type (optional or null)
+    subcategoryId: data.subcategoryId || null 
   };
 }
 
@@ -228,15 +211,15 @@ export async function addMenuItem(
     itemsColRef = collection(db, 'restaurants', restaurantId, 'menuCategories', categoryId, 'menuItems');
   }
   
-  const newMenuItemDocRef = doc(itemsColRef); // Create a reference with a new auto-generated ID
-  const itemIdString = newMenuItemDocRef.id; // Get the auto-generated ID
+  const newMenuItemDocRef = doc(itemsColRef); 
+  const itemIdString = newMenuItemDocRef.id; 
 
   const createdAt = serverTimestamp();
   const updatedAt = serverTimestamp();
 
   const dataToSave: any = {
     ...itemData,
-    itemIdString, // Store the document's own ID as a field
+    itemIdString, 
     restaurantId,
     categoryId,
     subcategoryId: subcategoryId || null,
@@ -244,7 +227,6 @@ export async function addMenuItem(
     updatedAt,
   };
 
-  // Handle optional fields to avoid storing empty values if not intended
   if (itemData.calories === undefined || itemData.calories === null) delete dataToSave.calories; else dataToSave.calories = Number(itemData.calories);
   if (!itemData.crossSellItems || itemData.crossSellItems.length === 0) delete dataToSave.crossSellItems;
   if (!itemData.upsellItems || itemData.upsellItems.length === 0) delete dataToSave.upsellItems;
@@ -257,11 +239,11 @@ export async function addMenuItem(
   if (!itemData.variants || itemData.variants.length === 0) delete dataToSave.variants;
   if (!itemData.availabilitySchedule || itemData.availabilitySchedule.length === 0) delete dataToSave.availabilitySchedule;
 
-  await setDoc(newMenuItemDocRef, dataToSave); // Use setDoc with the new reference
+  await setDoc(newMenuItemDocRef, dataToSave); 
 
   return { 
     id: itemIdString, 
-    itemIdString, // Include it in the returned object
+    itemIdString, 
     restaurantId, 
     categoryId, 
     subcategoryId: subcategoryId || null, 
@@ -294,28 +276,26 @@ export async function updateMenuItem(
       delete cleanedData[key];
     }
     if (key === 'imageUrl' && (cleanedData[key] === '' || cleanedData[key] === undefined)) {
-      cleanedData[key] = null; // Store null if empty string or undefined
+      cleanedData[key] = null; 
     }
     if (key === 'videoUrl' && (cleanedData[key] === '' || cleanedData[key] === undefined)) {
-      cleanedData[key] = null; // Store null if empty string or undefined
+      cleanedData[key] = null; 
     }
     if (key === 'calories' && (cleanedData[key] === null || cleanedData[key] === undefined || isNaN(cleanedData[key]))) {
-       delete cleanedData[key]; // Remove if null, undefined, or NaN
+       delete cleanedData[key]; 
     } else if (key === 'calories') {
-       cleanedData[key] = Number(cleanedData[key]); // Ensure it's stored as a number
+       cleanedData[key] = Number(cleanedData[key]); 
     }
-    // For array fields, ensure they are not stored as empty arrays if that's not desired, or handle appropriately
+    
     if ((key === 'variants' || key === 'availabilitySchedule' || key === 'dietaryTags' || key === 'allergenInfo' || key === 'crossSellItems' || key === 'upsellItems') && (!cleanedData[key] || (Array.isArray(cleanedData[key]) && cleanedData[key].length === 0))) {
-      delete cleanedData[key]; // Example: remove if empty array
+       cleanedData[key] = null; // Store null for empty arrays to remove them if desired
     }
   });
   
   const dataToUpdate = { ...cleanedData, updatedAt: serverTimestamp() };
-  // Ensure itemIdString is not part of the update payload as it's immutable or set at creation
   if (dataToUpdate.hasOwnProperty('itemIdString')) {
     delete dataToUpdate.itemIdString;
   }
-
 
   await updateDoc(itemRefPath, dataToUpdate);
 }
@@ -331,3 +311,63 @@ export async function deleteMenuItem(restaurantId: string, categoryId: string, s
   await deleteDoc(itemRefPath);
 }
 
+// Batch add menu items (e.g., for import)
+export async function batchAddMenuItems(restaurantId: string, itemsToImport: Array<{
+  categoryName: string;
+  itemName: string;
+  itemPrice?: string;
+  itemDescription?: string;
+}>): Promise<number> {
+  if (!db) throw new Error("Firestore is not initialized.");
+  const batch = writeBatch(db);
+  let importedCount = 0;
+
+  const categoriesCache: Record<string, string> = {}; // Cache categoryName to categoryId
+
+  for (const importItem of itemsToImport) {
+    let categoryId = categoriesCache[importItem.categoryName];
+    if (!categoryId) {
+      // Simple check for existing category by name, or create new
+      const categoriesCol = collection(db, `restaurants/${restaurantId}/menuCategories`);
+      const q = query(categoriesCol, where("name", "==", importItem.categoryName), limit(1));
+      const catSnapshot = await getDocs(q);
+      if (!catSnapshot.empty) {
+        categoryId = catSnapshot.docs[0].id;
+      } else {
+        const newCategoryData = { name: importItem.categoryName, order: 0, restaurantId, createdAt: serverTimestamp(), updatedAt: serverTimestamp() };
+        const newCategoryRef = doc(collection(db, `restaurants/${restaurantId}/menuCategories`));
+        batch.set(newCategoryRef, newCategoryData);
+        categoryId = newCategoryRef.id;
+      }
+      categoriesCache[importItem.categoryName] = categoryId;
+    }
+
+    let price = 0;
+    if (importItem.itemPrice) {
+      const parsedPrice = parseFloat(importItem.itemPrice.replace(/[^0-9.-]+/g, ""));
+      if (!isNaN(parsedPrice)) price = parsedPrice;
+    }
+
+    const itemsColRef = collection(db, `restaurants/${restaurantId}/menuCategories/${categoryId}/menuItems`);
+    const newItemDocRef = doc(itemsColRef);
+    const itemIdString = newItemDocRef.id;
+
+    const menuItemData = {
+      itemIdString,
+      restaurantId,
+      categoryId,
+      name: importItem.itemName,
+      description: importItem.itemDescription || '',
+      price,
+      availability: true,
+      order: 0,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+    batch.set(newItemDocRef, menuItemData);
+    importedCount++;
+  }
+
+  await batch.commit();
+  return importedCount;
+}
