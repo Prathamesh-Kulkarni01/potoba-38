@@ -1,0 +1,454 @@
+<svg viewBox="0 0 390 844" xmlns="http://www.w3.org/2000/svg">
+        {/* <!-- Background covering full screen --> */}
+        <defs>
+          <linearGradient id="bgGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stop-color="#FDFCFC" />
+            <stop offset="100%" stop-color="#FCFCFC" />
+          </linearGradient>
+
+          {/* <!-- Primary color glow --> */}
+          <radialGradient id="glowGradient" cx="50%" cy="40%" r="50%" fx="50%" fy="40%">
+            <stop offset="0%" stop-color="rgba(255, 94, 31, 0.2)" />
+            <stop offset="100%" stop-color="rgba(255, 94, 31, 0)" />
+          </radialGradient>
+
+          {/* <!-- Steam animation gradients --> */}
+          <linearGradient id="steamGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.8" />
+            <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0" />
+          </linearGradient>
+
+          {/* <!-- Sauce drop gradients --> */}
+          <linearGradient id="sauceGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stop-color="#FF5E1F" stop-opacity="1" />
+            <stop offset="100%" stop-color="#FF5E1F" stop-opacity="0.8" />
+          </linearGradient>
+        </defs>
+
+        {/* <!-- Full screen background --> */}
+
+        {/* <!-- Background accents --> */}
+        <circle cx="195" cy="422" r="300" fill="#FFA826" opacity="0.03" />
+        <circle cx="195" cy="422" r="200" fill="url(#glowGradient)" opacity="0.3" />
+        <circle cx="90" cy="700" r="80" fill="#1ECBAE" opacity="0.05" />
+        <circle cx="320" cy="150" r="60" fill="#1ECBAE" opacity="0.05" />
+
+        {/* <!-- App logo and cooking animation --> */}
+        <g transform="translate(195, 300) scale(1.1)">
+          {/* <!-- Main circular background --> */}
+          <circle cx="0" cy="0" r="85" fill="white" stroke="#E9EBEF" stroke-width="2" />
+
+          {/* <!-- Food preparation animation container --> */}
+          <g>
+            {/* <!-- Cooking plate/pan --> */}
+            <circle cx="0" cy="0" r="65" fill="#F5F5F5" stroke="#E9EBEF" stroke-width="2" />
+            <circle cx="0" cy="0" r="60" fill="#FCFCFC" stroke="#E9EBEF" stroke-width="1" />
+
+            {/* <!-- Pan handle --> */}
+            <rect x="60" y="-5" width="30" height="10" rx="5" fill="#E9EBEF" />
+
+            {/* <!-- Food preparation animation sequence --> */}
+
+            {/* <!-- 1. Ingredients falling into the pan --> */}
+            {/* <!-- Ingredient 1: Carrot (orange) --> */}
+            <g>
+              <path d="M -30,-80 Q -32,-60 -20,-30 L -15,-32 Q -25,-60 -25,-80 Z" fill="#FF5E1F">
+                <animate attributeName="d"
+                  values="M -30,-80 Q -32,-60 -20,-30 L -15,-32 Q -25,-60 -25,-80 Z;
+                          M -10,-10 Q -12,10 0,30 L 5,28 Q -5,10 -5,-10 Z;
+                          M -10,-10 Q -12,10 0,30 L 5,28 Q -5,10 -5,-10 Z"
+                  dur="4s"
+                  begin="0s"
+                  fill="freeze" />
+                <animate attributeName="opacity"
+                  values="1;1;0"
+                  dur="4s"
+                  begin="0s"
+                  fill="freeze" />
+              </path>
+            </g>
+
+            {/* <!-- Ingredient 2: Broccoli (green) --> */}
+            <g>
+              <path d="M 30,-90 Q 28,-70 25,-40 Q 20,-30 15,-40 Q 12,-70 20,-90 Z" fill="#1ECBAE">
+                <animate attributeName="d"
+                  values="M 30,-90 Q 28,-70 25,-40 Q 20,-30 15,-40 Q 12,-70 20,-90 Z;
+                          M 10,-20 Q 8,0 5,30 Q 0,40 -5,30 Q -8,0 0,-20 Z;
+                          M 10,-20 Q 8,0 5,30 Q 0,40 -5,30 Q -8,0 0,-20 Z"
+                  dur="3s"
+                  begin="0.5s"
+                  fill="freeze" />
+                <animate attributeName="opacity"
+                  values="1;1;0"
+                  dur="3s"
+                  begin="0.5s"
+                  fill="freeze" />
+              </path>
+            </g>
+
+            {/* <!-- Ingredient 3: Spice (yellow) --> */}
+            <g>
+              <circle cx="0" cy="-70" r="8" fill="#FFA826">
+                <animate attributeName="cy"
+                  values="-70;10;10"
+                  dur="2.5s"
+                  begin="1s"
+                  fill="freeze" />
+                <animate attributeName="opacity"
+                  values="1;1;0"
+                  dur="2.5s"
+                  begin="1s"
+                  fill="freeze" />
+                <animate attributeName="r"
+                  values="8;3;3"
+                  dur="2.5s"
+                  begin="1s"
+                  fill="freeze" />
+              </circle>
+              <circle cx="10" cy="-75" r="6" fill="#FFA826">
+                <animate attributeName="cy"
+                  values="-75;5;5"
+                  dur="2.8s"
+                  begin="1.2s"
+                  fill="freeze" />
+                <animate attributeName="opacity"
+                  values="1;1;0"
+                  dur="2.8s"
+                  begin="1.2s"
+                  fill="freeze" />
+                <animate attributeName="r"
+                  values="6;2;2"
+                  dur="2.8s"
+                  begin="1.2s"
+                  fill="freeze" />
+              </circle>
+              <circle cx="-5" cy="-80" r="5" fill="#FFA826">
+                <animate attributeName="cy"
+                  values="-80;0;0"
+                  dur="3s"
+                  begin="1.3s"
+                  fill="freeze" />
+                <animate attributeName="opacity"
+                  values="1;1;0"
+                  dur="3s"
+                  begin="1.3s"
+                  fill="freeze" />
+                <animate attributeName="r"
+                  values="5;2;2"
+                  dur="3s"
+                  begin="1.3s"
+                  fill="freeze" />
+              </circle>
+            </g>
+
+            {/* <!-- 2. Sauce/liquid pouring --> */}
+            <g>
+              <path d="M 40,-60 C 35,-40 30,-30 25,-20 L 15,-25 C 20,-35 25,-45 30,-65 Z" fill="url(#sauceGradient)">
+                <animate attributeName="d"
+                  values="M 40,-60 C 35,-40 30,-30 25,-20 L 15,-25 C 20,-35 25,-45 30,-65 Z;
+                          M 30,-20 C 25,0 20,10 15,20 L 5,15 C 10,5 15,-5 20,-25 Z;
+                          M 30,-20 C 25,0 20,10 15,20 L 5,15 C 10,5 15,-5 20,-25 Z"
+                  dur="2s"
+                  begin="2s"
+                  fill="freeze" />
+                <animate attributeName="opacity"
+                  values="1;1;0"
+                  dur="2s"
+                  begin="2s"
+                  fill="freeze" />
+              </path>
+
+              {/* <!-- Sauce drops --> */}
+              <circle cx="25" cy="-40" r="3" fill="#FF5E1F">
+                <animate attributeName="cy"
+                  values="-40;20;20"
+                  dur="0.5s"
+                  begin="2.2s"
+                  fill="freeze" />
+                <animate attributeName="opacity"
+                  values="1;1;0"
+                  dur="0.5s"
+                  begin="2.2s"
+                  fill="freeze" />
+              </circle>
+              <circle cx="20" cy="-35" r="2" fill="#FF5E1F">
+                <animate attributeName="cy"
+                  values="-35;15;15"
+                  dur="0.6s"
+                  begin="2.3s"
+                  fill="freeze" />
+                <animate attributeName="opacity"
+                  values="1;1;0"
+                  dur="0.6s"
+                  begin="2.3s"
+                  fill="freeze" />
+              </circle>
+              <circle cx="30" cy="-45" r="2.5" fill="#FF5E1F">
+                <animate attributeName="cy"
+                  values="-45;18;18"
+                  dur="0.5s"
+                  begin="2.4s"
+                  fill="freeze" />
+                <animate attributeName="opacity"
+                  values="1;1;0"
+                  dur="0.5s"
+                  begin="2.4s"
+                  fill="freeze" />
+              </circle>
+            </g>
+
+            {/* <!-- 3. Cooking/sizzling effect --> */}
+            <g>
+              {/* <!-- Sizzle bubbles --> */}
+              <circle cx="-20" cy="0" r="0" fill="#FFFFFF">
+                <animate attributeName="r"
+                  values="0;3;0"
+                  dur="0.8s"
+                  begin="3s"
+                  repeatCount="3" />
+                <animate attributeName="opacity"
+                  values="0;0.8;0"
+                  dur="0.8s"
+                  begin="3s"
+                  repeatCount="3" />
+              </circle>
+              <circle cx="15" cy="10" r="0" fill="#FFFFFF">
+                <animate attributeName="r"
+                  values="0;2;0"
+                  dur="0.6s"
+                  begin="3.3s"
+                  repeatCount="3" />
+                <animate attributeName="opacity"
+                  values="0;0.8;0"
+                  dur="0.6s"
+                  begin="3.3s"
+                  repeatCount="3" />
+              </circle>
+              <circle cx="0" cy="-15" r="0" fill="#FFFFFF">
+                <animate attributeName="r"
+                  values="0;2.5;0"
+                  dur="0.7s"
+                  begin="3.2s"
+                  repeatCount="3" />
+                <animate attributeName="opacity"
+                  values="0;0.8;0"
+                  dur="0.7s"
+                  begin="3.2s"
+                  repeatCount="3" />
+              </circle>
+            </g>
+
+            {/* <!-- 4. Final dish appearing --> */}
+            <g>
+              {/* <!-- Main dish --> */}
+              <ellipse cx="0" cy="0" r="0" rx="0" ry="0" fill="#FF5E1F" opacity="0">
+                <animate attributeName="rx"
+                  values="0;30;30"
+                  dur="1s"
+                  begin="4.5s"
+                  fill="freeze" />
+                <animate attributeName="ry"
+                  values="0;25;25"
+                  dur="1s"
+                  begin="4.5s"
+                  fill="freeze" />
+                <animate attributeName="opacity"
+                  values="0;0.8;0.8"
+                  dur="1s"
+                  begin="4.5s"
+                  fill="freeze" />
+              </ellipse>
+
+              {/* <!-- Side garnish --> */}
+              <ellipse cx="25" cy="15" rx="0" ry="0" fill="#1ECBAE" opacity="0">
+                <animate attributeName="rx"
+                  values="0;12;12"
+                  dur="0.8s"
+                  begin="5s"
+                  fill="freeze" />
+                <animate attributeName="ry"
+                  values="0;8;8"
+                  dur="0.8s"
+                  begin="5s"
+                  fill="freeze" />
+                <animate attributeName="opacity"
+                  values="0;0.7;0.7"
+                  dur="0.8s"
+                  begin="5s"
+                  fill="freeze" />
+              </ellipse>
+
+              {/* <!-- Second garnish --> */}
+              <ellipse cx="-20" cy="12" rx="0" ry="0" fill="#FFA826" opacity="0">
+                <animate attributeName="rx"
+                  values="0;10;10"
+                  dur="0.8s"
+                  begin="5.2s"
+                  fill="freeze" />
+                <animate attributeName="ry"
+                  values="0;7;7"
+                  dur="0.8s"
+                  begin="5.2s"
+                  fill="freeze" />
+                <animate attributeName="opacity"
+                  values="0;0.9;0.9"
+                  dur="0.8s"
+                  begin="5.2s"
+                  fill="freeze" />
+              </ellipse>
+
+              {/* <!-- Food decoration elements --> */}
+              <circle cx="10" cy="-15" r="0" fill="#FFFFFF" opacity="0">
+                <animate attributeName="r"
+                  values="0;4;4"
+                  dur="0.5s"
+                  begin="5.5s"
+                  fill="freeze" />
+                <animate attributeName="opacity"
+                  values="0;0.9;0.9"
+                  dur="0.5s"
+                  begin="5.5s"
+                  fill="freeze" />
+              </circle>
+              <circle cx="-12" cy="-10" r="0" fill="#FFFFFF" opacity="0">
+                <animate attributeName="r"
+                  values="0;3;3"
+                  dur="0.5s"
+                  begin="5.6s"
+                  fill="freeze" />
+                <animate attributeName="opacity"
+                  values="0;0.9;0.9"
+                  dur="0.5s"
+                  begin="5.6s"
+                  fill="freeze" />
+              </circle>
+            </g>
+
+            {/* <!-- 5. Steam rising from finished dish --> */}
+            <g opacity="0">
+              <animate attributeName="opacity"
+                values="0;1;1"
+                dur="0.5s"
+                begin="6s"
+                fill="freeze" />
+
+              {/* <!-- First steam wisp --> */}
+              <path d="M -5,-20 Q -10,-30 -5,-40 Q 0,-50 -5,-60" fill="none" stroke="url(#steamGradient)" stroke-width="2" stroke-linecap="round">
+                <animate attributeName="d"
+                  values="M -5,-20 Q -10,-30 -5,-40 Q 0,-50 -5,-60;
+                          M -5,-20 Q -15,-35 -5,-45 Q 0,-55 -10,-65;
+                          M -5,-20 Q -10,-30 -5,-40 Q 0,-50 -5,-60"
+                  dur="3s"
+                  begin="6s"
+                  repeatCount="indefinite" />
+                <animate attributeName="opacity"
+                  values="0.7;0;0.7"
+                  dur="3s"
+                  begin="6s"
+                  repeatCount="indefinite" />
+              </path>
+
+              {/* <!-- Second steam wisp --> */}
+              <path d="M 5,-20 Q 10,-35 5,-45 Q 0,-55 5,-65" fill="none" stroke="url(#steamGradient)" stroke-width="2" stroke-linecap="round">
+                <animate attributeName="d"
+                  values="M 5,-20 Q 10,-35 5,-45 Q 0,-55 5,-65;
+                          M 5,-20 Q 15,-30 10,-40 Q 5,-50 15,-60;
+                          M 5,-20 Q 10,-35 5,-45 Q 0,-55 5,-65"
+                  dur="2.5s"
+                  begin="6.2s"
+                  repeatCount="indefinite" />
+                <animate attributeName="opacity"
+                  values="0;0.7;0"
+                  dur="2.5s"
+                  begin="6.2s"
+                  repeatCount="indefinite" />
+              </path>
+
+              {/* <!-- Third steam wisp --> */}
+              <path d="M 0,-25 Q -5,-40 0,-50 Q 5,-60 0,-70" fill="none" stroke="url(#steamGradient)" stroke-width="2" stroke-linecap="round">
+                <animate attributeName="d"
+                  values="M 0,-25 Q -5,-40 0,-50 Q 5,-60 0,-70;
+                          M 0,-25 Q 5,-35 10,-45 Q 15,-55 5,-65;
+                          M 0,-25 Q -5,-40 0,-50 Q 5,-60 0,-70"
+                  dur="3.5s"
+                  begin="6.3s"
+                  repeatCount="indefinite" />
+                <animate attributeName="opacity"
+                  values="0.7;0.2;0.7"
+                  dur="3.5s"
+                  begin="6.3s"
+                  repeatCount="indefinite" />
+              </path>
+            </g>
+          </g>
+
+          {/* <!-- Utensils animating --> */}
+          <g>
+            {/* <!-- Spoon stirring animation --> */}
+            <g>
+              <path d="M -40,20 C -30,10 -20,0 -10,-5 C -5,-7 0,-7 0,0 C 0,5 -5,7 -10,5 C -20,0 -30,-10 -40,-20" fill="none" stroke="#121C2D" stroke-width="2" stroke-linecap="round">
+                <animateTransform attributeName="transform"
+                  type="rotate"
+                  values="0 -40 0; 180 -40 0; 360 -40 0"
+                  dur="4s"
+                  begin="2.5s"
+                  repeatCount="2" />
+              </path>
+              <ellipse cx="-40" cy="0" rx="5" ry="10" fill="#121C2D">
+                <animateTransform attributeName="transform"
+                  type="rotate"
+                  values="0 -40 0; 180 -40 0; 360 -40 0"
+                  dur="4s"
+                  begin="2.5s"
+                  repeatCount="2" />
+              </ellipse>
+            </g>
+
+            {/* <!-- Fork --> */}
+            <g transform="translate(40, 15)">
+              <animateTransform attributeName="transform"
+                type="rotate"
+                values="0 40 15; -15 40 15; 0 40 15"
+                dur="2s"
+                begin="5s"
+                repeatCount="indefinite" />
+              <rect x="-2" y="-40" width="4" height="50" rx="2" fill="#121C2D" /> 
+              <path d="M0,-45 L5,-35 L0,-25 L-5,-35 Z" fill="#121C2D" /> 
+            </g>
+          </g>
+        </g>
+
+        {/* <!-- App name --> */}
+        <g transform="translate(195, 480)">
+          <text x="0" y="0" font-family="Arial, sans-serif" font-size="50" font-weight="bold" text-anchor="middle" fill="#FF5E1F">POTOBA</text> 
+          <text x="0" y="30" font-family="Arial, sans-serif" font-size="16" text-anchor="middle" fill="#FF5E1F">Restaurant Management</text>
+        </g>
+
+        {/* <!-- Cooking animation text --> */}
+        <g transform="translate(195, 580)">
+          <text x="0" y="0" font-family="Arial, sans-serif" font-size="14" text-anchor="middle" fill="#FF5E1F">
+            <tspan>Preparing your experience</tspan>
+            <animate attributeName="opacity" values="1;0.5;1" dur="1.5s" repeatCount="indefinite" />
+          </text>
+
+          {/* <!-- Animated dots --> */}
+          <g>
+            <circle cx="-15" cy="20" r="3" fill="#FF5E1F">
+              <animate attributeName="opacity" values="0;1;0" dur="1.5s" begin="0s" repeatCount="indefinite" />
+            </circle>
+            <circle cx="0" cy="20" r="3" fill="#FF5E1F">
+              <animate attributeName="opacity" values="0;1;0" dur="1.5s" begin="0.5s" repeatCount="indefinite" />
+            </circle>
+            <circle cx="15" cy="20" r="3" fill="#FF5E1F">
+              <animate attributeName="opacity" values="0;1;0" dur="1.5s" begin="1s" repeatCount="indefinite" />
+            </circle>
+          </g>
+        </g>
+
+        {/* <!-- Secondary accent flourishes --> */}
+        <circle cx="100" cy="700" r="15" fill="#1ECBAE" opacity="0.2" /> 
+        <circle cx="310" cy="680" r="20" fill="#FFA826" opacity="0.2" /> 
+
+        {/* <!-- Copyright text --> */}
+        <text x="195" y="800" font-family="Arial, sans-serif" font-size="10" text-anchor="middle" fill="#FF5E1F">© 2025 Potoba | All Rights Reserved</text> 
+      </svg>

@@ -3,6 +3,7 @@
 
 import { CookingPot } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import Image from 'next/image';
 
 export default function AppLoadingScreen({ message = "Loading Potoba..." }: { message?: string }) {
   return (
@@ -10,7 +11,7 @@ export default function AppLoadingScreen({ message = "Loading Potoba..." }: { me
         "fixed inset-0 z-[200] flex h-screen w-screen flex-col items-center justify-center bg-background theme-transition",
         "wavy-bg" // Added a subtle background pattern from globals.css
     )}>
-      <div className="relative flex flex-col items-center p-8 bg-card/80 backdrop-blur-sm rounded-xl shadow-2xl">
+      {/* <div className="relative flex flex-col items-center p-8 bg-card/80 backdrop-blur-sm rounded-xl shadow-2xl">
         <CookingPot
           className={cn(
             "h-24 w-24 md:h-32 md:w-32 text-primary opacity-0" // Increased size for splash feel
@@ -27,7 +28,11 @@ export default function AppLoadingScreen({ message = "Loading Potoba..." }: { me
         <p className="mt-6 text-xl font-semibold text-primary animate-pulse">
           {message}
         </p>
-      </div>
+      </div> */}
+      <img className={cn(
+        "fixed inset-0 z-[200] flex h-screen w-screen flex-col items-center justify-center bg-background theme-transition",
+        "wavy-bg" // Added a subtle background pattern from globals.css
+    )} src='/images/spash.svg'/>
       {/* Keyframes are defined in globals.css to keep this component cleaner */}
     </div>
   );
