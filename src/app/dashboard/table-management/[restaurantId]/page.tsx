@@ -557,7 +557,7 @@ export default function TableManagementPage() {
 
       {qrModalTable && (
         <Dialog open={!!qrModalTable} onOpenChange={() => setQrModalTable(null)}>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="sm:max-w-screen-sm">
                 <DialogHeader>
                     <DialogTitle>QR Code for Table {qrModalTable.tableNumber}</DialogTitle>
                     <CardDescription>Customers can scan this to view the menu and order.</CardDescription>
