@@ -7,6 +7,7 @@ import { ThemeProvider } from '@/components/shared/theme-provider';
 import Head from 'next/head'; 
 import Script from 'next/script';
 import FirebaseMessagingInitializer from '@/components/firebase/firebase-messaging-initializer';
+import { useDynamicThemeColor } from '@/components/pwa/use-dynamic-theme-color';
 
 
 const geistSans = Geist({
@@ -70,6 +71,11 @@ export const metadata: Metadata = {
     images: ['/icons/icon-512x512.png'], 
   },
 };
+
+function DynamicThemeColorEffect() {
+  useDynamicThemeColor();
+  return null;
+}
 
 export default function RootLayout({
   children,
@@ -136,6 +142,7 @@ export default function RootLayout({
         >
           <AuthProvider>
             <FirebaseMessagingInitializer />
+            <DynamicThemeColorEffect />
             {children}
             <Toaster />
           </AuthProvider>

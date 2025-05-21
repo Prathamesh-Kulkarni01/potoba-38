@@ -18,12 +18,21 @@
             text-align: center;
             padding: 20px;
         }
+        body.dark {
+            background-color: #222A3E;
+            color: #fff;
+        }
         .container {
             max-width: 600px;
         }
         h1 {
             font-size: 2.5em;
             color: #FFB347; /* Primary Orange */
+            margin-bottom: 0.5em;
+        }
+        h1 {
+            font-size: 2.5em;
+            color: #FFB347;
             margin-bottom: 0.5em;
         }
         p {
@@ -44,6 +53,15 @@
         }
         a:hover {
             text-decoration: underline;
+        }
+        @media (prefers-color-scheme: dark) {
+            body {
+                background-color: #222A3E;
+                color: #fff;
+            }
+            h1, .icon {
+                color: #FFB347;
+            }
         }
     </style>
 </head>
