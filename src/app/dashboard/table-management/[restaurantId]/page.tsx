@@ -391,7 +391,7 @@ export default function TableManagementPage() {
   }
   
   const getDisplayTestLink = (storedQrValue: string) => {
-    const configuredBaseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://6000-firebase-studio-1746809721561.cluster-ancjwrkgr5dvux4qug5rbzyc2y.cloudworkstations.dev';
+    const configuredBaseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://potoba-v1.netlify.app';
     try {
       // Assuming storedQrValue is already a full URL
       if (new URL(storedQrValue)) return storedQrValue;

@@ -30,7 +30,7 @@ export async function addTable(restaurantId: string, tableData: Omit<Table, 'id'
   const newTableRef = doc(tablesCol); 
   const tableId = newTableRef.id;
 
-  const baseUrl = (process.env.NEXT_PUBLIC_BASE_URL || 'https://6000-firebase-studio-1746809721561.cluster-ancjwrkgr5dvux4qug5rbzyc2y.cloudworkstations.dev').replace(/\/$/, '');
+  const baseUrl = (process.env.NEXT_PUBLIC_BASE_URL || 'https://potoba-v1.netlify.app').replace(/\/$/, '');
   const finalQrCodeValue = `${baseUrl}/menu/table/${tableId}`;
 
 
