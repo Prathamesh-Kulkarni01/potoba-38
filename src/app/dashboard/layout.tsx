@@ -473,7 +473,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           },
           {
             href: `/dashboard/restaurant/${selectedRestaurantId}/settings`,
-            label: "Restaurant Settings",
+            label: "Settings",
             icon: Settings,
             roles: ["owner"],
             hint: "specific settings",
