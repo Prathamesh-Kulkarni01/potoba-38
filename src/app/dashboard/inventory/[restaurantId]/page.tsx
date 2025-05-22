@@ -6,14 +6,14 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth/context';
 import { getRestaurant } from '@/lib/firebase/firestore';
-import { getInventoryItems, addInventoryItem, updateInventoryItem, deleteInventoryItem } from '@/lib/firebase/inventory';
+import { getInventoryItems, addInventoryItem, updateInventoryItem, deleteInventoryItem, recordPurchase } from '@/lib/firebase/inventory';
 import type { RestaurantProfile, InventoryItem, InventoryItemCategory, UnitOfMeasure } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import LoadingSpinner from '@/components/shared/loading-spinner';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogTrigger } from '@/components/ui/dialog';
-import { PlusCircle, Edit3, Trash2, Archive, Search, Filter as FilterIcon } from 'lucide-react';
+import { PlusCircle, Edit3, Trash2, Archive, Search, Filter as FilterIcon, PackagePlus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import InventoryItemForm, { type InventoryItemFormValues } from '@/components/inventory/inventory-item-form';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
@@ -21,8 +21,10 @@ import { Timestamp } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { inventoryItemCategories, unitsOfMeasure } from '@/types'; // Import shared constants
+import { inventoryItemCategories, unitsOfMeasure } from '@/types'; 
 import { Badge } from '@/components/ui/badge';
+import ReceiveStockDialog, { type ReceiveStockFormValues } from '@/components/inventory/receive-stock-dialog';
+
 
 export default function InventoryManagementPage() {
   const params = useParams();
@@ -41,6 +43,8 @@ export default function InventoryManagementPage() {
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   
   const [deleteConfirmation, setDeleteConfirmation] = useState<{ isOpen: boolean; data: InventoryItem; } | null>(null);
+  const [receiveStockItem, setReceiveStockItem] = useState<InventoryItem | null>(null);
+
 
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<InventoryItemCategory | 'all'>('all');
@@ -58,7 +62,7 @@ export default function InventoryManagementPage() {
       if (restaurantData && (restaurantData.ownerId === user.uid || role === 'staff' && user.restaurantId === restaurantId)) {
         setRestaurant(restaurantData);
         setInventoryItems(fetchedItems);
-        setFilteredItems(fetchedItems); // Initially show all
+        setFilteredItems(fetchedItems); 
       } else {
         toast({ variant: "destructive", title: "Access Denied", description: "Restaurant not found or you don't have permission." });
         router.replace('/dashboard');
@@ -104,8 +108,9 @@ export default function InventoryManagementPage() {
     try {
       const itemData = {
         ...values,
-        reorderLevel: values.reorderLevel === null || values.reorderLevel === undefined ? null : Number(values.reorderLevel),
-        costPerUnit: values.costPerUnit === null || values.costPerUnit === undefined ? null : Number(values.costPerUnit),
+        reorderLevel: values.reorderLevel === null || values.reorderLevel === undefined || isNaN(values.reorderLevel) ? null : Number(values.reorderLevel),
+        costPerUnit: values.costPerUnit === null || values.costPerUnit === undefined || isNaN(values.costPerUnit) ? null : Number(values.costPerUnit),
+        supplierInfo: values.supplierInfo || null,
       };
       if (itemIdToUpdate) {
         await updateInventoryItem(restaurantId, itemIdToUpdate, itemData);
@@ -152,6 +157,29 @@ export default function InventoryManagementPage() {
     setEditingItem(null);
     setIsItemModalOpen(true);
   };
+
+  const handleReceiveStockSubmit = async (values: ReceiveStockFormValues) => {
+    if (!receiveStockItem) return;
+    setFormSubmitting(true);
+    try {
+      await recordPurchase(
+        restaurantId,
+        receiveStockItem.id,
+        values.quantityReceived,
+        values.costPerUnit,
+        values.notes,
+        values.supplierName
+      );
+      toast({ title: "Stock Received", description: `${values.quantityReceived} ${receiveStockItem.unitOfMeasure} of ${receiveStockItem.name} added to stock.` });
+      fetchData();
+      setReceiveStockItem(null); // Close dialog
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Stock Update Failed", description: error.message || "Could not update stock." });
+    } finally {
+      setFormSubmitting(false);
+    }
+  };
+
 
   if (authLoading || pageLoading) {
     return <div className="flex h-full items-center justify-center"><LoadingSpinner className="h-10 w-10 text-primary" /></div>;
@@ -215,7 +243,7 @@ export default function InventoryManagementPage() {
                   <TableHead className="text-right">Current Stock</TableHead>
                   <TableHead className="text-right">Reorder Level</TableHead>
                   <TableHead className="text-right">Last Updated</TableHead>
-                  {role === 'owner' && <TableHead className="text-right">Actions</TableHead>}
+                  {role === 'owner' && <TableHead className="text-right w-[180px]">Actions</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -226,11 +254,12 @@ export default function InventoryManagementPage() {
                     <TableCell>{unitsOfMeasure.find(u => u.value === item.unitOfMeasure)?.label || item.unitOfMeasure}</TableCell>
                     <TableCell className="text-right font-semibold">{item.currentStock}</TableCell>
                     <TableCell className="text-right">{item.reorderLevel ?? 'N/A'}</TableCell>
-                    <TableCell className="text-right text-xs">{format(item.lastStockUpdatedAt.toDate(), 'PPp')}</TableCell>
+                    <TableCell className="text-right text-xs">{item.lastStockUpdatedAt ? format(item.lastStockUpdatedAt.toDate(), 'PPp') : 'N/A'}</TableCell>
                     {role === 'owner' && (
-                      <TableCell className="text-right">
-                        <Button variant="ghost" size="sm" onClick={() => openEditModal(item)} className="mr-1"><Edit3 className="h-4 w-4" /></Button>
-                        <Button variant="ghost" size="sm" onClick={() => openDeleteDialog(item)} className="text-destructive hover:text-destructive/80"><Trash2 className="h-4 w-4" /></Button>
+                      <TableCell className="text-right space-x-1">
+                        <Button variant="outline" size="xs" onClick={() => setReceiveStockItem(item)} className="text-xs h-7"><PackagePlus className="mr-1 h-3 w-3" />Receive</Button>
+                        <Button variant="ghost" size="icon" onClick={() => openEditModal(item)} className="h-7 w-7"><Edit3 className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" onClick={() => openDeleteDialog(item)} className="text-destructive hover:text-destructive/80 h-7 w-7"><Trash2 className="h-4 w-4" /></Button>
                       </TableCell>
                     )}
                   </TableRow>
@@ -255,7 +284,6 @@ export default function InventoryManagementPage() {
       </Card>
 
       <Dialog open={isItemModalOpen} onOpenChange={(isOpen) => { if (!isOpen) { setIsItemModalOpen(false); setEditingItem(null); } }}>
-        {/* Using DialogTrigger inside another component (page.tsx) to control 'isItemModalOpen' state */}
         <InventoryItemForm
             item={editingItem}
             onSubmit={handleItemSubmit}
@@ -274,6 +302,18 @@ export default function InventoryManagementPage() {
           isLoading={formSubmitting}
         />
       )}
+
+      {receiveStockItem && (
+        <ReceiveStockDialog
+          isOpen={!!receiveStockItem}
+          onClose={() => setReceiveStockItem(null)}
+          item={receiveStockItem}
+          onSubmit={handleReceiveStockSubmit}
+          isLoading={formSubmitting}
+        />
+      )}
     </div>
   );
 }
+
+    

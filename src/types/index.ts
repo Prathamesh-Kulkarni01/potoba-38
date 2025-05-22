@@ -249,10 +249,10 @@ export interface PopularItem {
 // Inventory Management Types
 export type InventoryItemCategory = 'raw_material' | 'semi_finished' | 'finished_good' | 'other';
 export const inventoryItemCategories: { value: InventoryItemCategory; label: string }[] = [
-  { value: 'raw_material', label: 'Raw Material' }, // e.g., Flour, Sugar, Tomatoes
-  { value: 'semi_finished', label: 'Semi-Finished Good' }, // e.g., Pizza Dough, Pasta Sauce
-  { value: 'finished_good', label: 'Finished Good' }, // e.g., Bottled Drinks, Packaged Snacks
-  { value: 'other', label: 'Other' }, // e.g., Cleaning Supplies, Packaging
+  { value: 'raw_material', label: 'Raw Material' }, 
+  { value: 'semi_finished', label: 'Semi-Finished Good' }, 
+  { value: 'finished_good', label: 'Finished Good' }, 
+  { value: 'other', label: 'Other' }, 
 ];
 
 export type UnitOfMeasure = 'kg' | 'g' | 'L' | 'ml' | 'pcs' | 'pack' | 'bottle' | 'can' | 'box' | 'dozen' | 'other';
@@ -284,28 +284,39 @@ export interface InventoryItem {
   category: InventoryItemCategory;
   unitOfMeasure: UnitOfMeasure;
   currentStock: number;
-  reorderLevel?: number | null; // Optional reorder point
-  supplierInfo?: SupplierInfo | null; // Optional
-  costPerUnit?: number | null; // Optional average cost per unit
-  lastStockUpdatedAt: Timestamp; // When the currentStock was last explicitly set/adjusted
+  reorderLevel?: number | null; 
+  supplierInfo?: SupplierInfo | null; 
+  costPerUnit?: number | null; 
+  lastStockUpdatedAt: Timestamp; 
   createdAt: Timestamp;
   updatedAt: Timestamp;
-  // Future: batchNumber, expiryDate for perishable goods
 }
 
-export type StockTransactionType = 'purchase' | 'sale_usage' | 'wastage' | 'adjustment_in' | 'adjustment_out' | 'initial_stock';
+export type StockTransactionType = 
+  | 'purchase'          // Stock In: From supplier
+  | 'sale_usage'        // Stock Out: Used in a sale/order (deducted via recipe)
+  | 'wastage'           // Stock Out: Spoiled, damaged, expired
+  | 'adjustment_in'     // Stock In: Manual positive adjustment (e.g., recount, found stock)
+  | 'adjustment_out'    // Stock Out: Manual negative adjustment (e.g., recount, theft)
+  | 'initial_stock'     // Stock In: Setting up item for the first time
+  | 'transfer_in'       // Stock In: Received from another branch/location
+  | 'transfer_out';     // Stock Out: Sent to another branch/location
+
+
 export interface StockTransaction {
   id: string;
   restaurantId: string;
   inventoryItemId: string;
-  inventoryItemName: string; // Denormalized for easier display
+  inventoryItemName: string; 
   transactionType: StockTransactionType;
   quantity: number; // Positive for additions, negative for deductions
-  unitOfMeasure: UnitOfMeasure; // Denormalized
+  unitOfMeasure: UnitOfMeasure; 
   transactionDate: Timestamp;
-  costPerUnitAtTransaction?: number | null; // Cost at the time of this transaction
+  costPerUnitAtTransaction?: number | null; 
   notes?: string | null;
-  relatedOrderId?: string | null; // If linked to a sale
-  relatedPurchaseId?: string | null; // If linked to a purchase order
-  userId?: string | null; // User who performed the transaction
+  relatedOrderId?: string | null; 
+  relatedPurchaseId?: string | null; 
+  userId?: string | null; 
 }
+
+    

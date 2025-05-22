@@ -19,6 +19,8 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
   SidebarMenuBadge,
+  SidebarSeparator,
+  SidebarInset,
 } from '@/components/ui/sidebar';
 import {
   Collapsible,
@@ -348,7 +350,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         {
           href: "/dashboard/admin/content",
           label: "Content Moderation",
-          icon: ListChecks,
+          icon: ListOrdered,
           roles: ["admin"],
           hint: "admin content",
         },
