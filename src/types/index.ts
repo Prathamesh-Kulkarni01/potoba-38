@@ -279,7 +279,7 @@ export const inventoryItemCategories: { value: InventoryItemCategory; label: str
 
 
 export interface SupplierInfo {
-  name?: string | null; // Made optional
+  name?: string | null;
   contactPerson?: string | null;
   phone?: string | null;
   email?: string | null;
@@ -291,10 +291,11 @@ export interface InventoryItem {
   name: string;
   category: InventoryItemCategory;
   unitOfMeasure: UnitOfMeasure;
-  currentStock: number;
+  currentStock: number; // This serves as "Opening Stock" on creation
   reorderLevel?: number | null; 
   supplierInfo?: SupplierInfo | null; 
   costPerUnit?: number | null; 
+  unitConversionNotes?: string | null; // New field for conversion notes
   lastStockUpdatedAt: Timestamp; 
   createdAt: Timestamp;
   updatedAt: Timestamp;

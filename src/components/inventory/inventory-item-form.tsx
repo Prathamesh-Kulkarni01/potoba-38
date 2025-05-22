@@ -7,7 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea'; // For supplier notes
+import { Textarea } from '@/components/ui/textarea'; 
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -17,10 +17,10 @@ import LoadingSpinner from '@/components/shared/loading-spinner';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 const supplierInfoSchema = z.object({
-  name: z.string().optional(),
-  contactPerson: z.string().optional(),
-  phone: z.string().optional(),
-  email: z.string().email({ message: "Invalid email format for supplier."}).optional().or(z.literal('')),
+  name: z.string().optional().nullable(),
+  contactPerson: z.string().optional().nullable(),
+  phone: z.string().optional().nullable(),
+  email: z.string().email({ message: "Invalid email format for supplier."}).optional().or(z.literal('')).nullable(),
 }).optional().nullable();
 
 export const inventoryItemFormSchema = z.object({
@@ -31,10 +31,11 @@ export const inventoryItemFormSchema = z.object({
   unitOfMeasure: z.custom<UnitOfMeasure>((val) => unitsOfMeasure.map(u => u.value).includes(val as UnitOfMeasure), {
     message: "Please select a valid unit of measure.",
   }),
-  currentStock: z.coerce.number().min(0, { message: 'Stock cannot be negative.' }),
+  currentStock: z.coerce.number().min(0, { message: 'Stock cannot be negative (This will be the Opening Stock for new items).' }),
   reorderLevel: z.coerce.number().min(0, "Reorder level cannot be negative.").optional().nullable(),
   costPerUnit: z.coerce.number().min(0, "Cost cannot be negative.").optional().nullable(),
   supplierInfo: supplierInfoSchema,
+  unitConversionNotes: z.string().optional().nullable(),
 });
 
 export type InventoryItemFormValues = z.infer<typeof inventoryItemFormSchema>;
@@ -56,7 +57,8 @@ export default function InventoryItemForm({ item, onSubmit, onClose, isLoading }
       currentStock: item?.currentStock || 0,
       reorderLevel: item?.reorderLevel === undefined || item?.reorderLevel === null ? null : item.reorderLevel,
       costPerUnit: item?.costPerUnit === undefined || item?.costPerUnit === null ? null : item.costPerUnit,
-      supplierInfo: item?.supplierInfo || { name: '', contactPerson: '', phone: '', email: ''},
+      supplierInfo: item?.supplierInfo || { name: null, contactPerson: null, phone: null, email: null},
+      unitConversionNotes: item?.unitConversionNotes || null,
     },
   });
 
@@ -73,26 +75,27 @@ export default function InventoryItemForm({ item, onSubmit, onClose, isLoading }
         <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-0">
             <ScrollArea className="h-[65vh] pr-3">
                 <div className="space-y-4 p-1">
-                    <FormField control={form.control} name="name" render={({ field }) => ( <FormItem> <FormLabel>Item Name</FormLabel> <FormControl><Input placeholder="e.g., All-Purpose Flour" {...field} /></FormControl> <FormMessage /> </FormItem> )} />
+                    <FormField control={form.control} name="name" render={({ field }) => ( <FormItem> <FormLabel>Item Name</FormLabel> <FormControl><Input placeholder="e.g., All-Purpose Flour, Vodka 750ml" {...field} /></FormControl> <FormMessage /> </FormItem> )} />
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <FormField control={form.control} name="category" render={({ field }) => ( <FormItem> <FormLabel>Category</FormLabel> <Select onValueChange={field.onChange} defaultValue={field.value}> <FormControl><SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger></FormControl> <SelectContent>{inventoryItemCategories.map(cat => (<SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>))}</SelectContent> </Select> <FormMessage /> </FormItem> )} />
                         <FormField control={form.control} name="unitOfMeasure" render={({ field }) => ( <FormItem> <FormLabel>Unit of Measure</FormLabel> <Select onValueChange={field.onChange} defaultValue={field.value}> <FormControl><SelectTrigger><SelectValue placeholder="Select unit" /></SelectTrigger></FormControl> <SelectContent>{unitsOfMeasure.map(unit => (<SelectItem key={unit.value} value={unit.value}>{unit.label}</SelectItem>))}</SelectContent> </Select> <FormMessage /> </FormItem> )} />
                     </div>
-                    <FormField control={form.control} name="currentStock" render={({ field }) => ( <FormItem> <FormLabel>Current Stock</FormLabel> <FormControl><Input type="number" step="any" placeholder="e.g., 100" {...field} /></FormControl> <FormMessage /> </FormItem> )} />
+                    <FormField control={form.control} name="currentStock" render={({ field }) => ( <FormItem> <FormLabel>Current Stock {item ? '' : '(Opening Stock)'}</FormLabel> <FormControl><Input type="number" step="any" placeholder="e.g., 100" {...field} /></FormControl> <FormMessage /> </FormItem> )} />
                     
                     <details className="group rounded-lg border p-3 bg-muted/30">
-                        <summary className="font-medium cursor-pointer text-sm text-muted-foreground group-open:text-primary">Optional Details (Reorder, Cost, Supplier)</summary>
+                        <summary className="font-medium cursor-pointer text-sm text-muted-foreground group-open:text-primary">Optional Details (Reorder, Cost, Supplier, Conversion)</summary>
                         <div className="mt-4 space-y-4">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <FormField control={form.control} name="reorderLevel" render={({ field }) => ( <FormItem> <FormLabel>Reorder Level (Optional)</FormLabel> <FormControl><Input type="number" step="any" placeholder="e.g., 20" {...field} value={field.value === null ? '' : field.value} onChange={e => field.onChange(e.target.value === '' ? null : parseFloat(e.target.value))} /></FormControl> <FormMessage /> </FormItem> )} />
-                                <FormField control={form.control} name="costPerUnit" render={({ field }) => ( <FormItem> <FormLabel>Cost per Unit (Optional)</FormLabel> <FormControl><Input type="number" step="0.01" placeholder="e.g., 5.25" {...field} value={field.value === null ? '' : field.value} onChange={e => field.onChange(e.target.value === '' ? null : parseFloat(e.target.value))} /></FormControl> <FormMessage /> </FormItem> )} />
+                                <FormField control={form.control} name="reorderLevel" render={({ field }) => ( <FormItem> <FormLabel>Reorder Level</FormLabel> <FormControl><Input type="number" step="any" placeholder="e.g., 20" {...field} value={field.value === null ? '' : String(field.value)} onChange={e => field.onChange(e.target.value === '' ? null : parseFloat(e.target.value))} /></FormControl> <FormMessage /> </FormItem> )} />
+                                <FormField control={form.control} name="costPerUnit" render={({ field }) => ( <FormItem> <FormLabel>Cost per Unit</FormLabel> <FormControl><Input type="number" step="0.01" placeholder="e.g., 5.25" {...field} value={field.value === null ? '' : String(field.value)} onChange={e => field.onChange(e.target.value === '' ? null : parseFloat(e.target.value))} /></FormControl> <FormMessage /> </FormItem> )} />
                             </div>
-                            <FormField control={form.control} name="supplierInfo.name" render={({ field }) => ( <FormItem> <FormLabel>Supplier Name (Optional)</FormLabel> <FormControl><Input placeholder="e.g., Local Farm Co." {...field} /></FormControl> <FormMessage /> </FormItem> )} />
+                            <FormField control={form.control} name="supplierInfo.name" render={({ field }) => ( <FormItem> <FormLabel>Supplier Name</FormLabel> <FormControl><Input placeholder="e.g., Local Farm Co." {...field} value={field.value || ''} /></FormControl> <FormMessage /> </FormItem> )} />
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <FormField control={form.control} name="supplierInfo.contactPerson" render={({ field }) => ( <FormItem> <FormLabel>Contact Person (Optional)</FormLabel> <FormControl><Input placeholder="e.g., John Doe" {...field} /></FormControl> <FormMessage /> </FormItem> )} />
-                                <FormField control={form.control} name="supplierInfo.phone" render={({ field }) => ( <FormItem> <FormLabel>Supplier Phone (Optional)</FormLabel> <FormControl><Input type="tel" placeholder="e.g., +1234567890" {...field} /></FormControl> <FormMessage /> </FormItem> )} />
+                                <FormField control={form.control} name="supplierInfo.contactPerson" render={({ field }) => ( <FormItem> <FormLabel>Contact Person</FormLabel> <FormControl><Input placeholder="e.g., John Doe" {...field} value={field.value || ''}/></FormControl> <FormMessage /> </FormItem> )} />
+                                <FormField control={form.control} name="supplierInfo.phone" render={({ field }) => ( <FormItem> <FormLabel>Supplier Phone</FormLabel> <FormControl><Input type="tel" placeholder="e.g., +1234567890" {...field} value={field.value || ''} /></FormControl> <FormMessage /> </FormItem> )} />
                             </div>
-                             <FormField control={form.control} name="supplierInfo.email" render={({ field }) => ( <FormItem> <FormLabel>Supplier Email (Optional)</FormLabel> <FormControl><Input type="email" placeholder="supplier@example.com" {...field} /></FormControl> <FormMessage /> </FormItem> )} />
+                             <FormField control={form.control} name="supplierInfo.email" render={({ field }) => ( <FormItem> <FormLabel>Supplier Email</FormLabel> <FormControl><Input type="email" placeholder="supplier@example.com" {...field} value={field.value || ''} /></FormControl> <FormMessage /> </FormItem> )} />
+                             <FormField control={form.control} name="unitConversionNotes" render={({ field }) => ( <FormItem> <FormLabel>Unit Conversion Notes</FormLabel> <FormControl><Textarea placeholder="e.g., 1 Box = 12 Bottles, 1 Kg = 1000g for recipe use" {...field} value={field.value || ''} /></FormControl> <FormMessage /> </FormItem> )} />
                         </div>
                     </details>
                 </div>

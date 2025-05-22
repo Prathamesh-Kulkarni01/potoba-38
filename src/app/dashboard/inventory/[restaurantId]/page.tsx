@@ -4,7 +4,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link'; // Import Link
+import Link from 'next/link'; 
 import { useAuth } from '@/lib/auth/context';
 import { getRestaurant } from '@/lib/firebase/firestore';
 import { getInventoryItems, addInventoryItem, updateInventoryItem, deleteInventoryItem, recordPurchase } from '@/lib/firebase/inventory';
@@ -112,11 +112,13 @@ export default function InventoryManagementPage() {
         reorderLevel: values.reorderLevel === null || values.reorderLevel === undefined || isNaN(values.reorderLevel) ? null : Number(values.reorderLevel),
         costPerUnit: values.costPerUnit === null || values.costPerUnit === undefined || isNaN(values.costPerUnit) ? null : Number(values.costPerUnit),
         supplierInfo: values.supplierInfo || null,
+        unitConversionNotes: values.unitConversionNotes || null,
       };
       if (itemIdToUpdate) {
         await updateInventoryItem(restaurantId, itemIdToUpdate, itemData);
         toast({ title: "Inventory Item Updated", description: `${values.name} has been updated.` });
       } else {
+        // For new items, currentStock is the opening stock
         await addInventoryItem(restaurantId, itemData);
         toast({ title: "Inventory Item Added", description: `${values.name} has been added.` });
       }
@@ -204,9 +206,9 @@ export default function InventoryManagementPage() {
             </div>
             <div className="flex-grow">
               <CardTitle className="text-2xl md:text-3xl flex items-center">
-                <Archive className="mr-3 h-7 w-7 text-primary" /> Current Stock
+                <Archive className="mr-3 h-7 w-7 text-primary" /> Current Stock (Item Master)
               </CardTitle>
-              <CardDescription>Track and manage stock levels for {restaurant.name}.</CardDescription>
+              <CardDescription>Track and manage stock levels for {restaurant.name}. Add items to master list.</CardDescription>
             </div>
             {role === 'owner' && (
               <Button onClick={openAddModal} className="w-full md:w-auto bg-accent hover:bg-accent/90 text-accent-foreground">
@@ -251,6 +253,7 @@ export default function InventoryManagementPage() {
                   <TableHead>Unit</TableHead>
                   <TableHead className="text-right">Current Stock</TableHead>
                   <TableHead className="text-right">Reorder Level</TableHead>
+                  <TableHead>Unit Conv. Notes</TableHead>
                   <TableHead className="text-right">Last Updated</TableHead>
                   {role === 'owner' && <TableHead className="text-right w-[180px]">Actions</TableHead>}
                 </TableRow>
@@ -263,6 +266,7 @@ export default function InventoryManagementPage() {
                     <TableCell>{unitsOfMeasure.find(u => u.value === item.unitOfMeasure)?.label || item.unitOfMeasure}</TableCell>
                     <TableCell className="text-right font-semibold">{item.currentStock}</TableCell>
                     <TableCell className="text-right">{item.reorderLevel ?? 'N/A'}</TableCell>
+                    <TableCell className="text-xs max-w-[150px] truncate" title={item.unitConversionNotes || ''}>{item.unitConversionNotes || 'N/A'}</TableCell>
                     <TableCell className="text-right text-xs">{item.lastStockUpdatedAt ? format(item.lastStockUpdatedAt.toDate(), 'PPp') : 'N/A'}</TableCell>
                     {role === 'owner' && (
                       <TableCell className="text-right space-x-1">
