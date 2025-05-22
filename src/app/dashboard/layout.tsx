@@ -342,15 +342,15 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             hint: "View and manage all stock items",
           },
           {
-            // href: `/dashboard/inventory/${currentRestaurantId}/stock-in`, 
-            label: "Stock In (Soon)",
+            href: `/dashboard/inventory/${currentRestaurantId}/stock-in`, 
+            label: "Stock In",
             icon: PackagePlus,
             roles: ["owner", "staff"],
             hint: "Record incoming stock",
           },
           {
-            // href: `/dashboard/inventory/${currentRestaurantId}/stock-out`, 
-            label: "Stock Out (Soon)",
+            href: `/dashboard/inventory/${currentRestaurantId}/stock-out`, 
+            label: "Stock Out",
             icon: PackageMinus,
             roles: ["owner", "staff"],
             hint: "Record stock outflow",
@@ -708,7 +708,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                   className="rounded-md"
                   data-ai-hint="modern app logo"
                 />
-                <h1 className="text-2xl font-bold text-sidebar-primary group-data-[collapsible=icon]:hidden">
+                <h1 className="text-2xl font-bold text-sidebar-foreground group-data-[collapsible=icon]:hidden">
                   Potoba
                 </h1>
               </Link>

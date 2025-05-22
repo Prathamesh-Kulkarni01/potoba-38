@@ -291,7 +291,7 @@ export interface InventoryItem {
   name: string;
   category: InventoryItemCategory;
   unitOfMeasure: UnitOfMeasure;
-  currentStock: number; // This serves as "Opening Stock" on creation
+  currentStock: number; 
   reorderLevel?: number | null; 
   supplierInfo?: SupplierInfo | null; 
   costPerUnit?: number | null; 
@@ -309,7 +309,8 @@ export type StockTransactionType =
   | 'adjustment_out'    
   | 'initial_stock'     
   | 'transfer_in'       
-  | 'transfer_out';     
+  | 'transfer_out'
+  | 'internal_consumption'; // Added for internal use
 
 
 export interface StockTransaction {

@@ -17,7 +17,7 @@ import {
   type QueryConstraint,
 } from 'firebase/firestore';
 import { db } from './config';
-import type { InventoryItem, StockTransaction, StockTransactionType, UnitOfMeasure, OrderItem as ClientOrderItem, MenuItem, DailyStockSummary, SupplierInfo } from '@/types'; 
+import type { InventoryItem, StockTransaction, StockTransactionType, UnitOfMeasure, OrderItem as ClientOrderItem, MenuItem, DailyStockSummary, SupplierInfo, InventoryItemCategory } from '@/types'; 
 import { convertFirebaseTimestampToString } from './utils';
 import { getMenuItemByIdFromGroup } from './menu'; 
 import { startOfDay, endOfDay } from 'date-fns';
@@ -43,6 +43,8 @@ export async function addInventoryItem(
     lastStockUpdatedAt: now,
     unitConversionNotes: itemData.unitConversionNotes || null, 
     supplierInfo: itemData.supplierInfo || null,
+    reorderLevel: itemData.reorderLevel === undefined ? null : itemData.reorderLevel,
+    costPerUnit: itemData.costPerUnit === undefined ? null : itemData.costPerUnit,
   };
 
   const docRef = await addDoc(inventoryCol, dataToSave);
@@ -114,15 +116,15 @@ export async function updateInventoryItem(
 
   const updateData: any = { ...data, updatedAt: now };
   
-  // Ensure optional fields are set to null if explicitly undefined or if they were null and not changed
   const optionalFields: (keyof InventoryItem)[] = ['unitConversionNotes', 'supplierInfo', 'reorderLevel', 'costPerUnit'];
   optionalFields.forEach(field => {
     if (data[field] === undefined && currentItemData[field] === null) {
       updateData[field] = null;
     } else if (data[field] === undefined && currentItemData[field] !== undefined) {
-      updateData[field] = currentItemData[field]; // Retain existing value if not in update data
+      // Retain existing value if not in update data (and existing value is not explicitly null)
+      updateData[field] = currentItemData[field];
     } else if (data[field] === null) {
-      updateData[field] = null; // Explicitly set to null
+      updateData[field] = null; 
     }
   });
 
@@ -137,11 +139,11 @@ export async function updateInventoryItem(
       data.name || currentItemData.name, 
       data.unitOfMeasure || currentItemData.unitOfMeasure, 
       transactionType, 
-      stockDifference,
+      stockDifference, // This is the change amount, not the new total
       data.costPerUnit !== undefined ? data.costPerUnit : currentItemData.costPerUnit,
-      'Manual stock adjustment',
+      'Manual stock adjustment via item edit',
       null,
-      batch // Pass batch to internal function
+      batch 
     );
     updateData.lastStockUpdatedAt = now;
   }
@@ -175,7 +177,7 @@ async function addStockTransactionInternal(
   costPerUnitAtTransaction?: number | null,
   notes?: string | null,
   userId?: string | null,
-  batch?: WriteBatch, // Optional batch for atomicity
+  batchParam?: WriteBatch, // Optional batch for atomicity
   relatedOrderId?: string | null,
   relatedPurchaseId?: string | null,
   supplierName?: string | null,
@@ -186,7 +188,7 @@ async function addStockTransactionInternal(
 ): Promise<StockTransaction> {
   if (!db) throw new Error("Firestore is not initialized.");
 
-  const localBatch = batch || writeBatch(db); 
+  const localBatch = batchParam || writeBatch(db); 
   const transactionsCol = collection(db, getStockTransactionsCollectionPath(restaurantId));
   const transactionDate = Timestamp.now(); 
   const inventoryItemRef = doc(db, getInventoryCollectionPath(restaurantId), inventoryItemId);
@@ -198,7 +200,7 @@ async function addStockTransactionInternal(
     inventoryItemId,
     inventoryItemName,
     transactionType,
-    quantity: quantityChange,
+    quantity: quantityChange, // This should be the change amount (+ve for in, -ve for out)
     unitOfMeasure,
     transactionDate,
     costPerUnitAtTransaction: costPerUnitAtTransaction === undefined ? null : costPerUnitAtTransaction,
@@ -215,51 +217,32 @@ async function addStockTransactionInternal(
   localBatch.set(newTransactionRef, transactionPayload);
 
   let currentStock = 0;
-  try {
-    // If we are using a batch, we cannot read the item yet if it's part of the same batch creation.
-    // For 'initial_stock', currentStock is effectively 0 before this transaction.
-    // For other types, if we can't read (e.g., item doesn't exist which shouldn't happen for non-initial), we log error.
-    if (transactionType !== 'initial_stock' && !batch) {
-      const itemSnap = await getDoc(inventoryItemRef);
-      if (itemSnap.exists()) { 
-        currentStock = (itemSnap.data() as InventoryItem).currentStock;
-      } else {
-        console.warn(`Inventory item ${inventoryItemId} not found for transaction type ${transactionType}. Assuming 0 current stock.`);
-      }
-    } else if (transactionType !== 'initial_stock' && batch) {
-        // If in a batch and not initial stock, we assume the item *must* exist prior.
-        // Reading within a transaction/batch for uncommitted data is complex.
-        // This relies on the caller ensuring the item exists or handling this scenario.
-        // For now, we'll proceed assuming it might be read correctly if not part of the same batch write for creation.
-        // A safer approach might involve passing currentStock if known in batch operations.
-        // console.warn(`Reading inventory item ${inventoryItemId} within a batch for ${transactionType}. Stock level might not reflect uncommitted changes.`);
+  if (transactionType !== 'initial_stock') {
+    // For existing items, we need to fetch the current stock to calculate the new stock.
+    // This read should happen *before* the batch update if not part of the same transaction creation.
+    // If this is part of a larger batched operation where inventoryItemRef might not exist yet
+    // or is being created in the same batch, this logic might need adjustment.
+    // For isolated stock transactions, this is generally fine.
+    const itemSnap = await getDoc(inventoryItemRef); // Read current stock if item exists
+    if (itemSnap.exists()) {
+      currentStock = (itemSnap.data() as InventoryItem).currentStock;
+    } else if (transactionType !== 'purchase' && transactionType !== 'adjustment_in'){ 
+      // If it's an outflow and item doesn't exist, that's an issue.
+      // For purchase/adj_in, it might be okay if this function is called right after item creation in same batch
+      console.warn(`Inventory item ${inventoryItemId} not found for transaction type ${transactionType}. Assuming 0 current stock for update, but this might be an error.`);
     }
-  } catch (e) {
-     if (transactionType !== 'initial_stock') {
-        console.warn(`Error reading inventory item ${inventoryItemId} during transaction:`, e);
-     }
-  }
-
-  const newStockLevel = currentStock + quantityChange;
-
-  if (transactionType === 'initial_stock') {
-    // Set currentStock and other fields for a new item.
-    // If using a batch, this set() might be for a document that doesn't exist yet, which is fine.
-    localBatch.set(inventoryItemRef, {
-      currentStock: newStockLevel, // This is the opening stock
-      lastStockUpdatedAt: transactionDate,
-      updatedAt: transactionDate, // Also update main item's updatedAt
-    }, { merge: true }); // Merge true in case other fields are being set in the same batch for a new item
-  } else {
-    // Update currentStock for an existing item.
-    localBatch.update(inventoryItemRef, {
-      currentStock: newStockLevel,
-      lastStockUpdatedAt: transactionDate, 
-      updatedAt: transactionDate, 
-    });
   }
   
-  if (!batch) { 
+  const newStockLevel = currentStock + quantityChange;
+
+  // Update the main inventory item's stock level and last update timestamp
+  localBatch.set(inventoryItemRef, { // Use set with merge:true or update
+    currentStock: newStockLevel,
+    lastStockUpdatedAt: transactionDate,
+    updatedAt: transactionDate,
+  }, { merge: true }); 
+  
+  if (!batchParam) { 
     await localBatch.commit();
   }
 
@@ -269,13 +252,13 @@ async function addStockTransactionInternal(
 export async function recordPurchase(
   restaurantId: string,
   inventoryItemId: string,
-  quantityReceived: number,
+  quantityReceived: number, // Should be positive
   costPerUnit: number | null,
   notes?: string | null,
   supplierName?: string | null,
   invoiceNumber?: string | null,
   batchNumber?: string | null,
-  expiryDate?: Date | null, // Accept Date for easier UI binding
+  expiryDate?: Date | null,
   paymentMode?: string | null
 ): Promise<StockTransaction> {
   const item = await getInventoryItem(restaurantId, inventoryItemId);
@@ -287,13 +270,13 @@ export async function recordPurchase(
     item.name,
     item.unitOfMeasure,
     'purchase',
-    quantityReceived,
+    quantityReceived, // Positive for purchase
     costPerUnit,
-    notes, // Removed supplier from notes as it's now a dedicated field
-    null,
+    notes,
+    null, // userId
     undefined, // No batch passed from here
-    undefined,
-    undefined,
+    undefined, // relatedOrderId
+    undefined, // relatedPurchaseId (could be self-referential if we create a purchase doc)
     supplierName,
     invoiceNumber,
     batchNumber,
@@ -301,6 +284,33 @@ export async function recordPurchase(
     paymentMode
   );
 }
+
+export async function recordStockOutflow(
+  restaurantId: string,
+  inventoryItemId: string,
+  quantityOut: number, // Should be positive (will be converted to negative internally)
+  transactionType: 'wastage' | 'adjustment_out' | 'internal_consumption',
+  notes?: string | null,
+  userId?: string | null // Optional user ID who performed the action
+): Promise<StockTransaction> {
+  const item = await getInventoryItem(restaurantId, inventoryItemId);
+  if (!item) throw new Error(`Inventory item ${inventoryItemId} not found.`);
+  if (quantityOut <= 0) throw new Error("Quantity for stock outflow must be positive.");
+
+  return addStockTransactionInternal(
+    restaurantId,
+    inventoryItemId,
+    item.name,
+    item.unitOfMeasure,
+    transactionType,
+    -Math.abs(quantityOut), // Ensure it's negative for outflow
+    item.costPerUnit, // Use current cost for valuation of outflow
+    notes,
+    userId,
+    undefined // No batch passed from here
+  );
+}
+
 
 export async function deductStockForSoldItems(restaurantId: string, orderId: string, orderItems: ClientOrderItem[]): Promise<void> {
   if (!db) throw new Error("Firestore is not initialized.");
@@ -310,37 +320,39 @@ export async function deductStockForSoldItems(restaurantId: string, orderId: str
   let transactionCount = 0;
 
   for (const orderItem of orderItems) {
-    const menuItemResult = await getMenuItemByIdFromGroup(orderItem.menuItemId); // Use existing function that queries collection group
+    // Assuming getMenuItemByIdFromGroup is efficient and fetches necessary data.
+    // If not, consider fetching all menu items once or optimizing this lookup.
+    const menuItemResult = await getMenuItemByIdFromGroup(orderItem.menuItemId); 
+    
     if (menuItemResult && menuItemResult.menuItem.recipeIngredients && menuItemResult.menuItem.recipeIngredients.length > 0) {
       const menuItem = menuItemResult.menuItem;
       for (const ingredient of menuItem.recipeIngredients) {
+        // Note: Reading inventoryItemData inside the loop to get costPerUnit for each transaction.
+        // This could be optimized if performance becomes an issue by fetching all relevant inventory items upfront.
         const inventoryItemRef = doc(db, getInventoryCollectionPath(restaurantId), ingredient.inventoryItemId);
-        
-        // It's generally not recommended to read inside a batch loop if possible,
-        // but for simplicity and to get costPerUnit, we do it here.
-        // For very high volume, consider denormalizing cost or optimizing this.
-        const inventoryItemSnap = await getDoc(inventoryItemRef); 
+        const inventoryItemSnap = await getDoc(inventoryItemRef);
 
         if (inventoryItemSnap.exists()) {
           const inventoryItemData = inventoryItemSnap.data() as InventoryItem;
           const quantityToDeduct = ingredient.quantityUsed * orderItem.quantity;
 
+          // addStockTransactionInternal handles batching and updating currentStock
           await addStockTransactionInternal(
             restaurantId,
             ingredient.inventoryItemId,
-            ingredient.inventoryItemName,
+            ingredient.inventoryItemName, // Using the name stored in recipe for consistency
             ingredient.unitOfMeasureUsed, 
             'sale_usage',
-            -quantityToDeduct, // Quantity change is negative for deduction
-            inventoryItemData.costPerUnit, 
+            -Math.abs(quantityToDeduct), // Ensure negative for deduction
+            inventoryItemData.costPerUnit, // Cost at the time of sale usage
             `Used in ${orderItem.quantity}x ${menuItem.name}`,
             null, // userId, could be system or cashier user
-            batch, // Pass the batch
+            batch,
             orderId
           );
           transactionCount++;
         } else {
-          console.warn(`Inventory item ${ingredient.inventoryItemId} for menu item ${menuItem.name} not found.`);
+          console.warn(`Inventory item ${ingredient.inventoryItemId} (named ${ingredient.inventoryItemName}) for menu item ${menuItem.name} not found. Stock not deducted for this ingredient.`);
         }
       }
     }
@@ -353,26 +365,46 @@ export async function deductStockForSoldItems(restaurantId: string, orderId: str
 }
 
 
-export async function getStockTransactions(restaurantId: string, inventoryItemId?: string): Promise<StockTransaction[]> {
-    if (!db) throw new Error("Firestore is not initialized.");
-    const transactionsCol = collection(db, getStockTransactionsCollectionPath(restaurantId));
-    
-    const queryConstraints: QueryConstraint[] = [orderBy('transactionDate', 'desc')]; 
-    if (inventoryItemId) {
-        queryConstraints.unshift(where('inventoryItemId', '==', inventoryItemId));
-    }
-    const q = query(transactionsCol, ...queryConstraints);
-    
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(docSnap => {
-        const data = docSnap.data();
-        return {
-            id: docSnap.id,
-            ...data,
-            transactionDate: data.transactionDate as Timestamp,
-            expiryDate: data.expiryDate ? (data.expiryDate as Timestamp) : null, // Ensure expiryDate is handled
-        } as StockTransaction;
-    });
+export async function getStockTransactions(
+  restaurantId: string,
+  filters?: {
+    inventoryItemId?: string;
+    transactionTypes?: StockTransactionType[];
+    startDate?: Date;
+    endDate?: Date;
+  }
+): Promise<StockTransaction[]> {
+  if (!db) throw new Error("Firestore is not initialized.");
+  const transactionsCol = collection(db, getStockTransactionsCollectionPath(restaurantId));
+  
+  const queryConstraints: QueryConstraint[] = [orderBy('transactionDate', 'desc')]; 
+  
+  if (filters?.inventoryItemId) {
+    queryConstraints.push(where('inventoryItemId', '==', filters.inventoryItemId));
+  }
+  if (filters?.transactionTypes && filters.transactionTypes.length > 0) {
+    queryConstraints.push(where('transactionType', 'in', filters.transactionTypes));
+  }
+  if (filters?.startDate) {
+    queryConstraints.push(where('transactionDate', '>=', Timestamp.fromDate(filters.startDate)));
+  }
+  if (filters?.endDate) {
+    const endOfDayForFilter = endOfDay(filters.endDate); // Ensure we capture the whole day
+    queryConstraints.push(where('transactionDate', '<=', Timestamp.fromDate(endOfDayForFilter)));
+  }
+
+  const q = query(transactionsCol, ...queryConstraints);
+  
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map(docSnap => {
+    const data = docSnap.data();
+    return {
+      id: docSnap.id,
+      ...data,
+      transactionDate: data.transactionDate as Timestamp,
+      expiryDate: data.expiryDate ? (data.expiryDate as Timestamp) : null,
+    } as StockTransaction;
+  });
 }
 
 // --- KPI Functions ---
@@ -395,40 +427,34 @@ export async function countLowStockItems(restaurantId: string): Promise<number> 
 
 export async function getDailyStockTransactionSummary(restaurantId: string): Promise<DailyStockSummary> {
   if (!db) throw new Error("Firestore is not initialized.");
-  const transactionsCol = collection(db, getStockTransactionsCollectionPath(restaurantId));
   
   const today = new Date();
-  const startOfTodayTimestamp = Timestamp.fromDate(startOfDay(today));
-  const endOfTodayTimestamp = Timestamp.fromDate(endOfDay(today));
+  const startOfToday = startOfDay(today);
+  const endOfTodayDate = endOfDay(today);
 
-  const q = query(
-    transactionsCol,
-    where('transactionDate', '>=', startOfTodayTimestamp),
-    where('transactionDate', '<=', endOfTodayTimestamp)
-  );
+  const transactions = await getStockTransactions(restaurantId, { startDate: startOfToday, endDate: endOfTodayDate });
 
-  const snapshot = await getDocs(q);
   const summary: DailyStockSummary = {
     stockInQuantity: 0,
     stockOutQuantity: 0,
     wastageQuantity: 0,
   };
 
-  snapshot.forEach(docSnap => {
-    const transaction = docSnap.data() as StockTransaction;
+  transactions.forEach(transaction => {
     switch (transaction.transactionType) {
       case 'purchase':
       case 'adjustment_in':
       case 'initial_stock':
       case 'transfer_in':
-        summary.stockInQuantity += transaction.quantity; // Assumes positive for 'in' types
+        summary.stockInQuantity += transaction.quantity; 
         break;
-      case 'sale_usage': // Stored as negative
-      case 'adjustment_out': // Stored as negative
-      case 'transfer_out': // Stored as negative
+      case 'sale_usage': 
+      case 'adjustment_out': 
+      case 'transfer_out':
+      case 'internal_consumption':
         summary.stockOutQuantity += Math.abs(transaction.quantity); 
         break;
-      case 'wastage': // Stored as negative
+      case 'wastage': 
         summary.wastageQuantity += Math.abs(transaction.quantity); 
         break;
     }
