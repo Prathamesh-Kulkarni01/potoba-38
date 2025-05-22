@@ -22,6 +22,7 @@ import {
   SidebarMenuSubContent, // Renamed from SidebarSubMenuContent
   SidebarMenuBadge,
   SidebarSeparator,
+  SidebarInset,
   // SidebarMenuSub, // Removed if not directly used from sidebar.tsx
   // SidebarMenuSubTrigger, // Removed if not directly used from sidebar.tsx
 } from '@/components/ui/sidebar';
