@@ -57,7 +57,7 @@ export interface RestaurantProfile {
   id: string;
   ownerId: string;
   name: string;
-  outletType?: OutletType; // Changed from 'type' to 'outletType'
+  outletType?: OutletType;
   createdAt: Timestamp; 
   subscriptionPlan?: string; 
   stripeCustomerId?: string;
@@ -171,8 +171,8 @@ export interface OrderItem {
   totalPrice: number; 
   variantChoices?: { variantName: string; optionName: string; optionPrice: number }[]; 
   notes?: string; 
-  categoryId?: string; // Added for tax calculation
-  taxOverrides?: TaxConfig[]; // Added for tax calculation
+  categoryId?: string; 
+  taxOverrides?: TaxConfig[]; 
 }
 
 export interface Order {
@@ -244,4 +244,68 @@ export interface PopularItem {
   menuItemName: string;
   orderCount: number;
   totalRevenue: number;
+}
+
+// Inventory Management Types
+export type InventoryItemCategory = 'raw_material' | 'semi_finished' | 'finished_good' | 'other';
+export const inventoryItemCategories: { value: InventoryItemCategory; label: string }[] = [
+  { value: 'raw_material', label: 'Raw Material' }, // e.g., Flour, Sugar, Tomatoes
+  { value: 'semi_finished', label: 'Semi-Finished Good' }, // e.g., Pizza Dough, Pasta Sauce
+  { value: 'finished_good', label: 'Finished Good' }, // e.g., Bottled Drinks, Packaged Snacks
+  { value: 'other', label: 'Other' }, // e.g., Cleaning Supplies, Packaging
+];
+
+export type UnitOfMeasure = 'kg' | 'g' | 'L' | 'ml' | 'pcs' | 'pack' | 'bottle' | 'can' | 'box' | 'dozen' | 'other';
+export const unitsOfMeasure: { value: UnitOfMeasure; label: string }[] = [
+  { value: 'kg', label: 'Kilogram (kg)' },
+  { value: 'g', label: 'Gram (g)' },
+  { value: 'L', label: 'Liter (L)' },
+  { value: 'ml', label: 'Milliliter (ml)' },
+  { value: 'pcs', label: 'Pieces (pcs)' },
+  { value: 'pack', label: 'Pack' },
+  { value: 'bottle', label: 'Bottle' },
+  { value: 'can', label: 'Can' },
+  { value: 'box', label: 'Box' },
+  { value: 'dozen', label: 'Dozen' },
+  { value: 'other', label: 'Other' },
+];
+
+export interface SupplierInfo {
+  name: string;
+  contactPerson?: string;
+  phone?: string;
+  email?: string;
+}
+
+export interface InventoryItem {
+  id: string;
+  restaurantId: string;
+  name: string;
+  category: InventoryItemCategory;
+  unitOfMeasure: UnitOfMeasure;
+  currentStock: number;
+  reorderLevel?: number | null; // Optional reorder point
+  supplierInfo?: SupplierInfo | null; // Optional
+  costPerUnit?: number | null; // Optional average cost per unit
+  lastStockUpdatedAt: Timestamp; // When the currentStock was last explicitly set/adjusted
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  // Future: batchNumber, expiryDate for perishable goods
+}
+
+export type StockTransactionType = 'purchase' | 'sale_usage' | 'wastage' | 'adjustment_in' | 'adjustment_out' | 'initial_stock';
+export interface StockTransaction {
+  id: string;
+  restaurantId: string;
+  inventoryItemId: string;
+  inventoryItemName: string; // Denormalized for easier display
+  transactionType: StockTransactionType;
+  quantity: number; // Positive for additions, negative for deductions
+  unitOfMeasure: UnitOfMeasure; // Denormalized
+  transactionDate: Timestamp;
+  costPerUnitAtTransaction?: number | null; // Cost at the time of this transaction
+  notes?: string | null;
+  relatedOrderId?: string | null; // If linked to a sale
+  relatedPurchaseId?: string | null; // If linked to a purchase order
+  userId?: string | null; // User who performed the transaction
 }

@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { useAuth, type UserRole } from "@/lib/auth/context";
-import AppLoadingScreen from "@/components/shared/app-loading-screen"; // Changed import
+import AppLoadingScreen from '@/components/shared/app-loading-screen'; 
 import UserNav from "@/components/dashboard/user-nav";
 import {
   SidebarProvider,
@@ -18,10 +18,8 @@ import {
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
-  SidebarInset,
-  SidebarSeparator,
   SidebarMenuBadge,
-} from "@/components/ui/sidebar";
+} from '@/components/ui/sidebar';
 import {
   Collapsible,
   CollapsibleContent,
@@ -59,8 +57,8 @@ import {
   ChevronDown,
   LogOut,
   ChevronsLeftRight,
-  SquareMenuIcon,
-} from "lucide-react"; // Changed to SquareMenuIcon
+  Archive, // Icon for Inventory
+} from "lucide-react"; 
 import type { RestaurantProfile } from "@/types";
 import {
   getRestaurantsByOwner,
@@ -205,7 +203,6 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     setSelectedRestaurantId(restaurantId);
   };
 
-  // AuthProvider shows initial loading screen. This handles subsequent loading states specific to dashboard.
   if (
     authContextLoading ||
     (authContextRole === "owner" &&
@@ -223,8 +220,6 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     !authContextRole ||
     (authContextRole === "owner" && user.onboardingComplete === false)
   ) {
-    // This case should ideally be handled by useEffect redirecting.
-    // If it's reached, it means redirection is pending or failed.
     return <AppLoadingScreen message="Preparing your space..." />;
   }
 
@@ -251,52 +246,6 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     }
     return [
       {
-        href: `/dashboard/restaurant/${currentRestaurantId}`,
-        label: "Overview",
-        icon: Store,
-        roles: ["owner"],
-        hint: "restaurant details",
-      },
-      {
-        href: `/dashboard/menu-management/${currentRestaurantId}`,
-        label: "Menu",
-        icon: BookCopy,
-        roles: ["owner"],
-        hint: "manage menu",
-      },
-      {
-        href: `/dashboard/table-management/${currentRestaurantId}`,
-        label: "Tables",
-        icon: Briefcase,
-        roles: ["owner"],
-        hint: "manage tables",
-        badgeCount: 2,
-      },
-      {
-        href: `/dashboard/orders/${currentRestaurantId}`,
-        label: "Orders",
-        icon: ListOrdered,
-        roles: ["owner", "staff"],
-        hint: "view orders",
-        badgeCount: 5,
-      },
-      {
-        href: `/dashboard/restaurant/${currentRestaurantId}/kitchen`,
-        label: "KOT",
-        icon: CookingPot,
-        roles: ["owner", "kitchen"],
-        hint: "kitchen order tickets",
-        badgeCount: 3,
-      },
-      {
-        href: `/dashboard/staff/${currentRestaurantId}`,
-        label: "Staff",
-        icon: Users,
-        roles: ["owner"],
-        hint: "manage staff",
-      },
-
-      {
         label: "Manage Restaurant",
         icon: Store,
         roles: ["owner"],
@@ -304,25 +253,63 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         isGroup: true,
         children: [
           {
+            href: `/dashboard/restaurant/${currentRestaurantId}`,
+            label: "Overview",
+            icon: Store,
+            roles: ["owner"],
+            hint: "restaurant details",
+          },
+          {
+            href: `/dashboard/menu-management/${currentRestaurantId}`,
+            label: "Menu Management",
+            icon: BookCopy,
+            roles: ["owner"],
+            hint: "manage menu",
+          },
+          {
+            href: `/dashboard/inventory/${currentRestaurantId}`,
+            label: "Inventory",
+            icon: Archive,
+            roles: ["owner"],
+            hint: "manage inventory",
+          },
+          {
+            href: `/dashboard/table-management/${currentRestaurantId}`,
+            label: "Table Management",
+            icon: Briefcase,
+            roles: ["owner"],
+            hint: "manage tables",
+            badgeCount: 2, 
+          },
+          {
+            href: `/dashboard/orders/${currentRestaurantId}`,
+            label: "Order Management",
+            icon: ListOrdered,
+            roles: ["owner", "staff"],
+            hint: "view orders",
+            badgeCount: 5, 
+          },
+          {
+            href: `/dashboard/restaurant/${currentRestaurantId}/kitchen`,
+            label: "KOT",
+            icon: CookingPot,
+            roles: ["owner", "kitchen"],
+            hint: "kitchen order tickets",
+            badgeCount: 3,
+          },
+          {
+            href: `/dashboard/staff/${currentRestaurantId}`,
+            label: "Staff Management",
+            icon: Users,
+            roles: ["owner"],
+            hint: "manage staff",
+          },
+          {
             href: `/dashboard/restaurant/${currentRestaurantId}/settings`,
             label: "Restaurant Settings",
             icon: Settings,
             roles: ["owner"],
             hint: "specific settings",
-          },
-          {
-            href: `/dashboard/recipes/${currentRestaurantId}`,
-            label: "Recipes (Old)",
-            icon: Utensils,
-            roles: ["owner", "staff"],
-            hint: "food recipes",
-          },
-          {
-            href: `/dashboard/meal-planner/${currentRestaurantId}`,
-            label: "Meal Planner",
-            icon: SquareMenuIcon,
-            roles: ["owner", "staff"],
-            hint: "meal plan",
           },
         ],
       },
@@ -361,7 +348,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         {
           href: "/dashboard/admin/content",
           label: "Content Moderation",
-          icon: SquareMenuIcon,
+          icon: ListChecks,
           roles: ["admin"],
           hint: "admin content",
         },
@@ -411,16 +398,21 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   } else if (authContextRole === "staff") {
     const staffRestaurantId = user?.restaurantId;
     if (staffRestaurantId) {
-      desktopNavItems = [
-        ...desktopNavItems,
-        ...getOwnerNavItems(staffRestaurantId).filter(
-          (item) =>
-            item.label === "Orders" ||
-            item.label === "Recipes (Old)" ||
-            item.label === "Meal Planner" ||
-            item.label === "KOT"
-        ),
-      ];
+      const staffOwnerNavs = getOwnerNavItems(staffRestaurantId);
+      const staffAccessibleTopLevel = staffOwnerNavs.find(item => item.label === "Manage Restaurant");
+      if (staffAccessibleTopLevel && staffAccessibleTopLevel.children) {
+        const staffSpecificItems = staffAccessibleTopLevel.children.filter(child => 
+            child.label === "Order Management" || 
+            child.label === "KOT" ||
+            child.label === "Inventory" // Assuming staff might also access inventory
+        );
+        if (staffSpecificItems.length > 0) {
+          desktopNavItems.push({
+            ...staffAccessibleTopLevel,
+            children: staffSpecificItems
+          });
+        }
+      }
     }
   }
   if (authContextRole === "admin") {
@@ -464,12 +456,11 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             icon: ListOrdered,
             hint: "view orders",
           },
-          {
-            href: `/dashboard/table-management/${selectedRestaurantId}`,
-            label: "Tables",
-            icon: Briefcase,
-            hint: "manage tables",
-            badgeCount: 2,
+           {
+            href: `/dashboard/inventory/${selectedRestaurantId}`,
+            label: "Inventory",
+            icon: Archive,
+            hint: "inventory",
           },
           {
             href: `/dashboard/restaurant/${selectedRestaurantId}/settings`,
@@ -489,11 +480,10 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             hint: "view orders",
           },
           {
-            href: `/dashboard/table-management/${selectedRestaurantId}`,
-            label: "Tables",
-            icon: Briefcase,
-            hint: "manage tables",
-            badgeCount: 2,
+            href: `/dashboard/inventory/${user.restaurantId}`,
+            label: "Inventory",
+            icon: Archive,
+            hint: "inventory",
           },
         ]
       : []),
@@ -507,7 +497,6 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           },
         ]
       : []),
-    
   ];
 
   const selectedRestaurantName =
@@ -642,11 +631,11 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
               <Link href="/dashboard" className="flex items-center gap-2">
                 <Image
                   src="/images/logo.png"
-                  alt="App Logo"
+                  alt="Potoba Logo"
                   width={40}
                   height={40}
                   className="rounded-md"
-                  data-ai-hint="modern logo"
+                  data-ai-hint="modern app logo"
                 />
                 <h1 className="text-2xl font-bold text-sidebar-primary group-data-[collapsible=icon]:hidden">
                   Potoba
@@ -752,11 +741,11 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             <Link href="/dashboard" className="flex items-center gap-2">
               <Image
                 src="/images/logo.png"
-                alt="App Logo"
+                alt="Potoba Logo"
                 width={32}
                 height={32}
                 className="rounded-md"
-                data-ai-hint="modern logo"
+                data-ai-hint="modern app logo"
               />
               <h1 className="text-xl font-bold text-primary">Potoba</h1>
             </Link>
@@ -811,8 +800,6 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             </div>
           </header>
           <main className="flex-1 bg-background max-h-[calc(100dvh-theme(spacing.16)-theme(spacing.16))] overflow-y-auto p-4 pt-6 ">
-            {" "}
-            {/* Adjusted max-h */}
             {children}
           </main>
           <BottomNavigationBar navItems={bottomNavLinks} />
