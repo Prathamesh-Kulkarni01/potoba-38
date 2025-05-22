@@ -1,3 +1,4 @@
+
 // src/app/dashboard/layout.tsx
 "use client";
 
@@ -19,9 +20,10 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
   SidebarMenuBadge,
+  SidebarMenuSubContent,
   SidebarSeparator,
   SidebarInset,
-} from '@/components/ui/sidebar';
+} from '@/components/ui/sidebar'; // Updated to use SidebarMenuSubContent
 import {
   Collapsible,
   CollapsibleContent,
@@ -59,7 +61,9 @@ import {
   ChevronDown,
   LogOut,
   ChevronsLeftRight,
-  Archive, // Icon for Inventory
+  Archive,
+  BarChart3,
+  ScanText,
 } from "lucide-react"; 
 import type { RestaurantProfile } from "@/types";
 import {
@@ -269,10 +273,10 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             hint: "manage menu",
           },
           {
-            href: `/dashboard/inventory/${currentRestaurantId}`,
+            href: `/dashboard/inventory/${currentRestaurantId}/dashboard`, // Updated Inventory link
             label: "Inventory",
             icon: Archive,
-            roles: ["owner"],
+            roles: ["owner", "staff"], // Staff might need access
             hint: "manage inventory",
           },
           {
@@ -281,7 +285,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             icon: Briefcase,
             roles: ["owner"],
             hint: "manage tables",
-            badgeCount: 2, 
+            // badgeCount: 2, 
           },
           {
             href: `/dashboard/orders/${currentRestaurantId}`,
@@ -289,7 +293,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             icon: ListOrdered,
             roles: ["owner", "staff"],
             hint: "view orders",
-            badgeCount: 5, 
+            // badgeCount: 5, 
           },
           {
             href: `/dashboard/restaurant/${currentRestaurantId}/kitchen`,
@@ -297,7 +301,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             icon: CookingPot,
             roles: ["owner", "kitchen"],
             hint: "kitchen order tickets",
-            badgeCount: 3,
+            // badgeCount: 3,
           },
           {
             href: `/dashboard/staff/${currentRestaurantId}`,
@@ -343,14 +347,14 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         {
           href: "/dashboard/admin/analytics",
           label: "Platform Analytics",
-          icon: LayoutDashboard,
+          icon: BarChart3, // Updated icon
           roles: ["admin"],
           hint: "admin analytics",
         },
         {
           href: "/dashboard/admin/content",
           label: "Content Moderation",
-          icon: ListOrdered,
+          icon: ScanText, // Updated icon
           roles: ["admin"],
           hint: "admin content",
         },
@@ -406,7 +410,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         const staffSpecificItems = staffAccessibleTopLevel.children.filter(child => 
             child.label === "Order Management" || 
             child.label === "KOT" ||
-            child.label === "Inventory" // Assuming staff might also access inventory
+            child.label === "Inventory"
         );
         if (staffSpecificItems.length > 0) {
           desktopNavItems.push({
@@ -459,7 +463,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             hint: "view orders",
           },
            {
-            href: `/dashboard/inventory/${selectedRestaurantId}`,
+            href: `/dashboard/inventory/${selectedRestaurantId}/dashboard`,
             label: "Inventory",
             icon: Archive,
             hint: "inventory",
@@ -468,7 +472,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             href: `/dashboard/restaurant/${selectedRestaurantId}/settings`,
             label: "Settings",
             icon: Settings,
-            roles: ["owner"],
+            // roles: ["owner"], // Role check is already handled by authContextRole
             hint: "specific settings",
           },
         ]
@@ -482,7 +486,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             hint: "view orders",
           },
           {
-            href: `/dashboard/inventory/${user.restaurantId}`,
+            href: `/dashboard/inventory/${user.restaurantId}/dashboard`,
             label: "Inventory",
             icon: Archive,
             hint: "inventory",
@@ -562,16 +566,10 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                     )}
                   </SidebarMenuButton>
                 </CollapsibleTrigger>
-                <CollapsibleContent className="group-data-[collapsible=icon]:absolute group-data-[collapsible=icon]:left-full group-data-[collapsible=icon]:top-0 group-data-[collapsible=icon]:ml-2 group-data-[collapsible=icon]:bg-sidebar group-data-[collapsible=icon]:p-2 group-data-[collapsible=icon]:rounded-md group-data-[collapsible=icon]:shadow-lg group-data-[collapsible=icon]:w-48 group-data-[collapsible=icon]:z-50">
-                  <div
-                    className={cn(
-                      !isSubmenu && "py-1 group-data-[collapsible=icon]:py-0",
-                      isSubmenu &&
-                        "ml-4 border-l border-sidebar-border/50 group-data-[collapsible=icon]:ml-0 group-data-[collapsible=icon]:border-l-0"
-                    )}
-                  >
+                <CollapsibleContent>
+                  <SidebarMenuSubContent> 
                     {renderNavMenu(item.children, true)}
-                  </div>
+                  </SidebarMenuSubContent>
                 </CollapsibleContent>
               </Collapsible>
             ) : (

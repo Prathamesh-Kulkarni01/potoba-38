@@ -2,7 +2,7 @@
 import type { User as FirebaseUser } from 'firebase/auth';
 import type { Timestamp } from 'firebase/firestore';
 
-export type UserRole = 'admin' | 'user' | 'owner' | 'staff';
+export type UserRole = 'admin' | 'user' | 'owner' | 'staff' | 'kitchen'; // Added kitchen role
 
 export interface AuthUser extends FirebaseUser {
   role: UserRole | null;
@@ -108,11 +108,26 @@ export interface AvailabilityRule {
   endTime: string;   
 }
 
+export type UnitOfMeasure = 'kg' | 'g' | 'L' | 'ml' | 'pcs' | 'pack' | 'bottle' | 'can' | 'box' | 'dozen' | 'other';
+export const unitsOfMeasure: { value: UnitOfMeasure; label: string }[] = [
+  { value: 'kg', label: 'Kilogram (kg)' },
+  { value: 'g', label: 'Gram (g)' },
+  { value: 'L', label: 'Liter (L)' },
+  { value: 'ml', label: 'Milliliter (ml)' },
+  { value: 'pcs', label: 'Pieces (pcs)' },
+  { value: 'pack', label: 'Pack' },
+  { value: 'bottle', label: 'Bottle' },
+  { value: 'can', label: 'Can' },
+  { value: 'box', label: 'Box' },
+  { value: 'dozen', label: 'Dozen' },
+  { value: 'other', label: 'Other' },
+];
+
 export interface RecipeIngredientItem {
   inventoryItemId: string;
-  inventoryItemName: string; // For display convenience
+  inventoryItemName: string; 
   quantityUsed: number;
-  unitOfMeasureUsed: UnitOfMeasure; // Unit used in recipe (e.g., 'g', 'ml', 'pcs')
+  unitOfMeasureUsed: UnitOfMeasure; 
 }
 
 export interface MenuItem {
@@ -135,7 +150,7 @@ export interface MenuItem {
   upsellItems?: string[]; 
   variants?: MenuItemVariant[]; 
   availabilitySchedule?: AvailabilityRule[]; 
-  recipeIngredients?: RecipeIngredientItem[]; // Added for recipe mapping
+  recipeIngredients?: RecipeIngredientItem[]; 
   isVegetarian?: boolean | null;
   currency?: string | null;
   portionSize?: string | null;
@@ -254,7 +269,6 @@ export interface PopularItem {
   totalRevenue: number;
 }
 
-// Inventory Management Types
 export type InventoryItemCategory = 'raw_material' | 'semi_finished' | 'finished_good' | 'other';
 export const inventoryItemCategories: { value: InventoryItemCategory; label: string }[] = [
   { value: 'raw_material', label: 'Raw Material' }, 
@@ -263,26 +277,12 @@ export const inventoryItemCategories: { value: InventoryItemCategory; label: str
   { value: 'other', label: 'Other' }, 
 ];
 
-export type UnitOfMeasure = 'kg' | 'g' | 'L' | 'ml' | 'pcs' | 'pack' | 'bottle' | 'can' | 'box' | 'dozen' | 'other';
-export const unitsOfMeasure: { value: UnitOfMeasure; label: string }[] = [
-  { value: 'kg', label: 'Kilogram (kg)' },
-  { value: 'g', label: 'Gram (g)' },
-  { value: 'L', label: 'Liter (L)' },
-  { value: 'ml', label: 'Milliliter (ml)' },
-  { value: 'pcs', label: 'Pieces (pcs)' },
-  { value: 'pack', label: 'Pack' },
-  { value: 'bottle', label: 'Bottle' },
-  { value: 'can', label: 'Can' },
-  { value: 'box', label: 'Box' },
-  { value: 'dozen', label: 'Dozen' },
-  { value: 'other', label: 'Other' },
-];
 
 export interface SupplierInfo {
-  name: string;
-  contactPerson?: string;
-  phone?: string;
-  email?: string;
+  name?: string | null; // Made optional
+  contactPerson?: string | null;
+  phone?: string | null;
+  email?: string | null;
 }
 
 export interface InventoryItem {
@@ -301,14 +301,14 @@ export interface InventoryItem {
 }
 
 export type StockTransactionType = 
-  | 'purchase'          // Stock In: From supplier
-  | 'sale_usage'        // Stock Out: Used in a sale/order (deducted via recipe)
-  | 'wastage'           // Stock Out: Spoiled, damaged, expired
-  | 'adjustment_in'     // Stock In: Manual positive adjustment (e.g., recount, found stock)
-  | 'adjustment_out'    // Stock Out: Manual negative adjustment (e.g., recount, theft)
-  | 'initial_stock'     // Stock In: Setting up item for the first time
-  | 'transfer_in'       // Stock In: Received from another branch/location
-  | 'transfer_out';     // Stock Out: Sent to another branch/location
+  | 'purchase'         
+  | 'sale_usage'        
+  | 'wastage'           
+  | 'adjustment_in'     
+  | 'adjustment_out'    
+  | 'initial_stock'     
+  | 'transfer_in'       
+  | 'transfer_out';     
 
 
 export interface StockTransaction {
@@ -317,7 +317,7 @@ export interface StockTransaction {
   inventoryItemId: string;
   inventoryItemName: string; 
   transactionType: StockTransactionType;
-  quantity: number; // Positive for additions, negative for deductions (sale_usage, wastage, adjustment_out, transfer_out are negative)
+  quantity: number; 
   unitOfMeasure: UnitOfMeasure; 
   transactionDate: Timestamp;
   costPerUnitAtTransaction?: number | null; 
@@ -327,4 +327,9 @@ export interface StockTransaction {
   userId?: string | null; 
 }
 
+export interface DailyStockSummary {
+  stockInQuantity: number;
+  stockOutQuantity: number;
+  wastageQuantity: number;
+}
     

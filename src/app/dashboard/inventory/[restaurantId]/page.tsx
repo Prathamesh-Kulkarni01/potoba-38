@@ -4,6 +4,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link'; // Import Link
 import { useAuth } from '@/lib/auth/context';
 import { getRestaurant } from '@/lib/firebase/firestore';
 import { getInventoryItems, addInventoryItem, updateInventoryItem, deleteInventoryItem, recordPurchase } from '@/lib/firebase/inventory';
@@ -13,7 +14,7 @@ import LoadingSpinner from '@/components/shared/loading-spinner';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogTrigger } from '@/components/ui/dialog';
-import { PlusCircle, Edit3, Trash2, Archive, Search, Filter as FilterIcon, PackagePlus } from 'lucide-react';
+import { PlusCircle, Edit3, Trash2, Archive, Search, Filter as FilterIcon, PackagePlus, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import InventoryItemForm, { type InventoryItemFormValues } from '@/components/inventory/inventory-item-form';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
@@ -172,7 +173,7 @@ export default function InventoryManagementPage() {
       );
       toast({ title: "Stock Received", description: `${values.quantityReceived} ${receiveStockItem.unitOfMeasure} of ${receiveStockItem.name} added to stock.` });
       fetchData();
-      setReceiveStockItem(null); // Close dialog
+      setReceiveStockItem(null); 
     } catch (error: any) {
       toast({ variant: "destructive", title: "Stock Update Failed", description: error.message || "Could not update stock." });
     } finally {
@@ -193,9 +194,17 @@ export default function InventoryManagementPage() {
       <Card className="shadow-xl">
         <CardHeader>
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <div>
+            <div className="flex items-center">
+                <Button variant="ghost" size="icon" className="mr-2 md:hidden" onClick={() => router.push(`/dashboard/inventory/${restaurantId}/dashboard`)}>
+                    <ArrowLeft className="h-5 w-5" />
+                </Button>
+                <Link href={`/dashboard/inventory/${restaurantId}/dashboard`} className="hidden md:inline-flex items-center mr-3 text-sm text-muted-foreground hover:text-primary">
+                    <ArrowLeft className="h-4 w-4 mr-1" /> Back to Inventory Dashboard
+                </Link>
+            </div>
+            <div className="flex-grow">
               <CardTitle className="text-2xl md:text-3xl flex items-center">
-                <Archive className="mr-3 h-7 w-7 text-primary" /> Inventory Management
+                <Archive className="mr-3 h-7 w-7 text-primary" /> Current Stock
               </CardTitle>
               <CardDescription>Track and manage stock levels for {restaurant.name}.</CardDescription>
             </div>
@@ -315,5 +324,3 @@ export default function InventoryManagementPage() {
     </div>
   );
 }
-
-    
