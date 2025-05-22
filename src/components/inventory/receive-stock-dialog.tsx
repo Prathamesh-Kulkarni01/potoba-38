@@ -2,7 +2,7 @@
 // src/components/inventory/receive-stock-dialog.tsx
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -55,6 +55,20 @@ export default function ReceiveStockDialog({ isOpen, onClose, item, onSubmit, is
     },
   });
 
+  const quantityReceived = form.watch('quantityReceived');
+  const costPerUnit = form.watch('costPerUnit');
+  const [totalValue, setTotalValue] = useState<number>(0);
+
+  useEffect(() => {
+    const qty = parseFloat(String(quantityReceived));
+    const cost = parseFloat(String(costPerUnit));
+    if (!isNaN(qty) && !isNaN(cost) && qty > 0 && cost >= 0) {
+      setTotalValue(qty * cost);
+    } else {
+      setTotalValue(0);
+    }
+  }, [quantityReceived, costPerUnit]);
+
   const handleSubmit = async (values: ReceiveStockFormValues) => {
     await onSubmit(values);
   };
@@ -98,6 +112,10 @@ export default function ReceiveStockDialog({ isOpen, onClose, item, onSubmit, is
                 </FormItem>
               )}
             />
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Total Value</Label>
+              <Input type="text" value={`₹${totalValue.toFixed(2)}`} readOnly disabled className="bg-muted/50 h-9" />
+            </div>
             <FormField
               control={form.control}
               name="supplierName"
@@ -196,7 +214,7 @@ export default function ReceiveStockDialog({ isOpen, onClose, item, onSubmit, is
               name="notes"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Notes (Optional)</FormLabel>
+                  <FormLabel>Remarks (Optional)</FormLabel>
                   <FormControl>
                     <Textarea placeholder="e.g., Early morning delivery" {...field} value={field.value || ''} />
                   </FormControl>
@@ -204,7 +222,7 @@ export default function ReceiveStockDialog({ isOpen, onClose, item, onSubmit, is
                 </FormItem>
               )}
             />
-            <DialogFooter className="pt-4 sticky bottom-0 bg-dialog pb-1">
+            <DialogFooter className="pt-4 sticky bottom-0 bg-background pb-1">
               <DialogClose asChild>
                 <Button type="button" variant="outline" onClick={onClose} disabled={isLoading}>
                   Cancel
