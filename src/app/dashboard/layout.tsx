@@ -23,7 +23,7 @@ import {
   SidebarMenuSubContent,
   SidebarSeparator,
   SidebarInset,
-} from '@/components/ui/sidebar'; // Updated to use SidebarMenuSubContent
+} from '@/components/ui/sidebar';
 import {
   Collapsible,
   CollapsibleContent,
@@ -61,9 +61,12 @@ import {
   ChevronDown,
   LogOut,
   ChevronsLeftRight,
-  Archive,
-  BarChart3,
+  Archive, // Already here
+  BarChart3, // Already here
   ScanText,
+  PackagePlus, // Added
+  PackageMinus, // Added
+  Trash2, // Added
 } from "lucide-react"; 
 import type { RestaurantProfile } from "@/types";
 import {
@@ -273,19 +276,11 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             hint: "manage menu",
           },
           {
-            href: `/dashboard/inventory/${currentRestaurantId}/dashboard`, // Updated Inventory link
-            label: "Inventory",
-            icon: Archive,
-            roles: ["owner", "staff"], // Staff might need access
-            hint: "manage inventory",
-          },
-          {
             href: `/dashboard/table-management/${currentRestaurantId}`,
             label: "Table Management",
-            icon: Briefcase,
+            icon: Briefcase, // Using Briefcase as Table wasn't imported, consider Table icon
             roles: ["owner"],
             hint: "manage tables",
-            // badgeCount: 2, 
           },
           {
             href: `/dashboard/orders/${currentRestaurantId}`,
@@ -293,7 +288,6 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             icon: ListOrdered,
             roles: ["owner", "staff"],
             hint: "view orders",
-            // badgeCount: 5, 
           },
           {
             href: `/dashboard/restaurant/${currentRestaurantId}/kitchen`,
@@ -301,7 +295,6 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             icon: CookingPot,
             roles: ["owner", "kitchen"],
             hint: "kitchen order tickets",
-            // badgeCount: 3,
           },
           {
             href: `/dashboard/staff/${currentRestaurantId}`,
@@ -321,6 +314,59 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       },
     ];
   };
+  
+  const getInventoryNavItems = (currentRestaurantId: string | null): NavItem[] => {
+    if (!currentRestaurantId) {
+      return []; // No inventory items if no restaurant selected
+    }
+    return [
+      {
+        label: "Inventory Management",
+        icon: Archive,
+        roles: ["owner", "staff"],
+        hint: "Manage restaurant inventory",
+        isGroup: true,
+        children: [
+          {
+            href: `/dashboard/inventory/${currentRestaurantId}/dashboard`,
+            label: "Overview",
+            icon: BarChart3,
+            roles: ["owner", "staff"],
+            hint: "Inventory overview and KPIs",
+          },
+          {
+            href: `/dashboard/inventory/${currentRestaurantId}`,
+            label: "Stock List",
+            icon: List,
+            roles: ["owner", "staff"],
+            hint: "View and manage all stock items",
+          },
+          {
+            // href: `/dashboard/inventory/${currentRestaurantId}/stock-in`, // Placeholder
+            label: "Stock In (Soon)",
+            icon: PackagePlus,
+            roles: ["owner", "staff"],
+            hint: "Record incoming stock",
+          },
+          {
+            // href: `/dashboard/inventory/${currentRestaurantId}/stock-out`, // Placeholder
+            label: "Stock Out (Soon)",
+            icon: PackageMinus,
+            roles: ["owner", "staff"],
+            hint: "Record stock outflow",
+          },
+          {
+            // href: `/dashboard/inventory/${currentRestaurantId}/wastage`, // Placeholder
+            label: "Wastage (Soon)",
+            icon: Trash2,
+            roles: ["owner", "staff"],
+            hint: "Log wasted or spoiled items",
+          },
+        ],
+      },
+    ];
+  };
+
 
   const platformAdminNavItems: NavItem[] = [
     {
@@ -347,14 +393,14 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         {
           href: "/dashboard/admin/analytics",
           label: "Platform Analytics",
-          icon: BarChart3, // Updated icon
+          icon: BarChart3, 
           roles: ["admin"],
           hint: "admin analytics",
         },
         {
           href: "/dashboard/admin/content",
           label: "Content Moderation",
-          icon: ScanText, // Updated icon
+          icon: ScanText, 
           roles: ["admin"],
           hint: "admin content",
         },
@@ -400,6 +446,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     desktopNavItems = [
       ...desktopNavItems,
       ...getOwnerNavItems(selectedRestaurantId),
+      ...getInventoryNavItems(selectedRestaurantId), // Add Inventory Module for Owner
     ];
   } else if (authContextRole === "staff") {
     const staffRestaurantId = user?.restaurantId;
@@ -409,8 +456,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       if (staffAccessibleTopLevel && staffAccessibleTopLevel.children) {
         const staffSpecificItems = staffAccessibleTopLevel.children.filter(child => 
             child.label === "Order Management" || 
-            child.label === "KOT" ||
-            child.label === "Inventory"
+            child.label === "KOT"
+            // Removed "Inventory" from here as it will be a top-level group
         );
         if (staffSpecificItems.length > 0) {
           desktopNavItems.push({
@@ -419,12 +466,15 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           });
         }
       }
+      desktopNavItems = [...desktopNavItems, ...getInventoryNavItems(staffRestaurantId)]; // Add Inventory Module for Staff
     }
   }
+
   if (authContextRole === "admin") {
     desktopNavItems = [...desktopNavItems, ...platformAdminNavItems];
   }
   desktopNavItems = [...desktopNavItems, ...settingsNavItems];
+
 
   const getFilteredNavItems = (
     items: NavItem[],
@@ -472,7 +522,6 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             href: `/dashboard/restaurant/${selectedRestaurantId}/settings`,
             label: "Settings",
             icon: Settings,
-            // roles: ["owner"], // Role check is already handled by authContextRole
             hint: "specific settings",
           },
         ]
@@ -809,3 +858,4 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     </>
   );
 }
+
