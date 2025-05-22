@@ -28,6 +28,9 @@ import { db } from './config';
 import type { Order, OrderStatus, OrderItem, ClientOrder, MenuItem } from '@/types';
 import { convertFirebaseTimestampToString, getOrdersCollectionPath } from './utils'; 
 import { startOfDay, endOfDay, subDays } from 'date-fns';
+import { getRestaurant } from './firestore';
+import { getMenuCategories } from './menu';
+import { calculateOrderTaxes } from '../taxEngine';
 
 const safeString = (value: any): string | undefined => typeof value === 'string' ? value : undefined;
 const safeNumber = (value: any): number | undefined => typeof value === 'number' && !isNaN(value) ? value : undefined;
@@ -70,6 +73,36 @@ export async function createOrder(restaurantId: string, orderData: Omit<Order, '
   const createdAt = serverTimestamp(); 
   const updatedAt = serverTimestamp(); 
 
+  // --- TAX ENGINE INTEGRATION ---
+  // 1. Fetch restaurant profile (with taxes)
+  const restaurant = await getRestaurant(restaurantId);
+  if (!restaurant) throw new Error('Restaurant not found');
+  // 2. Fetch all categories for this restaurant
+  const categories = await getMenuCategories(restaurantId);
+  const categoryMap = Object.fromEntries(categories.map(cat => [cat.id, cat]));
+  // 3. Prepare items for tax engine (need MenuItem shape)
+  //    orderData.items: OrderItem[] (need to fetch MenuItem for each)
+  //    For now, assume orderData.items have enough info (id, price, categoryId, taxOverrides)
+  //    If not, you may need to fetch each MenuItem by id
+  const itemsForTax = orderData.items.map(item => ({
+    item: {
+      id: item.menuItemId,
+      itemIdString: item.menuItemId,
+      restaurantId,
+      categoryId: (item as any).categoryId || '', // Use categoryId from OrderItem if present
+      name: item.menuItemName,
+      description: '',
+      price: item.unitPrice,
+      availability: true,
+      order: 0,
+      createdAt: createdAt as Timestamp,
+      updatedAt: updatedAt as Timestamp,
+      // taxOverrides: ... // If you have this info, pass it
+    },
+    quantity: item.quantity,
+  }));
+  const taxResult = calculateOrderTaxes({ items: itemsForTax, restaurant, categoryMap });
+
   const dataToSave = {
     ...orderData,
     restaurantId,
@@ -82,13 +115,20 @@ export async function createOrder(restaurantId: string, orderData: Omit<Order, '
     customerPhoneNumber: orderData.customerPhoneNumber || null,
     customerWhatsapp: orderData.customerWhatsapp || null,
     groupId: orderData.groupId || null,
+    subtotal: taxResult.subtotal,
+    taxAmount: taxResult.totalTax,
+    taxBreakup: taxResult.taxBreakup,
+    totalAmount: taxResult.total,
   };
 
   const docRef = await addDoc(ordersCol, dataToSave);
-  
   return {
     id: docRef.id,
     ...orderData, 
+    subtotal: taxResult.subtotal,
+    taxAmount: taxResult.totalTax,
+    taxBreakup: taxResult.taxBreakup,
+    totalAmount: taxResult.total,
     createdAt: Timestamp.now(), 
     updatedAt: Timestamp.now(), 
   } as Order; 

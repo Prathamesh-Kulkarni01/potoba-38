@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useForm } from 'react-hook-form';
@@ -8,8 +7,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
-import type { MenuCategory } from '@/types';
+import type { MenuCategory, TaxConfig, RestaurantProfile } from '@/types';
 import LoadingSpinner from '@/components/shared/loading-spinner';
+import { useEffect, useState } from 'react';
+import { MultiSelect } from '@/components/ui/multiselect';
 
 const categoryFormSchema = z.object({
   name: z.string().min(1, { message: 'Category name is required.' }),
@@ -21,12 +22,13 @@ type CategoryFormValues = z.infer<typeof categoryFormSchema>;
 interface CategoryFormProps {
   restaurantId: string;
   category?: MenuCategory | null;
-  onSubmit: (values: CategoryFormValues, categoryId?: string) => Promise<void>;
+  onSubmit: (values: CategoryFormValues & { taxOverrides?: TaxConfig[] }, categoryId?: string) => Promise<void>;
   onClose: () => void;
   isLoading: boolean;
+  restaurant?: RestaurantProfile | null;
 }
 
-export default function CategoryForm({ restaurantId, category, onSubmit, onClose, isLoading }: CategoryFormProps) {
+export default function CategoryForm({ restaurantId, category, onSubmit, onClose, isLoading, restaurant }: CategoryFormProps) {
   const form = useForm<CategoryFormValues>({
     resolver: zodResolver(categoryFormSchema),
     defaultValues: {
@@ -35,8 +37,10 @@ export default function CategoryForm({ restaurantId, category, onSubmit, onClose
     },
   });
 
+  const [taxOverrides, setTaxOverrides] = useState<TaxConfig[]>(category?.taxOverrides || []);
+
   const handleSubmit = async (values: CategoryFormValues) => {
-    await onSubmit(values, category?.id);
+    await onSubmit({ ...values, taxOverrides }, category?.id);
   };
 
   return (
@@ -72,6 +76,21 @@ export default function CategoryForm({ restaurantId, category, onSubmit, onClose
               </FormItem>
             )}
           />
+          {/* Tax MultiSelect */}
+          {restaurant?.taxes && (
+            <div className="space-y-2">
+              <FormLabel>Assign Taxes (Overrides)</FormLabel>
+              <MultiSelect
+                options={restaurant.taxes.map(tax => ({ label: `${tax.name} (${tax.type === 'percentage' ? tax.rate + '%' : '₹' + tax.rate})`, value: tax.id, isInclusive: tax.isInclusive }))}
+                value={taxOverrides.map(t => t.id)}
+                onChange={(selectedIds: string[]) => {
+                  const selectedTaxes = (restaurant.taxes ?? []).filter(tax => selectedIds.includes(tax.id));
+                  setTaxOverrides(selectedTaxes);
+                }}
+              />
+              <div className="text-xs text-muted-foreground">If no override, restaurant default taxes apply.</div>
+            </div>
+          )}
           <DialogFooter>
             <DialogClose asChild>
               <Button type="button" variant="outline" onClick={onClose} disabled={isLoading}>

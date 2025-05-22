@@ -1,4 +1,3 @@
-
 // src/app/dashboard/orders/[restaurantId]/page.tsx
 'use client';
 
@@ -19,7 +18,7 @@ import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from '@/components/ui/badge';
 import { ShoppingCart, Eye, MoreHorizontal, Clock, Utensils, CheckCircle, XCircle, Send, CalendarIcon, Filter, ArrowUpDown, PlusCircle, ListOrdered, Hourglass, FilterIcon, FilterXIcon } from 'lucide-react';
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useToast } from '@/hooks/use-toast';
 import { format, parseISO } from 'date-fns';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -30,19 +29,19 @@ import { cn } from '@/lib/utils';
 import { collection, query, where, orderBy, onSnapshot, Timestamp, QueryConstraint, Unsubscribe } from 'firebase/firestore';
 import { db } from '@/lib/firebase/config';
 import MenuSelectionForBill from '@/components/table-management/menu-selection-for-bill';
-import OrderBillPanel from '@/components/orders/order-bill-panel';
+import BillingPanel from '@/components/shared/billing-panel';
 
-const orderStatusConfig: Record<OrderStatusType, { label: string; icon?: React.ElementType, shortLabel?: string }> = {
-  pending_customer_confirmation: { label: 'Pending Customer Confirmation', shortLabel: 'Pending Cust.', icon: Hourglass },
-  pending_kitchen: { label: 'Pending Kitchen Acceptance', shortLabel: 'Pending Kitchen', icon: Hourglass },
-  confirmed_by_kitchen: { label: 'Kitchen Confirmed', shortLabel: 'Kitchen Confirmed', icon: Utensils },
-  preparing: { label: 'Preparing', shortLabel: 'Preparing', icon: Utensils },
-  ready_for_pickup: { label: 'Ready for Pickup', shortLabel: 'Ready Pickup', icon: ShoppingCart },
-  served: { label: 'Served', shortLabel: 'Served', icon: CheckCircle },
-  payment_pending: { label: 'Payment Pending', shortLabel: 'Payment Pend.', icon: Clock },
-  completed: { label: 'Completed', shortLabel: 'Completed', icon: CheckCircle },
-  cancelled_by_customer: { label: 'Cancelled by Customer', shortLabel: 'Cancelled (Cust)', icon: XCircle },
-  cancelled_by_restaurant: { label: 'Cancelled by Restaurant', shortLabel: 'Cancelled (Rest)', icon: XCircle },
+const orderStatusConfig: Record<OrderStatusType, { label: string; icon?: React.ElementType; color: string; shortLabel?: string }> = {
+  pending_customer_confirmation: { label: 'Pending Customer Confirmation', shortLabel: 'Pending Cust.', icon: Hourglass, color: 'text-yellow-600' },
+  pending_kitchen: { label: 'Pending Kitchen Acceptance', shortLabel: 'Pending Kitchen', icon: Hourglass, color: 'text-yellow-600' },
+  confirmed_by_kitchen: { label: 'Kitchen Confirmed', shortLabel: 'Kitchen Confirmed', icon: Utensils, color: 'text-blue-600' },
+  preparing: { label: 'Preparing', shortLabel: 'Preparing', icon: Utensils, color: 'text-blue-600' },
+  ready_for_pickup: { label: 'Ready for Pickup', shortLabel: 'Ready Pickup', icon: ShoppingCart, color: 'text-orange-600' },
+  served: { label: 'Served', shortLabel: 'Served', icon: CheckCircle, color: 'text-green-600' },
+  payment_pending: { label: 'Payment Pending', shortLabel: 'Payment Pend.', icon: Clock, color: 'text-red-600' },
+  completed: { label: 'Completed', shortLabel: 'Completed', icon: CheckCircle, color: 'text-green-700' },
+  cancelled_by_customer: { label: 'Cancelled by Customer', shortLabel: 'Cancelled (Cust)', icon: XCircle, color: 'text-gray-500' },
+  cancelled_by_restaurant: { label: 'Cancelled by Restaurant', shortLabel: 'Cancelled (Rest)', icon: XCircle, color: 'text-gray-500' },
 };
 
 const possibleNextStatuses: Record<OrderStatusType, OrderStatusType[]> = {
@@ -119,6 +118,8 @@ export default function OrderManagementPage() {
   const [subcategories, setSubcategoriesState] = useState<MenuSubcategory[]>([]);
 
   const [showFilters, setShowFilters] = useState(false);
+
+  const [activeOrderEditTab, setActiveOrderEditTab] = useState<'bill' | 'details'>('bill');
 
   // Fetch restaurant and menu data
   useEffect(() => {
@@ -267,8 +268,17 @@ export default function OrderManagementPage() {
   };
 
   const handleOpenEditPanel = (order: ClientOrder) => {
+    // Enrich items with categoryId and taxOverrides
+    const enrichedItems = order.items.map(item => {
+      const menuItem = menuItems.find(mi => mi.id === item.menuItemId);
+      return {
+        ...item,
+        categoryId: menuItem?.categoryId,
+        taxOverrides: menuItem?.taxOverrides,
+      };
+    });
     setSelectedOrderToEdit(order);
-    setCurrentOrderBillItems([...order.items]); // Deep copy
+    setCurrentOrderBillItems(enrichedItems); // Use enriched items
     setEditingMode('edit');
     setIsOrderEditPanelVisible(true);
     setIsMenuSelectionForOrderOpen(false); // Close menu selection if open
@@ -298,7 +308,8 @@ export default function OrderManagementPage() {
           quantity,
           unitPrice: menuItem.price,
           totalPrice: quantity * menuItem.price,
-          // variantChoices: [] // Handle variants if applicable
+          categoryId: menuItem.categoryId,
+          taxOverrides: menuItem.taxOverrides,
         }];
       }
     });
@@ -596,21 +607,74 @@ export default function OrderManagementPage() {
         {/* Order Edit/New Panel (conditionally rendered) */}
         {isOrderEditPanelVisible && (
           <div className={orderEditPanelClasses}>
-            <OrderBillPanel
-              restaurantId={restaurantId}
-              orderToEdit={selectedOrderToEdit}
+            <Tabs value={activeOrderEditTab} onValueChange={(val) => setActiveOrderEditTab(val as 'bill' | 'details')} className="w-full">
+              <TabsList className="mb-4 overflow-x-auto flex-nowrap whitespace-nowrap">
+                <TabsTrigger value="bill">Bill</TabsTrigger>
+                <TabsTrigger value="details">Details</TabsTrigger>
+              </TabsList>
+              <TabsContent value="bill">
+                <BillingPanel
+                  billItems={currentOrderBillItems}
+                  restaurant={restaurant}
+                  categoryMap={categories.reduce((acc, cat) => { acc[cat.id] = cat; return acc; }, {} as Record<string, MenuCategory>)}
+                  isLoading={formSubmitting}
+                  onUpdateItemQuantity={handleUpdateItemQuantityInOrderBill}
+                  onRemoveItem={handleRemoveItemFromOrderBill}
+                  onFinalize={() => handleSaveOrderChanges({})}
+                  onClose={() => { setIsOrderEditPanelVisible(false); setSelectedOrderToEdit(null); setEditingMode(null); }}
+                  onToggleMenuSelection={() => setIsMenuSelectionForOrderOpen(!isMenuSelectionForOrderOpen)}
+                  isMenuSelectionOpen={isMenuSelectionForOrderOpen}
               mode={editingMode || 'new'}
-              currentBillItems={currentOrderBillItems}
+                  panelTitle={editingMode === 'edit' && selectedOrderToEdit ? `Edit Order #${selectedOrderToEdit.id.substring(0,6)}` : 'Create New Order'}
+                  finalizeLabel={editingMode === 'edit' ? 'Save Order Changes' : 'Place New Order'}
+                  customerName={selectedOrderToEdit?.customerName || ''}
+                  setCustomerName={v => setSelectedOrderToEdit(o => o ? { ...o, customerName: v } : o)}
+                  customerPhoneNumber={selectedOrderToEdit?.customerPhoneNumber || ''}
+                  setCustomerPhoneNumber={v => setSelectedOrderToEdit(o => o ? { ...o, customerPhoneNumber: v } : o)}
+                  tableNumber={selectedOrderToEdit?.tableNumber || ''}
+                  setTableNumber={v => setSelectedOrderToEdit(o => o ? { ...o, tableNumber: v } : o)}
+                  customerNotes={selectedOrderToEdit?.customerNotes || ''}
+                  setCustomerNotes={v => setSelectedOrderToEdit(o => o ? { ...o, customerNotes: v } : o)}
+                  orderStatus={selectedOrderToEdit?.status || ''}
+                  setOrderStatus={v => setSelectedOrderToEdit(o => o ? { ...o, status: v as OrderStatusType } : o)}
+                  orderStatusConfig={orderStatusConfig}
+                  activeTab={activeOrderEditTab}
+                  setActiveTab={setActiveOrderEditTab}
+                  view="bill"
+                />
+              </TabsContent>
+              <TabsContent value="details">
+                <BillingPanel
+                  billItems={currentOrderBillItems}
+                  restaurant={restaurant}
+                  categoryMap={categories.reduce((acc, cat) => { acc[cat.id] = cat; return acc; }, {} as Record<string, MenuCategory>)}
               isLoading={formSubmitting}
               onUpdateItemQuantity={handleUpdateItemQuantityInOrderBill}
               onRemoveItem={handleRemoveItemFromOrderBill}
-              onSaveOrder={handleSaveOrderChanges}
+                  onFinalize={() => handleSaveOrderChanges({})}
               onClose={() => { setIsOrderEditPanelVisible(false); setSelectedOrderToEdit(null); setEditingMode(null); }}
               onToggleMenuSelection={() => setIsMenuSelectionForOrderOpen(!isMenuSelectionForOrderOpen)}
               isMenuSelectionOpen={isMenuSelectionForOrderOpen}
-              taxRate={restaurant?.taxRate || 0.10}
+                  mode={editingMode || 'new'}
+                  panelTitle={editingMode === 'edit' && selectedOrderToEdit ? `Edit Order #${selectedOrderToEdit.id.substring(0,6)}` : 'Create New Order'}
+                  finalizeLabel={editingMode === 'edit' ? 'Save Order Changes' : 'Place New Order'}
+                  customerName={selectedOrderToEdit?.customerName || ''}
+                  setCustomerName={v => setSelectedOrderToEdit(o => o ? { ...o, customerName: v } : o)}
+                  customerPhoneNumber={selectedOrderToEdit?.customerPhoneNumber || ''}
+                  setCustomerPhoneNumber={v => setSelectedOrderToEdit(o => o ? { ...o, customerPhoneNumber: v } : o)}
+                  tableNumber={selectedOrderToEdit?.tableNumber || ''}
+                  setTableNumber={v => setSelectedOrderToEdit(o => o ? { ...o, tableNumber: v } : o)}
+                  customerNotes={selectedOrderToEdit?.customerNotes || ''}
+                  setCustomerNotes={v => setSelectedOrderToEdit(o => o ? { ...o, customerNotes: v } : o)}
+                  orderStatus={selectedOrderToEdit?.status || ''}
+                  setOrderStatus={v => setSelectedOrderToEdit(o => o ? { ...o, status: v as OrderStatusType } : o)}
               orderStatusConfig={orderStatusConfig}
+                  activeTab={activeOrderEditTab}
+                  setActiveTab={setActiveOrderEditTab}
+                  view="details"
             />
+              </TabsContent>
+            </Tabs>
           </div>
         )}
       </div>

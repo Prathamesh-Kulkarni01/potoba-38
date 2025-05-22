@@ -22,6 +22,15 @@ export interface UserProfile {
   isAnonymous?: boolean; 
 }
 
+export interface TaxConfig {
+  id: string; // unique id for the tax (e.g. 'cgst', 'sgst', 'igst', 'service_charge')
+  name: string; // e.g. 'CGST', 'SGST', 'IGST', 'Service Charge'
+  rate: number; // percentage (e.g. 2.5 for 2.5%)
+  type: 'percentage' | 'fixed'; // type of tax
+  isDefault?: boolean; // is this a default tax for the restaurant
+  isInclusive?: boolean; // is this tax included in price
+}
+
 export interface RestaurantProfile {
   id: string;
   ownerId: string;
@@ -38,6 +47,7 @@ export interface RestaurantProfile {
     notificationEmail?: string;
     customDomain?: string | null; 
   };
+  taxes?: TaxConfig[]; // List of taxes for the restaurant
 }
 
 export interface MenuCategory {
@@ -47,6 +57,7 @@ export interface MenuCategory {
   order: number; 
   createdAt: Timestamp;
   updatedAt: Timestamp;
+  taxOverrides?: TaxConfig[]; // Category-specific tax overrides
 }
 
 export interface MenuSubcategory {
@@ -100,6 +111,7 @@ export interface MenuItem {
   portionSize?: string | null;
   createdAt: Timestamp;
   updatedAt: Timestamp;
+  taxOverrides?: TaxConfig[]; // Item-specific tax overrides
 }
 
 export type TableStatus = 'available' | 'occupied' | 'reserved' | 'needs_cleaning';
@@ -162,6 +174,7 @@ export interface Order {
   groupId?: string | null; // Allow null for groupId
   createdAt: Timestamp; 
   updatedAt: Timestamp; 
+  taxBreakup?: { taxId: string; name: string; amount: number; rate: number; }[]; // Detailed tax breakup
 }
 
 export interface ClientOrder extends Omit<Order, 'createdAt' | 'updatedAt' | 'userId' | 'groupId'> {

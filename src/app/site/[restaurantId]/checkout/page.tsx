@@ -25,6 +25,7 @@ import { RecaptchaVerifier } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase/config';
 import { doc, getDoc, updateDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import { convertFirebaseTimestampToString } from '@/lib/firebase/utils';
+import { calculateOrderTaxes } from '@/lib/taxEngine';
 
 export default function CheckoutPage() {
   const params = useParams();
@@ -131,6 +132,30 @@ export default function CheckoutPage() {
   const deliveryFee = (tableId || groupId) ? 0 : 5.00; 
   const total = useMemo(() => subtotal + tax + deliveryFee, [subtotal, tax, deliveryFee]);
 
+  const taxBreakdown = (() => {
+    // If order exists and has taxBreakup, use it
+    if (typeof order !== 'undefined' && order?.taxBreakup && order.taxBreakup.length > 0) {
+      return { taxBreakup: order.taxBreakup, totalTax: order.taxAmount };
+    }
+    // Otherwise, calculate dynamically for cart
+    if (restaurant && restaurant.taxes && cartToUse.length > 0) {
+      const itemsForTax = cartToUse.map(item => ({
+        item: {
+          id: item.menuItemId,
+          name: item.menuItemName,
+          price: item.unitPrice,
+          categoryId: item.categoryId || '',
+          taxOverrides: item.taxOverrides || undefined,
+        },
+        quantity: item.quantity,
+      }));
+      const categoryMap = {};
+      const result = calculateOrderTaxes({ items: itemsForTax, restaurant, categoryMap });
+      return { taxBreakup: result.taxBreakup, totalTax: result.totalTax };
+    }
+    return { taxBreakup: [], totalTax: 0 };
+  })();
+
   const handleSendOtp = async () => {
     if (!customerPhoneNumberState) { toast({ variant: "destructive", title: "Input Error", description: "Please enter phone number." }); return; }
     if (!appVerifierRef.current) { toast({ variant: "destructive", title: "Verification Error", description: "Phone verification not ready." }); return; }
@@ -235,7 +260,7 @@ export default function CheckoutPage() {
             cartItemCount={cartItemCountGlobal}
             showShadow={showNavShadow}
             restaurantId={restaurant.id}
-            tableContext={tableId && tableNumber ? { id: tableId, number: tableNumber, docId: tableId } : undefined}
+            tableContext={tableId && tableNumber ? { tableNumber: tableNumber, tableDocId: tableId } : undefined}
             isUserAnonymous={user?.isAnonymous}
             userDisplayName={user?.displayName || user?.email || (user?.isAnonymous ? "Guest" : "")}
             activeGroup={activeGroup || undefined}
@@ -336,7 +361,7 @@ export default function CheckoutPage() {
                                   return (
                                     <div key={item.menuItemId + JSON.stringify(item.variantChoices) + (groupItem.addedByUid || '')} className="flex justify-between items-start text-sm py-2 border-b last:border-b-0">
                                         <div className="flex items-start">
-                                            {item.imageUrl && <Image src={item.imageUrl} alt={item.menuItemName} width={40} height={40} className="rounded mr-3 object-cover" data-ai-hint="cart item image"/>}
+                                            {('imageUrl' in item) && item.imageUrl && <Image src={item.imageUrl} alt={item.menuItemName} width={40} height={40} className="rounded mr-3 object-cover" data-ai-hint="cart item image"/>}
                                             <div className="flex-1">
                                                 <p className="font-medium">{item.menuItemName}</p>
                                                 <p className="text-xs text-muted-foreground">Qty: {item.quantity} &times; ₹{item.unitPrice.toFixed(2)}</p>
@@ -346,7 +371,6 @@ export default function CheckoutPage() {
                                         <div className="flex items-center gap-2">
                                             <span className="font-medium min-w-[50px] text-right">₹{item.totalPrice.toFixed(2)}</span>
                                             {!groupId && <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => updateLocalQuantity(item.menuItemId, 0)}><Trash2 className="h-4 w-4"/></Button>}
-                                            {/* For group orders, item removal/quantity update might be restricted or handled differently (e.g. only by person who added or host) */}
                                         </div>
                                     </div>
                                   );
@@ -354,7 +378,20 @@ export default function CheckoutPage() {
                             </CardContent>
                              <CardFooter className="flex-col space-y-2 border-t pt-4">
                                 <div className="w-full flex justify-between text-sm"><p>Subtotal</p><p>₹{subtotal.toFixed(2)}</p></div>
-                                <div className="w-full flex justify-between text-sm text-muted-foreground"><p>Tax ({(taxRate * 100).toFixed(0)}%)</p><p>₹{tax.toFixed(2)}</p></div>
+                                {/* Tax Breakup UI */}
+                                {taxBreakdown.taxBreakup && taxBreakdown.taxBreakup.length > 0 ? (
+                                    <div className="w-full flex flex-col gap-1 my-1">
+                                        <div className="flex justify-between text-xs text-muted-foreground font-semibold"><span>Taxes</span><span>Total: ₹{taxBreakdown.totalTax.toFixed(2)}</span></div>
+                                        {taxBreakdown.taxBreakup.map((tax: any, idx: number) => (
+                                            <div key={tax.taxId + idx} className="flex justify-between text-xs text-muted-foreground pl-2">
+                                                <span>{tax.name} ({tax.rate}{tax.name.includes('GST') ? '%' : ''})</span>
+                                                <span>₹{tax.amount.toFixed(2)}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="w-full flex justify-between text-sm text-muted-foreground"><p>Tax</p><p>₹{tax.toFixed(2)}</p></div>
+                                )}
                                 {!(tableId || groupId) && <div className="w-full flex justify-between text-sm text-muted-foreground"><p>Delivery Fee</p><p>₹{deliveryFee.toFixed(2)}</p></div>}
                                 <Separator className="my-2"/>
                                 <div className="w-full flex justify-between text-lg font-bold text-primary"><p>Total</p><p>₹{total.toFixed(2)}</p></div>

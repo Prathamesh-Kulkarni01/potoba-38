@@ -5,9 +5,9 @@ import { Settings, Globe, ExternalLink, Construction } from "lucide-react"; // A
 import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth/context";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { getRestaurant, updateRestaurantProfile } from "@/lib/firebase/firestore"; 
-import type { RestaurantProfile } from "@/types";
+import type { RestaurantProfile, TaxConfig } from "@/types";
 import LoadingSpinner from "@/components/shared/loading-spinner";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -16,6 +16,13 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
+import { PlusCircle, Edit3, Trash2 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { getMenuCategories, getMenuItems, updateMenuCategory, updateMenuItem } from '@/lib/firebase/menu';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { MultiSelect } from '@/components/ui/multiselect';
 
 export default function RestaurantSettingsPage() {
   const params = useParams();
@@ -32,7 +39,18 @@ export default function RestaurantSettingsPage() {
   const [tableReservationsEnabled, setTableReservationsEnabled] = useState(false);
   const [notificationEmail, setNotificationEmail] = useState('');
   const [customDomain, setCustomDomain] = useState('');
-
+  const [showAddTaxModal, setShowAddTaxModal] = useState(false);
+  const [editingTax, setEditingTax] = useState<TaxConfig | null>(null);
+  const [taxForm, setTaxForm] = useState({
+    name: '',
+    rate: 0,
+    type: 'percentage',
+    isInclusive: false,
+    isDefault: false
+  });
+  const [categories, setCategories] = useState<MenuCategory[]>([]);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [taxAssignLoading, setTaxAssignLoading] = useState<string | null>(null);
 
   useEffect(() => {
     if (!restaurantId) {
@@ -67,6 +85,13 @@ export default function RestaurantSettingsPage() {
     }
   }, [restaurantId, user, role, router, toast]);
 
+  useEffect(() => {
+    if (restaurantId && user && role === 'owner') {
+      getMenuCategories(restaurantId).then(setCategories);
+      getMenuItems(restaurantId).then(setMenuItems);
+    }
+  }, [restaurantId, user, role]);
+
   const handleSaveChanges = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!restaurant) return;
@@ -85,6 +110,69 @@ export default function RestaurantSettingsPage() {
       toast({ variant: "destructive", title: "Save Failed", description: "Could not save settings."});
     } finally {
       setFormSubmitting(false);
+    }
+  };
+
+  const handleEditTax = (tax: TaxConfig) => {
+    setEditingTax(tax);
+    setTaxForm({
+      name: tax.name,
+      rate: tax.rate,
+      type: tax.type,
+      isInclusive: !!tax.isInclusive,
+      isDefault: !!tax.isDefault
+    });
+    setShowAddTaxModal(true);
+  };
+
+  const handleDeleteTax = async (tax: TaxConfig) => {
+    if (!restaurant) return;
+    setFormSubmitting(true);
+    try {
+      const updatedTaxes = (restaurant.taxes || []).filter(t => t.id !== tax.id);
+      await updateRestaurantProfile(restaurant.id, { taxes: updatedTaxes });
+      setRestaurant({ ...restaurant, taxes: updatedTaxes });
+      toast({ title: "Tax Deleted", description: `Tax '${tax.name}' has been deleted.` });
+    } catch (error) {
+      console.error("Error deleting tax:", error);
+      toast({ variant: "destructive", title: "Delete Failed", description: "Could not delete tax." });
+    } finally {
+      setFormSubmitting(false);
+    }
+  };
+
+  const handleSaveTax = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!restaurant) return;
+    setFormSubmitting(true);
+    try {
+      let updatedTaxes = restaurant.taxes ? [...restaurant.taxes] : [];
+      if (editingTax) {
+        // Update existing tax
+        updatedTaxes = updatedTaxes.map(t => t.id === editingTax.id ? { ...editingTax, ...taxForm, type: taxForm.type as 'percentage' | 'fixed' } : t);
+      } else {
+        // Add new tax
+        const newTax: TaxConfig = {
+          id: `${taxForm.name.replace(/\s+/g, '_').toLowerCase()}_${Date.now()}`,
+          name: taxForm.name,
+          rate: taxForm.rate,
+          type: taxForm.type as 'percentage' | 'fixed',
+          isInclusive: taxForm.isInclusive,
+          isDefault: taxForm.isDefault
+        };
+        updatedTaxes.push(newTax);
+      }
+      await updateRestaurantProfile(restaurant.id, { taxes: updatedTaxes });
+      setRestaurant({ ...restaurant, taxes: updatedTaxes });
+      toast({ title: "Tax Saved", description: "Tax has been successfully saved." });
+    } catch (error) {
+      console.error("Error saving tax:", error);
+      toast({ variant: "destructive", title: "Save Failed", description: "Could not save tax." });
+    } finally {
+      setFormSubmitting(false);
+      setShowAddTaxModal(false);
+      setEditingTax(null);
+      setTaxForm({ name: '', rate: 0, type: 'percentage', isInclusive: false, isDefault: false });
     }
   };
 
@@ -118,9 +206,10 @@ export default function RestaurantSettingsPage() {
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="general" className="w-full">
-            <TabsList className="grid w-full grid-cols-1 md:grid-cols-3 mb-6 max-w-xl">
+            <TabsList className="grid w-full grid-cols-1 md:grid-cols-4 mb-6 max-w-xl">
               <TabsTrigger value="general">General</TabsTrigger>
               <TabsTrigger value="webpage">Webpage</TabsTrigger>
+              <TabsTrigger value="tax">Tax</TabsTrigger>
               <TabsTrigger value="advanced">Advanced</TabsTrigger>
             </TabsList>
 
@@ -224,6 +313,80 @@ export default function RestaurantSettingsPage() {
                         </div>
                     </CardContent>
                 </Card>
+            </TabsContent>
+            <TabsContent value="tax">
+              <Card className="border-green-400/20 shadow-md">
+                <CardHeader>
+                  <CardTitle className="text-xl">Tax Management</CardTitle>
+                  <CardDescription>Configure GST, service charge, and other taxes for your restaurant.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-8 max-w-2xl mx-auto">
+                  {/* List of Taxes */}
+                  <div className="mb-6">
+                    <div className="flex justify-between items-center mb-2">
+                      <h3 className="text-lg font-semibold">Current Taxes</h3>
+                      <Button variant="outline" size="sm" onClick={() => setShowAddTaxModal(true)}><PlusCircle className="h-4 w-4 mr-1"/>Add Tax</Button>
+                    </div>
+                    <div className="grid gap-3">
+                      {(restaurant?.taxes && restaurant.taxes.length > 0) ? restaurant.taxes.map((tax, idx) => (
+                        <Card key={tax.id + idx} className="flex flex-col md:flex-row md:items-center justify-between p-3 border border-muted-foreground/10">
+                          <div className="flex-1 flex flex-col md:flex-row md:items-center gap-2">
+                            <span className="font-bold text-primary">{tax.name}</span>
+                            <span className="text-xs text-muted-foreground">{tax.type === 'percentage' ? `${tax.rate}%` : `₹${tax.rate}`}</span>
+                            {tax.isInclusive && <span className="text-xs text-green-600 font-semibold ml-2">Inclusive</span>}
+                            {tax.isDefault && <span className="text-xs text-blue-600 font-semibold ml-2">Default</span>}
+                          </div>
+                          <div className="flex gap-2 mt-2 md:mt-0">
+                            <Button variant="outline" size="icon" onClick={() => handleEditTax(tax)}><Edit3 className="h-4 w-4"/></Button>
+                            <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDeleteTax(tax)}><Trash2 className="h-4 w-4"/></Button>
+                          </div>
+                        </Card>
+                      )) : <div className="text-muted-foreground text-sm">No taxes configured yet.</div>}
+                    </div>
+                  </div>
+                  <Separator />
+                  {/* Add/Edit Tax Modal */}
+                  <Dialog open={showAddTaxModal} onOpenChange={setShowAddTaxModal}>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>{editingTax ? 'Edit Tax' : 'Add New Tax'}</DialogTitle>
+                      </DialogHeader>
+                      <form onSubmit={handleSaveTax} className="space-y-4 py-2">
+                        <div>
+                          <Label htmlFor="taxName">Tax Name</Label>
+                          <Input id="taxName" value={taxForm.name} onChange={e => setTaxForm(f => ({ ...f, name: e.target.value }))} required placeholder="e.g. CGST, SGST, Service Charge" />
+                        </div>
+                        <div className="flex gap-2">
+                          <div className="flex-1">
+                            <Label htmlFor="taxRate">Rate</Label>
+                            <Input id="taxRate" type="number" value={taxForm.rate} onChange={e => setTaxForm(f => ({ ...f, rate: parseFloat(e.target.value) }))} required min={0} step={0.01} placeholder="e.g. 2.5" />
+                          </div>
+                          <div className="flex-1">
+                            <Label htmlFor="taxType">Type</Label>
+                            <Select value={taxForm.type} onValueChange={val => setTaxForm(f => ({ ...f, type: val as 'percentage' | 'fixed' }))}>
+                              <SelectTrigger id="taxType"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="percentage">Percentage (%)</SelectItem>
+                                <SelectItem value="fixed">Fixed (₹)</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        <div className="flex gap-2 items-center">
+                          <Label htmlFor="isInclusive">Inclusive</Label>
+                          <input id="isInclusive" type="checkbox" checked={taxForm.isInclusive} onChange={e => setTaxForm(f => ({ ...f, isInclusive: e.target.checked }))} />
+                          <Label htmlFor="isDefault" className="ml-4">Default</Label>
+                          <input id="isDefault" type="checkbox" checked={taxForm.isDefault} onChange={e => setTaxForm(f => ({ ...f, isDefault: e.target.checked }))} />
+                        </div>
+                        <DialogFooter>
+                          <DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose>
+                          <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground">{editingTax ? 'Save Changes' : 'Add Tax'}</Button>
+                        </DialogFooter>
+                      </form>
+                    </DialogContent>
+                  </Dialog>
+                </CardContent>
+              </Card>
             </TabsContent>
             <TabsContent value="advanced">
               <Card className="border-gray-400/20 shadow-md">

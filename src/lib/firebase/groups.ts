@@ -70,7 +70,7 @@ export async function createTableGroup(
     tableNumber,
     creatorName,
     creatorPhone,
-    creatorUid: creatorUid || null,
+    creatorUid: creatorUid || undefined,
     members: [{ name: creatorName, phone: creatorPhone, uid: creatorUid || null }],
     status: 'active',
     cartItems: [],
@@ -120,12 +120,13 @@ export async function joinTableGroup(
 
     // Check if user is already a member
     if (groupData.members.some(member => member.uid === user.uid)) {
-      return { 
+      const { id: _id, ...rest } = groupData;
+      return {
         id: groupDoc.id,
-        ...groupData,
+        ...rest,
         createdAt: convertFirebaseTimestampToString(groupData.createdAt),
         updatedAt: convertFirebaseTimestampToString(groupData.updatedAt),
-       }; // User already in group, return ClientTableGroup
+      };
     }
     
     const memberData = { uid: user.uid, name: user.displayName || user.email?.split('@')[0] || 'New Member' };
@@ -138,12 +139,12 @@ export async function joinTableGroup(
     const updatedGroupDoc = await getDoc(groupRef); 
     const updatedGroupData = updatedGroupDoc.data() as TableGroup;
 
-
-    return { 
-        id: updatedGroupDoc.id, 
-        ...updatedGroupData,
-        createdAt: convertFirebaseTimestampToString(updatedGroupData.createdAt),
-        updatedAt: convertFirebaseTimestampToString(updatedGroupData.updatedAt),
+    const { id: _id, ...rest } = updatedGroupData;
+    return {
+      id: updatedGroupDoc.id,
+      ...rest,
+      createdAt: convertFirebaseTimestampToString(updatedGroupData.createdAt),
+      updatedAt: convertFirebaseTimestampToString(updatedGroupData.updatedAt),
     };
 
   } catch (error: any) {
@@ -158,9 +159,10 @@ export async function getTableGroup(restaurantId: string, groupCode: string): Pr
   const docSnap = await getDoc(groupRef);
   if (docSnap.exists()) {
     const data = docSnap.data() as TableGroup;
-    return { 
-      id: docSnap.id, 
-      ...data,
+    const { id: _id, ...rest } = data;
+    return {
+      id: docSnap.id,
+      ...rest,
       createdAt: convertFirebaseTimestampToString(data.createdAt),
       updatedAt: convertFirebaseTimestampToString(data.updatedAt),
     };
@@ -245,6 +247,27 @@ export async function addItemToGroupCart(
       cartItems: updatedCartItems,
       updatedAt: serverTimestamp(),
     });
+  });
+}
+
+/**
+ * Fetch all table groups for a given table (by restaurantId and tableId)
+ */
+export async function getTableGroupsForTable(restaurantId: string, tableId: string): Promise<ClientTableGroup[]> {
+  if (!db) throw new Error("Firestore is not initialized.");
+  if (!tableId) throw new Error("tableId is required and must be a string.");
+  const groupsCol = collection(db, `restaurants/${restaurantId}/tableGroups`);
+  const q = query(groupsCol, where('tableId', '==', tableId));
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map(docSnap => {
+    const data = docSnap.data() as TableGroup;
+    const { id: _id, ...rest } = data; // Remove any id from data to avoid duplicate
+    return {
+      id: docSnap.id,
+      ...rest,
+      createdAt: convertFirebaseTimestampToString(data.createdAt),
+      updatedAt: convertFirebaseTimestampToString(data.updatedAt),
+    };
   });
 }
 

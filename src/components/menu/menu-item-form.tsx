@@ -1,7 +1,6 @@
-
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -13,13 +12,14 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import type { MenuItem, MenuItemVariant, AvailabilityRule, MenuItemVariantOption } from '@/types';
+import type { MenuItem, MenuItemVariant, AvailabilityRule, MenuItemVariantOption, TaxConfig, RestaurantProfile } from '@/types';
 import LoadingSpinner from '@/components/shared/loading-spinner';
 import { Sparkles, PlusCircle, Trash2 } from 'lucide-react';
 import { generateMenuItemDescription } from '@/ai/flows/generate-menu-item-description-flow';
 import { useToast } from '@/hooks/use-toast';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card } from '../ui/card';
+import { MultiSelect } from '@/components/ui/multiselect';
 
 const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/; // HH:mm format
 
@@ -70,9 +70,10 @@ interface MenuItemFormProps {
   subcategoryId?: string | null;
   subcategoryName?: string; 
   menuItem?: MenuItem | null;
-  onSubmit: (values: MenuItemFormValues, itemId?: string) => Promise<void>;
+  onSubmit: (values: MenuItemFormValues & { taxOverrides?: TaxConfig[] }, itemId?: string) => Promise<void>;
   onClose: () => void;
   isLoading: boolean;
+  restaurant?: RestaurantProfile | null;
 }
 
 export default function MenuItemForm({
@@ -80,9 +81,11 @@ export default function MenuItemForm({
   onSubmit,
   onClose,
   isLoading,
+  restaurant,
 }: MenuItemFormProps) {
   const { toast } = useToast();
   const [isGeneratingDescription, setIsGeneratingDescription] = useState(false);
+  const [taxOverrides, setTaxOverrides] = useState<TaxConfig[]>(menuItem?.taxOverrides || []);
 
   const form = useForm<MenuItemFormValues>({
     resolver: zodResolver(menuItemFormSchema),
@@ -94,11 +97,11 @@ export default function MenuItemForm({
       videoUrl: menuItem?.videoUrl || '',
       availability: menuItem?.availability === undefined ? true : menuItem.availability,
       order: menuItem?.order || 0,
-      dietaryTags: menuItem?.dietaryTags?.join(', ') || '',
-      allergenInfo: menuItem?.allergenInfo?.join(', ') || '',
+      dietaryTags: menuItem?.dietaryTags || [],
+      allergenInfo: menuItem?.allergenInfo || [],
       calories: menuItem?.calories || null,
-      crossSellItems: menuItem?.crossSellItems?.join(', ') || '',
-      upsellItems: menuItem?.upsellItems?.join(', ') || '',
+      crossSellItems: menuItem?.crossSellItems || [],
+      upsellItems: menuItem?.upsellItems || [],
       variants: menuItem?.variants || [],
       availabilitySchedule: menuItem?.availabilitySchedule || [],
     },
@@ -140,6 +143,7 @@ export default function MenuItemForm({
       calories: values.calories === null || values.calories === undefined || isNaN(values.calories) ? undefined : Number(values.calories),
       variants: values.variants && values.variants.length > 0 ? values.variants : undefined,
       availabilitySchedule: values.availabilitySchedule && values.availabilitySchedule.length > 0 ? values.availabilitySchedule : undefined,
+      taxOverrides,
     };
      if (dataToSubmit.imageUrl === '') dataToSubmit.imageUrl = null;
      if (dataToSubmit.videoUrl === '') dataToSubmit.videoUrl = null;
@@ -241,6 +245,20 @@ export default function MenuItemForm({
                 <FormField control={form.control} name="calories" render={({ field }) => ( <FormItem> <FormLabel>Calories</FormLabel> <FormControl><Input type="number" placeholder="e.g., 350" {...field} value={field.value ?? ''} /></FormControl> <FormMessage /> </FormItem> )} />
                 <FormField control={form.control} name="crossSellItems" render={({ field }) => ( <FormItem> <FormLabel>Cross-Sell Items</FormLabel> <FormControl><Input placeholder="e.g., Fries, Coke (comma-separated)" {...field} /></FormControl><FormDescription>Suggest items that go well with this one.</FormDescription><FormMessage /> </FormItem> )} />
                 <FormField control={form.control} name="upsellItems" render={({ field }) => ( <FormItem> <FormLabel>Up-Sell Items</FormLabel> <FormControl><Input placeholder="e.g., Large Fries, Combo Meal (comma-separated)" {...field} /></FormControl><FormDescription>Suggest premium alternatives or additions.</FormDescription><FormMessage /> </FormItem> )} />
+                {restaurant?.taxes && (
+                  <div className="space-y-2">
+                    <FormLabel>Assign Taxes (Overrides)</FormLabel>
+                    <MultiSelect
+                      options={restaurant.taxes.map(tax => ({ label: `${tax.name} (${tax.type === 'percentage' ? tax.rate + '%' : '₹' + tax.rate})`, value: tax.id, isInclusive: tax.isInclusive }))}
+                      value={taxOverrides.map(t => t.id)}
+                      onChange={(selectedIds: string[]) => {
+                        const selectedTaxes = (restaurant.taxes ?? []).filter(tax => selectedIds.includes(tax.id));
+                        setTaxOverrides(selectedTaxes);
+                      }}
+                    />
+                    <div className="text-xs text-muted-foreground">If no override, restaurant default taxes apply.</div>
+                  </div>
+                )}
               </TabsContent>
             </ScrollArea>
           </Tabs>

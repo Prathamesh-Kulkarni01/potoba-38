@@ -1,4 +1,3 @@
-
 // src/app/dashboard/menu-management/[restaurantId]/page.tsx
 'use client';
 
@@ -338,6 +337,7 @@ export default function MenuManagementPage() {
                       onSubmit={handleCategorySubmit}
                       onClose={() => { setIsCategoryModalOpen(false); setEditingCategory(null); }}
                       isLoading={formSubmitting}
+                      restaurant={restaurant}
                     />
                   )}
                 </Dialog>
@@ -406,6 +406,7 @@ export default function MenuManagementPage() {
                                 onSubmit={handleMenuItemSubmit}
                                 onClose={() => { setIsMenuItemModalOpen(false); setParentCategoryForItem(null); setParentSubcategoryForItem(null); }}
                                 isLoading={formSubmitting}
+                                restaurant={restaurant}
                               />
                             )}
                           </Dialog>
@@ -456,6 +457,7 @@ export default function MenuManagementPage() {
                                       onSubmit={handleMenuItemSubmit}
                                       onClose={() => { setIsMenuItemModalOpen(false); setParentCategoryForItem(null); setParentSubcategoryForItem(null); }}
                                       isLoading={formSubmitting}
+                                      restaurant={restaurant}
                                     />
                                   )}
                                 </Dialog>
@@ -510,6 +512,7 @@ export default function MenuManagementPage() {
             onSubmit={handleCategorySubmit}
             onClose={() => { setIsCategoryModalOpen(false); setEditingCategory(null); }}
             isLoading={formSubmitting}
+            restaurant={restaurant}
           />
         </Dialog>
       )}
@@ -531,12 +534,13 @@ export default function MenuManagementPage() {
         <Dialog open={isMenuItemModalOpen} onOpenChange={(isOpen) => { if (!isOpen) { setIsMenuItemModalOpen(false); setEditingMenuItem(null); setParentCategoryForItem(null); setParentSubcategoryForItem(null); } }}>
           <MenuItemForm
             restaurantId={restaurantId}
-            categoryId={editingMenuItem.categoryId}
-            subcategoryId={editingMenuItem.subcategoryId}
+            categoryId={parentCategoryForItem || editingMenuItem?.categoryId || ''}
+            subcategoryId={parentSubcategoryForItem || editingMenuItem?.subcategoryId}
             menuItem={editingMenuItem}
             onSubmit={handleMenuItemSubmit}
             onClose={() => { setIsMenuItemModalOpen(false); setEditingMenuItem(null); setParentCategoryForItem(null); setParentSubcategoryForItem(null); }}
             isLoading={formSubmitting}
+            restaurant={restaurant}
           />
         </Dialog>
       )}

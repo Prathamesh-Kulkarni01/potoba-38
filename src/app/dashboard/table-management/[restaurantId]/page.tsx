@@ -1,4 +1,3 @@
-
 // src/app/dashboard/table-management/[restaurantId]/page.tsx
 'use client';
 
@@ -11,7 +10,7 @@ import { addTable, updateTable, deleteTable } from '@/lib/firebase/tables'; // C
 import { updateOrder, createOrder } from '@/lib/firebase/orders'; // Changed import
 import { getOrdersCollectionPath, getTablesCollectionPath } from '@/lib/firebase/utils'; // Import from utils
 import { getMenuItems as fetchMenuItemsFirebase, getMenuCategories, getMenuSubcategories } from '@/lib/firebase/menu';
-import type { RestaurantProfile, Table as FirebaseTableType, TableStatus, OrderStatus, OrderItem, MenuItem as MenuItemType, MenuCategory, MenuSubcategory, ClientOrder } from '@/types';
+import type { RestaurantProfile, Table as FirebaseTableType, TableStatus, OrderStatus, OrderItem, MenuItem as MenuItemType, MenuCategory, MenuSubcategory, ClientOrder, ClientTableGroup } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import LoadingSpinner from '@/components/shared/loading-spinner';
 import { Button } from '@/components/ui/button';
@@ -19,7 +18,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogClose } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { PlusCircle, Edit3, Trash2, QrCode, Users, Circle, X, MinusCircle, Utensils } from 'lucide-react';
+import { PlusCircle, Edit3, Trash2, QrCode, Users, Circle, X, MinusCircle, Utensils, Hourglass, ShoppingCart, CheckCircle, Clock, XCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -32,6 +31,11 @@ import { cn } from '@/lib/utils';
 import { collection, query, where, orderBy, onSnapshot, Timestamp, Unsubscribe } from 'firebase/firestore'; // Added onSnapshot, Timestamp, Unsubscribe
 import { db } from '@/lib/firebase/config'; // Added db
 import { convertFirebaseTimestampToString } from '@/lib/firebase/utils'; // Utility for timestamp conversion
+import { calculateOrderTaxes } from '@/lib/taxEngine';
+import BillingPanel from '@/components/shared/billing-panel';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { getTableGroupsForTable } from '@/lib/firebase/groups';
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';
 
 
 const tableFormSchema = z.object({
@@ -45,6 +49,19 @@ const statusColors: Record<TableStatus, string> = {
   occupied: 'bg-red-500',
   reserved: 'bg-yellow-500',
   needs_cleaning: 'bg-blue-500',
+};
+
+const orderStatusConfig = {
+  pending_customer_confirmation: { label: 'Pending Customer Confirmation', shortLabel: 'Pending Cust.', icon: Hourglass, color: 'text-yellow-600' },
+  pending_kitchen: { label: 'Pending Kitchen Acceptance', shortLabel: 'Pending Kitchen', icon: Hourglass, color: 'text-yellow-600' },
+  confirmed_by_kitchen: { label: 'Kitchen Confirmed', shortLabel: 'Kitchen Confirmed', icon: Utensils, color: 'text-blue-600' },
+  preparing: { label: 'Preparing', shortLabel: 'Preparing', icon: Utensils, color: 'text-blue-600' },
+  ready_for_pickup: { label: 'Ready for Pickup', shortLabel: 'Ready Pickup', icon: ShoppingCart, color: 'text-orange-600' },
+  served: { label: 'Served', shortLabel: 'Served', icon: CheckCircle, color: 'text-green-600' },
+  payment_pending: { label: 'Payment Pending', shortLabel: 'Payment Pend.', icon: Clock, color: 'text-red-600' },
+  completed: { label: 'Completed', shortLabel: 'Completed', icon: CheckCircle, color: 'text-green-700' },
+  cancelled_by_customer: { label: 'Cancelled by Customer', shortLabel: 'Cancelled (Cust)', icon: XCircle, color: 'text-gray-500' },
+  cancelled_by_restaurant: { label: 'Cancelled by Restaurant', shortLabel: 'Cancelled (Rest)', icon: XCircle, color: 'text-gray-500' },
 };
 
 const toClientOrder = (docId: string, data: any): ClientOrder => {
@@ -110,6 +127,11 @@ export default function TableManagementPage() {
   const [isMenuSelectionPanelOpen, setIsMenuSelectionPanelOpen] = useState(false);
 
   const ordersListenerUnsubscribeRef = useRef<Unsubscribe | null>(null);
+
+  const [groupOrders, setGroupOrders] = useState<ClientTableGroup[]>([]);
+  const [activeBillTab, setActiveBillTab] = useState('main');
+  const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
+  const [activeGroupSubTab, setActiveGroupSubTab] = useState<'bill' | 'details'>('bill');
 
   const form = useForm<TableFormValues>({
     resolver: zodResolver(tableFormSchema),
@@ -192,12 +214,18 @@ export default function TableManagementPage() {
 
       const aggregatedBillItems: OrderItem[] = orders.reduce((acc, order) => {
         order.items.forEach(item => {
+          const menuItem = menuItems.find(mi => mi.id === item.menuItemId);
           const existingItem = acc.find(bi => bi.menuItemId === item.menuItemId);
+          const enrichedItem = {
+            ...item,
+            categoryId: menuItem?.categoryId,
+            taxOverrides: menuItem?.taxOverrides,
+          };
           if (existingItem) {
             existingItem.quantity += item.quantity;
             existingItem.totalPrice += item.totalPrice;
           } else {
-            acc.push({ ...item });
+            acc.push(enrichedItem);
           }
         });
         return acc;
@@ -217,6 +245,17 @@ export default function TableManagementPage() {
       }
     };
   }, [selectedTable, restaurantId, toast]);
+
+  // Fetch group orders for selected table
+  useEffect(() => {
+    if (!selectedTable || !restaurantId) {
+      setGroupOrders([]);
+      return;
+    }
+    getTableGroupsForTable(restaurantId, selectedTable.id)
+      .then(setGroupOrders)
+      .catch(() => setGroupOrders([]));
+  }, [selectedTable, restaurantId]);
 
 
   const handleSelectTable = (table: FirebaseTableType) => {
@@ -242,6 +281,8 @@ export default function TableManagementPage() {
             quantity,
             unitPrice: menuItem.price,
             totalPrice: quantity * menuItem.price,
+          categoryId: menuItem.categoryId,
+          taxOverrides: menuItem.taxOverrides,
         }];
         }
     });
@@ -285,6 +326,7 @@ export default function TableManagementPage() {
         toast({ title: "Bill Updated", description: `Bill for table ${selectedTable.tableNumber} is pending payment.` });
       } else {
         const newOrderData = {
+          restaurantId: restaurantId,
           tableId: selectedTable.id,
           tableNumber: selectedTable.tableNumber,
           items: currentBillItems,
@@ -383,6 +425,12 @@ export default function TableManagementPage() {
     setIsTableModalOpen(true);
   };
 
+  // Build categoryMap for tax engine
+  const categoryMap = categories.reduce((acc, cat) => {
+    acc[cat.id] = cat;
+    return acc;
+  }, {} as Record<string, MenuCategory>);
+
   if (authLoading || pageLoading) { // pageLoading covers initial table and menu/restaurant data
     return <div className="flex h-screen items-center justify-center"><LoadingSpinner className="h-10 w-10 text-primary" /></div>;
   }
@@ -475,7 +523,7 @@ export default function TableManagementPage() {
                         <CardDescription>Capacity: {table.capacity} guests</CardDescription>
                       </CardHeader>
                       <CardContent className="flex-grow space-y-2 text-xs">
-                        <Select value={table.status} onValueChange={(newStatus) => handleStatusChange(table.id, newStatus as TableStatus)} onClick={(e) => e.stopPropagation()}>
+                        <Select value={table.status} onValueChange={(newStatus) => handleStatusChange(table.id, newStatus as TableStatus)}>
                           <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                           <SelectContent>
                             {(Object.keys(statusColors) as TableStatus[]).map(s => <SelectItem key={s} value={s} className="capitalize text-xs">{s.replace('_', ' ')}</SelectItem>)}
@@ -508,17 +556,78 @@ export default function TableManagementPage() {
 
         {selectedTable && isBillPanelVisible && (
           <div className={billPanelClasses}>
-            <BillPanel
-              selectedTable={selectedTable}
-              billItems={currentBillItems}
+            <Tabs value={activeBillTab} onValueChange={setActiveBillTab} className="w-full">
+              <TabsList className="mb-4 overflow-x-auto flex-nowrap whitespace-nowrap">
+                {groupOrders.map(group => (
+                  <TabsTrigger
+                    key={group.id}
+                    value={group.id}
+                    className={activeBillTab === group.id ? 'bg-primary text-primary-foreground' : ''}
+                    onClick={() => { setActiveGroupId(group.id); setActiveGroupSubTab('bill'); }}
+                  >
+                    {group.creatorName || 'Group'} ({group.members.length})
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+              {groupOrders.map(group => (
+                <TabsContent key={group.id} value={group.id}>
+                  <div className="flex flex-col gap-2">
+                    <Tabs value={activeGroupSubTab} onValueChange={(val) => setActiveGroupSubTab(val as 'bill' | 'details')} className="w-full">
+                      <TabsList className="mb-2 flex-nowrap overflow-x-auto">
+                        <TabsTrigger value="bill">Bill</TabsTrigger>
+                        <TabsTrigger value="details">Details</TabsTrigger>
+                      </TabsList>
+                      <TabsContent value="bill">
+                        <BillingPanel
+                          billItems={group.cartItems}
+                          restaurant={restaurant}
+                          categoryMap={categoryMap}
+                          isLoading={formSubmitting}
+                          onUpdateItemQuantity={() => {}}
+                          onRemoveItem={() => {}}
+                          onFinalize={() => {}}
+                          panelTitle={`Group: ${group.creatorName || group.id}`}
+                          finalizeLabel="Finalize Group Bill"
+                          customerName={group.creatorName || ''}
+                          setCustomerName={(v) => {/* update group creatorName logic here */}}
+                          customerPhoneNumber={group.creatorPhone || ''}
+                          setCustomerPhoneNumber={(v) => {/* update group creatorPhone logic here */}}
+                          tableNumber={selectedTable?.tableNumber || ''}
+                          setTableNumber={() => {}}
+                          orderStatusConfig={orderStatusConfig}
+                          activeTab={activeGroupSubTab}
+                          setActiveTab={setActiveGroupSubTab}
+                          view="bill"
+                        />
+                      </TabsContent>
+                      <TabsContent value="details">
+                        <BillingPanel
+                          billItems={group.cartItems}
+                          restaurant={restaurant}
+                          categoryMap={categoryMap}
               isLoading={formSubmitting}
-              onUpdateItemQuantity={handleUpdateItemQuantityInBill}
-              onRemoveItem={handleRemoveItemFromBill}
-              onFinalizeBill={handleFinalizeBill}
-              onClose={() => { setSelectedTable(null); setIsBillPanelVisible(false); setIsMenuSelectionPanelOpen(false); setCurrentBillItems([]); }}
-              onToggleMenuSelection={() => setIsMenuSelectionPanelOpen(!isMenuSelectionPanelOpen)}
-              isMenuSelectionOpen={isMenuSelectionPanelOpen}
-            />
+                          onUpdateItemQuantity={() => {}}
+                          onRemoveItem={() => {}}
+                          onFinalize={() => {}}
+                          panelTitle={`Group: ${group.creatorName || group.id}`}
+                          finalizeLabel="Finalize Group Bill"
+                          customerName={group.creatorName || ''}
+                          setCustomerName={(v) => {/* update group creatorName logic here */}}
+                          customerPhoneNumber={group.creatorPhone || ''}
+                          setCustomerPhoneNumber={(v) => {/* update group creatorPhone logic here */}}
+                          tableNumber={selectedTable?.tableNumber || ''}
+                          setTableNumber={() => {}}
+                          orderStatusConfig={orderStatusConfig}
+                          activeTab={activeGroupSubTab}
+                          setActiveTab={setActiveGroupSubTab}
+                          view="details"
+                        />
+                      </TabsContent>
+                    </Tabs>
+                  </div>
+                </TabsContent>
+              ))}
+            </Tabs>
           </div>
         )}
       </div>
@@ -585,71 +694,4 @@ export default function TableManagementPage() {
     </div>
   );
 }
-
-
-interface BillPanelProps {
-  selectedTable: FirebaseTableType;
-  billItems: OrderItem[];
-  isLoading: boolean;
-  onUpdateItemQuantity: (menuItemId: string, newQuantity: number) => void;
-  onRemoveItem: (menuItemId: string) => void;
-  onFinalizeBill: () => void;
-  onClose: () => void;
-  onToggleMenuSelection: () => void;
-  isMenuSelectionOpen: boolean;
-}
-
-const BillPanel = ({ selectedTable, billItems, isLoading, onUpdateItemQuantity, onRemoveItem, onFinalizeBill, onClose, onToggleMenuSelection, isMenuSelectionOpen }: BillPanelProps) => {
-  const subtotal = billItems.reduce((sum, item) => sum + item.totalPrice, 0);
-  const taxRate = 0.10; 
-  const taxAmount = subtotal * taxRate;
-  const totalAmount = subtotal + taxAmount;
-
-  return (
-    <div className="flex flex-col h-full">
-      <div className="flex justify-between items-center mb-4 pb-2 border-b">
-        <h2 className="text-xl font-semibold text-primary">Bill for Table {selectedTable.tableNumber}</h2>
-        <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={onToggleMenuSelection} className="text-sm">
-              {isMenuSelectionOpen ? <X className="h-4 w-4 mr-1" /> : <Utensils className="h-4 w-4 mr-1" />}
-              {isMenuSelectionOpen ? 'Close Menu' : 'Add Items'}
-            </Button>
-            <Button variant="ghost" size="icon" onClick={onClose} className="md:hidden">
-                <X className="h-5 w-5" />
-            </Button>
-        </div>
-      </div>
-
-      <h3 className="text-lg font-medium mb-2 mt-2">Current Bill Items</h3>
-      <ScrollArea className="flex-grow mb-4 border rounded-md p-1 bg-muted/20">
-        {billItems.length > 0 ? billItems.map(item => (
-          <Card key={item.menuItemId} className="mb-1 p-2 shadow-none border-b last:border-b-0 rounded-none bg-background">
-            <div className="flex justify-between items-center">
-              <div>
-                <p className="font-medium text-sm">{item.menuItemName}</p>
-                <p className="text-xs text-muted-foreground">₹{item.unitPrice.toFixed(2)} each</p>
-              </div>
-              <div className="flex items-center gap-1">
-                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onUpdateItemQuantity(item.menuItemId, item.quantity - 1)} disabled={item.quantity <= 1 || isLoading}><MinusCircle className="h-4 w-4"/></Button>
-                <span className="w-5 text-center text-sm">{item.quantity}</span>
-                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onUpdateItemQuantity(item.menuItemId, item.quantity + 1)} disabled={isLoading}><PlusCircle className="h-4 w-4"/></Button>
-                <p className="w-16 text-right font-medium text-sm">₹{item.totalPrice.toFixed(2)}</p>
-                <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => onRemoveItem(item.menuItemId)} disabled={isLoading}><Trash2 className="h-4 w-4"/></Button>
-              </div>
-            </div>
-          </Card>
-        )) : <p className="text-sm text-muted-foreground text-center py-8">No items in the bill yet.</p>}
-      </ScrollArea>
-
-      <div className="mt-auto border-t pt-4 space-y-2">
-        <div className="flex justify-between text-sm font-medium"><span>Subtotal:</span><span>₹{subtotal.toFixed(2)}</span></div>
-        <div className="flex justify-between text-sm text-muted-foreground"><span>Tax ({ (taxRate * 100).toFixed(0) }%):</span><span>₹{taxAmount.toFixed(2)}</span></div>
-        <div className="flex justify-between text-xl font-bold text-primary"><span>Total:</span><span>₹{totalAmount.toFixed(2)}</span></div>
-        <Button className="w-full mt-3 bg-primary hover:bg-primary/90 text-primary-foreground" onClick={onFinalizeBill} disabled={isLoading || billItems.length === 0}>
-          {isLoading ? <LoadingSpinner className="mr-2 h-4 w-4"/> : 'Finalize Bill & Pay'}
-        </Button>
-      </div>
-    </div>
-  );
-};
 
