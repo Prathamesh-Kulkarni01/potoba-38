@@ -61,12 +61,12 @@ import {
   ChevronDown,
   LogOut,
   ChevronsLeftRight,
-  Archive, // Already here
-  BarChart3, // Already here
+  Archive, 
+  BarChart3, 
   ScanText,
-  PackagePlus, // Added
-  PackageMinus, // Added
-  Trash2, // Added
+  PackagePlus, 
+  PackageMinus, 
+  Trash2, 
 } from "lucide-react"; 
 import type { RestaurantProfile } from "@/types";
 import {
@@ -278,7 +278,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           {
             href: `/dashboard/table-management/${currentRestaurantId}`,
             label: "Table Management",
-            icon: Briefcase, // Using Briefcase as Table wasn't imported, consider Table icon
+            icon: Briefcase, 
             roles: ["owner"],
             hint: "manage tables",
           },
@@ -317,7 +317,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   
   const getInventoryNavItems = (currentRestaurantId: string | null): NavItem[] => {
     if (!currentRestaurantId) {
-      return []; // No inventory items if no restaurant selected
+      return []; 
     }
     return [
       {
@@ -342,21 +342,21 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             hint: "View and manage all stock items",
           },
           {
-            // href: `/dashboard/inventory/${currentRestaurantId}/stock-in`, // Placeholder
+            // href: `/dashboard/inventory/${currentRestaurantId}/stock-in`, 
             label: "Stock In (Soon)",
             icon: PackagePlus,
             roles: ["owner", "staff"],
             hint: "Record incoming stock",
           },
           {
-            // href: `/dashboard/inventory/${currentRestaurantId}/stock-out`, // Placeholder
+            // href: `/dashboard/inventory/${currentRestaurantId}/stock-out`, 
             label: "Stock Out (Soon)",
             icon: PackageMinus,
             roles: ["owner", "staff"],
             hint: "Record stock outflow",
           },
           {
-            // href: `/dashboard/inventory/${currentRestaurantId}/wastage`, // Placeholder
+            // href: `/dashboard/inventory/${currentRestaurantId}/wastage`, 
             label: "Wastage (Soon)",
             icon: Trash2,
             roles: ["owner", "staff"],
@@ -446,7 +446,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     desktopNavItems = [
       ...desktopNavItems,
       ...getOwnerNavItems(selectedRestaurantId),
-      ...getInventoryNavItems(selectedRestaurantId), // Add Inventory Module for Owner
+      ...getInventoryNavItems(selectedRestaurantId), 
     ];
   } else if (authContextRole === "staff") {
     const staffRestaurantId = user?.restaurantId;
@@ -457,7 +457,6 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         const staffSpecificItems = staffAccessibleTopLevel.children.filter(child => 
             child.label === "Order Management" || 
             child.label === "KOT"
-            // Removed "Inventory" from here as it will be a top-level group
         );
         if (staffSpecificItems.length > 0) {
           desktopNavItems.push({
@@ -466,7 +465,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           });
         }
       }
-      desktopNavItems = [...desktopNavItems, ...getInventoryNavItems(staffRestaurantId)]; // Add Inventory Module for Staff
+      desktopNavItems = [...desktopNavItems, ...getInventoryNavItems(staffRestaurantId)]; 
     }
   }
 
@@ -623,14 +622,14 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
               </Collapsible>
             ) : (
               <SidebarMenuButton
-                asChild
+                asChild={!!item.href} 
                 isActive={
-                  pathname === item.href ||
-                  (item.href &&
+                  item.href ? (pathname === item.href || 
+                  (item.href && 
                     item.href !== "/dashboard" &&
                     pathname.startsWith(
                       item.href.split("[")[0].replace(/\/(undefined|null)$/, "")
-                    ))
+                    ))) : false
                 }
                 tooltip={{
                   children: item.label,
@@ -639,30 +638,53 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                   align: "center",
                 }}
                 size={isSubmenu ? "sm" : "default"}
+                disabled={!item.href} 
               >
-                <Link
-                  href={item.href!}
-                  target={item.target}
-                  rel={item.rel}
-                  className="flex items-center justify-between w-full"
-                >
-                  <div className="flex items-center gap-2">
-                    <item.icon
-                      className={cn("h-5 w-5", isSubmenu && "h-4 w-4")}
-                    />
-                    <span
-                      className={cn(
-                        "ml-1 group-data-[collapsible=icon]:hidden truncate",
-                        isSubmenu && "text-sm"
-                      )}
-                    >
-                      {item.label}
-                    </span>
+                {item.href ? ( 
+                  <Link
+                    href={item.href} 
+                    target={item.target}
+                    rel={item.rel}
+                    className="flex items-center justify-between w-full"
+                  >
+                    <div className="flex items-center gap-2">
+                      <item.icon
+                        className={cn("h-5 w-5", isSubmenu && "h-4 w-4")}
+                      />
+                      <span
+                        className={cn(
+                          "ml-1 group-data-[collapsible=icon]:hidden truncate",
+                          isSubmenu && "text-sm"
+                        )}
+                      >
+                        {item.label}
+                      </span>
+                    </div>
+                    {item.badgeCount && item.badgeCount > 0 && (
+                      <SidebarMenuBadge>{item.badgeCount}</SidebarMenuBadge>
+                    )}
+                  </Link>
+                ) : (
+                  // Render content directly inside button if no href (for disabled placeholders)
+                  <div className="flex items-center justify-between w-full">
+                    <div className="flex items-center gap-2">
+                      <item.icon
+                        className={cn("h-5 w-5", isSubmenu && "h-4 w-4")}
+                      />
+                      <span
+                        className={cn(
+                          "ml-1 group-data-[collapsible=icon]:hidden truncate",
+                          isSubmenu && "text-sm"
+                        )}
+                      >
+                        {item.label}
+                      </span>
+                    </div>
+                    {item.badgeCount && item.badgeCount > 0 && (
+                      <SidebarMenuBadge>{item.badgeCount}</SidebarMenuBadge>
+                    )}
                   </div>
-                  {item.badgeCount && item.badgeCount > 0 && (
-                    <SidebarMenuBadge>{item.badgeCount}</SidebarMenuBadge>
-                  )}
-                </Link>
+                )}
               </SidebarMenuButton>
             )}
           </SidebarMenuItem>
@@ -858,4 +880,3 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     </>
   );
 }
-
