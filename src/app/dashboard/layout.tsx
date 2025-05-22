@@ -2,7 +2,7 @@
 // src/app/dashboard/layout.tsx
 "use client";
 
-import { useEffect, type ReactNode, useState, useCallback } from "react";
+import { useEffect, type ReactNode, useState, useCallback, useMemo } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -19,10 +19,11 @@ import {
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
+  SidebarMenuSubContent, // Renamed from SidebarSubMenuContent
   SidebarMenuBadge,
-  SidebarMenuSubContent,
   SidebarSeparator,
-  SidebarInset,
+  // SidebarMenuSub, // Removed if not directly used from sidebar.tsx
+  // SidebarMenuSubTrigger, // Removed if not directly used from sidebar.tsx
 } from '@/components/ui/sidebar';
 import {
   Collapsible,
@@ -54,7 +55,7 @@ import {
   ListOrdered,
   Briefcase,
   ExternalLink,
-  Table,
+  Table as TableIconLucide, // Renamed to avoid conflict
   List,
   Settings2,
   CookingPot,
@@ -182,6 +183,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         .finally(() => {
           setRestaurantsLoading(false);
         });
+    } else if (authContextRole === 'staff' && user?.restaurantId) {
+        setSelectedRestaurantId(user.restaurantId); // For staff, selected is their assigned restaurant
     }
   }, [authContextRole, user?.uid, user?.restaurantId, toast]);
 
@@ -191,7 +194,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         `selectedRestaurant_${user.uid}`,
         selectedRestaurantId
       );
-      if (user.restaurantId !== selectedRestaurantId) {
+      if (user.restaurantId !== selectedRestaurantId && authContextRole === 'owner') { // Only update user profile if owner changes selection
         updateUserProfile(user.uid, {
           restaurantId: selectedRestaurantId,
         }).catch((err) =>
@@ -202,7 +205,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         );
       }
     }
-  }, [selectedRestaurantId, user?.uid, user?.restaurantId]);
+  }, [selectedRestaurantId, user?.uid, user?.restaurantId, authContextRole]);
 
   const handleRestaurantChange = (restaurantId: string) => {
     if (restaurantId === "create_new_restaurant_redirect_target") {
@@ -212,37 +215,17 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     setSelectedRestaurantId(restaurantId);
   };
 
-  if (
-    authContextLoading ||
-    (authContextRole === "owner" &&
-      restaurantsLoading &&
-      ownedRestaurants.length === 0 &&
-      !pathname.endsWith("/create-restaurant") &&
-      !pathname.endsWith("/subscription") &&
-      !pathname.endsWith("/restaurant-setup"))
-  ) {
-    return <AppLoadingScreen message="Loading dashboard..." />;
-  }
-
-  if (
-    !user ||
-    !authContextRole ||
-    (authContextRole === "owner" && user.onboardingComplete === false)
-  ) {
-    return <AppLoadingScreen message="Preparing your space..." />;
-  }
-
-  const commonNavItems: NavItem[] = [
+  const commonNavItems: NavItem[] = useMemo(() => [
     {
       href: "/dashboard",
       label: "Dashboard",
       icon: LayoutDashboard,
       roles: ["owner", "staff", "admin", "user"],
     },
-  ];
+  ], []);
 
-  const getOwnerNavItems = (currentRestaurantId: string | null): NavItem[] => {
-    if (!currentRestaurantId) {
+  const getOwnerNavItems = useCallback((currentRestaurantId: string | null): NavItem[] => {
+    if (!currentRestaurantId || currentRestaurantId.trim() === "") {
       return [
         {
           href: `/dashboard/create-restaurant`,
@@ -313,10 +296,10 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         ],
       },
     ];
-  };
+  }, []);
   
-  const getInventoryNavItems = (currentRestaurantId: string | null): NavItem[] => {
-    if (!currentRestaurantId) {
+  const getInventoryNavItems = useCallback((currentRestaurantId: string | null): NavItem[] => {
+    if (!currentRestaurantId || currentRestaurantId.trim() === "") {
       return []; 
     }
     return [
@@ -356,7 +339,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             hint: "Record stock outflow",
           },
           {
-            // href: `/dashboard/inventory/${currentRestaurantId}/wastage`, 
+            // href: `/dashboard/inventory/${currentRestaurantId}/wastage`, // This item won't render as a link
             label: "Wastage (Soon)",
             icon: Trash2,
             roles: ["owner", "staff"],
@@ -365,10 +348,10 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         ],
       },
     ];
-  };
+  }, []);
 
 
-  const platformAdminNavItems: NavItem[] = [
+  const platformAdminNavItems: NavItem[] = useMemo(() => [
     {
       label: "Platform Admin",
       icon: ShieldCheck,
@@ -413,9 +396,9 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         },
       ],
     },
-  ];
+  ], []);
 
-  const settingsNavItems: NavItem[] = [
+  const settingsNavItems: NavItem[] = useMemo(() => [
     {
       label: "General Settings",
       icon: Settings2,
@@ -439,56 +422,65 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         },
       ],
     },
-  ];
+  ], []);
 
-  let desktopNavItems: NavItem[] = [...commonNavItems];
-  if (authContextRole === "owner") {
-    desktopNavItems = [
-      ...desktopNavItems,
-      ...getOwnerNavItems(selectedRestaurantId),
-      ...getInventoryNavItems(selectedRestaurantId), 
-    ];
-  } else if (authContextRole === "staff") {
-    const staffRestaurantId = user?.restaurantId;
-    if (staffRestaurantId) {
-      const staffOwnerNavs = getOwnerNavItems(staffRestaurantId);
-      const staffAccessibleTopLevel = staffOwnerNavs.find(item => item.label === "Manage Restaurant");
-      if (staffAccessibleTopLevel && staffAccessibleTopLevel.children) {
-        const staffSpecificItems = staffAccessibleTopLevel.children.filter(child => 
-            child.label === "Order Management" || 
-            child.label === "KOT"
-        );
-        if (staffSpecificItems.length > 0) {
-          desktopNavItems.push({
-            ...staffAccessibleTopLevel,
-            children: staffSpecificItems
-          });
+  const desktopNavItems = useMemo((): NavItem[] => {
+    let items: NavItem[] = [...commonNavItems];
+    if (authContextRole === "owner") {
+      items = [
+        ...items,
+        ...getOwnerNavItems(selectedRestaurantId),
+        ...getInventoryNavItems(selectedRestaurantId),
+      ];
+    } else if (authContextRole === "staff") {
+      const staffRestaurantId = user?.restaurantId;
+      if (staffRestaurantId) {
+        const staffOwnerNavs = getOwnerNavItems(staffRestaurantId);
+        const staffAccessibleTopLevel = staffOwnerNavs.find(item => item.label === "Manage Restaurant");
+        if (staffAccessibleTopLevel && staffAccessibleTopLevel.children) {
+          const staffSpecificItems = staffAccessibleTopLevel.children.filter(child => 
+              child.label === "Order Management" || 
+              child.label === "KOT"
+          );
+          if (staffSpecificItems.length > 0) {
+            items.push({
+              ...staffAccessibleTopLevel,
+              children: staffSpecificItems
+            });
+          }
         }
+        items = [...items, ...getInventoryNavItems(staffRestaurantId)];
       }
-      desktopNavItems = [...desktopNavItems, ...getInventoryNavItems(staffRestaurantId)]; 
     }
+
+    if (authContextRole === "admin") {
+      items = [...items, ...platformAdminNavItems];
+    }
+    items = [...items, ...settingsNavItems];
+    return items;
+  }, [authContextRole, selectedRestaurantId, user?.restaurantId, commonNavItems, getOwnerNavItems, getInventoryNavItems, platformAdminNavItems, settingsNavItems]);
+
+  if (
+    initialLoading || 
+    authContextLoading ||
+    (authContextRole === "owner" &&
+      restaurantsLoading &&
+      ownedRestaurants.length === 0 &&
+      !pathname.endsWith("/create-restaurant") &&
+      !pathname.endsWith("/subscription") &&
+      !pathname.endsWith("/restaurant-setup"))
+  ) {
+    return <AppLoadingScreen message="Loading dashboard..." />;
   }
 
-  if (authContextRole === "admin") {
-    desktopNavItems = [...desktopNavItems, ...platformAdminNavItems];
+  if (
+    !user ||
+    !authContextRole ||
+    (authContextRole === "owner" && user.onboardingComplete === false)
+  ) {
+    return <AppLoadingScreen message="Preparing your space..." />;
   }
-  desktopNavItems = [...desktopNavItems, ...settingsNavItems];
 
-
-  const getFilteredNavItems = (
-    items: NavItem[],
-    currentRole: UserRole | null
-  ) => {
-    if (!currentRole) return [];
-    return items
-      .filter((item) => item.roles.includes(currentRole))
-      .map((item) => ({
-        ...item,
-        children: item.children
-          ? getFilteredNavItems(item.children, currentRole)
-          : undefined,
-      }));
-  };
 
   const bottomNavLinks: BottomNavItem[] = [
     {
@@ -557,6 +549,21 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     ownedRestaurants.find((r) => r.id === selectedRestaurantId)?.name ||
     "Select Restaurant";
 
+  const getFilteredNavItems = (
+    items: NavItem[],
+    currentRole: UserRole | null
+  ) => {
+    if (!currentRole) return [];
+    return items
+      .filter((item) => item.roles.includes(currentRole))
+      .map((item) => ({
+        ...item,
+        children: item.children
+          ? getFilteredNavItems(item.children, currentRole)
+          : undefined,
+      }));
+  };
+
   const renderNavMenu = (items: NavItem[], isSubmenu = false) => {
     return (
       <SidebarMenu
@@ -564,7 +571,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       >
         {getFilteredNavItems(items, authContextRole).map((item) => (
           <SidebarMenuItem key={item.label + (item.href || "")}>
-            {item.children && item.children.length > 0 ? (
+            {item.isGroup && item.children && item.children.length > 0 ? (
               <Collapsible
                 open={openCollapsibles[item.label] || false}
                 onOpenChange={() => toggleCollapsible(item.label)}
@@ -665,7 +672,6 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                     )}
                   </Link>
                 ) : (
-                  // Render content directly inside button if no href (for disabled placeholders)
                   <div className="flex items-center justify-between w-full">
                     <div className="flex items-center gap-2">
                       <item.icon
