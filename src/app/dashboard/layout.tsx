@@ -19,12 +19,10 @@ import {
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
-  SidebarMenuSubContent, // Renamed from SidebarSubMenuContent
+  SidebarMenuSubContent, 
   SidebarMenuBadge,
   SidebarSeparator,
   SidebarInset,
-  // SidebarMenuSub, // Removed if not directly used from sidebar.tsx
-  // SidebarMenuSubTrigger, // Removed if not directly used from sidebar.tsx
 } from '@/components/ui/sidebar';
 import {
   Collapsible,
@@ -56,7 +54,7 @@ import {
   ListOrdered,
   Briefcase,
   ExternalLink,
-  Table as TableIconLucide, // Renamed to avoid conflict
+  Table as TableIconLucide, 
   List,
   Settings2,
   CookingPot,
@@ -185,7 +183,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           setRestaurantsLoading(false);
         });
     } else if (authContextRole === 'staff' && user?.restaurantId) {
-        setSelectedRestaurantId(user.restaurantId); // For staff, selected is their assigned restaurant
+        setSelectedRestaurantId(user.restaurantId); 
     }
   }, [authContextRole, user?.uid, user?.restaurantId, toast]);
 
@@ -195,7 +193,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         `selectedRestaurant_${user.uid}`,
         selectedRestaurantId
       );
-      if (user.restaurantId !== selectedRestaurantId && authContextRole === 'owner') { // Only update user profile if owner changes selection
+      if (user.restaurantId !== selectedRestaurantId && authContextRole === 'owner') { 
         updateUserProfile(user.uid, {
           restaurantId: selectedRestaurantId,
         }).catch((err) =>
@@ -262,7 +260,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           {
             href: `/dashboard/table-management/${currentRestaurantId}`,
             label: "Table Management",
-            icon: Briefcase, 
+            icon: TableIconLucide, 
             roles: ["owner"],
             hint: "manage tables",
           },
@@ -305,7 +303,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     }
     return [
       {
-        label: "Inventory Management",
+        label: "Inventory",
         icon: Archive,
         roles: ["owner", "staff"],
         hint: "Manage restaurant inventory",
@@ -340,8 +338,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             hint: "Record stock outflow",
           },
           {
-            // href: `/dashboard/inventory/${currentRestaurantId}/wastage`, // This item won't render as a link
-            label: "Wastage (Soon)",
+             href: `/dashboard/inventory/${currentRestaurantId}/wastage`,
+            label: "Wastage",
             icon: Trash2,
             roles: ["owner", "staff"],
             hint: "Log wasted or spoiled items",
@@ -887,3 +885,4 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     </>
   );
 }
+

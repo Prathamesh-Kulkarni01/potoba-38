@@ -25,6 +25,7 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { Label } from '@radix-ui/react-label';
 
 const stockInFormSchema = z.object({
   inventoryItemId: z.string().min(1, { message: 'Please select an item.' }),
