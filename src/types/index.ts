@@ -295,7 +295,7 @@ export interface InventoryItem {
   reorderLevel?: number | null; 
   supplierInfo?: SupplierInfo | null; 
   costPerUnit?: number | null; 
-  unitConversionNotes?: string | null; // New field for conversion notes
+  unitConversionNotes?: string | null; 
   lastStockUpdatedAt: Timestamp; 
   createdAt: Timestamp;
   updatedAt: Timestamp;
@@ -323,6 +323,11 @@ export interface StockTransaction {
   transactionDate: Timestamp;
   costPerUnitAtTransaction?: number | null; 
   notes?: string | null;
+  supplierName?: string | null;
+  invoiceNumber?: string | null;
+  batchNumber?: string | null;
+  expiryDate?: Timestamp | null;
+  paymentMode?: string | null;
   relatedOrderId?: string | null; 
   relatedPurchaseId?: string | null; 
   userId?: string | null; 
