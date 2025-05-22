@@ -1,15 +1,15 @@
 
 import { doc, setDoc, getDoc, serverTimestamp, Timestamp, collection, addDoc, writeBatch, query, where, getDocs } from 'firebase/firestore';
 import { db } from './config';
-import type { UserRole, UserProfile as UserProfileType, RestaurantProfile } from '@/types'; 
+import type { UserRole, UserProfile as UserProfileType, RestaurantProfile, OutletType } from '@/types'; 
 
 export async function createUserProfile(
   uid: string,
   email: string | null,
   role: UserRole, 
-  restaurantData?: { name: string; type?: string },
-  phoneNumber?: string | null, // Added
-  isAnonymous?: boolean // Added
+  restaurantData?: { name: string; outletType?: OutletType }, // outletType is now part of restaurantData
+  phoneNumber?: string | null, 
+  isAnonymous?: boolean 
 ): Promise<{ userProfile: UserProfileType; restaurantId?: string }> {
   if (!db) throw new Error("Firestore is not initialized.");
 
@@ -24,7 +24,7 @@ export async function createUserProfile(
     const newRestaurantRef = await addDoc(collection(db, 'restaurants'), {
       ownerId: uid,
       name: restaurantData.name,
-      type: restaurantData.type || '',
+      outletType: restaurantData.outletType || 'restaurant', // Default if not provided during initial creation
       createdAt: serverTimestamp(),
     });
     restaurantId = newRestaurantRef.id;
@@ -37,8 +37,8 @@ export async function createUserProfile(
     role, 
     restaurantId, 
     onboardingComplete,
-    phoneNumber: phoneNumber || null, // Save phone number
-    isAnonymous: isAnonymous || false, // Save anonymous status
+    phoneNumber: phoneNumber || null, 
+    isAnonymous: isAnonymous || false, 
     createdAt: serverTimestamp() as Timestamp, 
   };
 
@@ -70,8 +70,8 @@ export async function getUserProfile(uid: string): Promise<UserProfileType | nul
       role: data.role,
       restaurantId: data.restaurantId || null, 
       onboardingComplete: typeof data.onboardingComplete === 'boolean' ? data.onboardingComplete : false,
-      phoneNumber: data.phoneNumber || null, // Retrieve phone number
-      isAnonymous: typeof data.isAnonymous === 'boolean' ? data.isAnonymous : false, // Retrieve anonymous status
+      phoneNumber: data.phoneNumber || null, 
+      isAnonymous: typeof data.isAnonymous === 'boolean' ? data.isAnonymous : false, 
       createdAt: data.createdAt as Timestamp, 
     } as UserProfileType;
   } else {
@@ -82,32 +82,29 @@ export async function getUserProfile(uid: string): Promise<UserProfileType | nul
 export async function updateUserProfile(uid: string, data: Partial<UserProfileType>): Promise<void> {
   if (!db) throw new Error("Firestore is not initialized.");
   const userRef = doc(db, 'users', uid);
-  // Ensure serverTimestamp is used for any timestamp fields if they are part of `data`
   const dataToUpdate = { ...data };
   if (data.createdAt && !(data.createdAt instanceof Timestamp)) {
-      // If createdAt is being set and it's not already a Timestamp (e.g. from a client placeholder)
-      // it's generally not updated after initial creation, but if it is, ensure it's correct type or serverTimestamp
+    // Handle potential client-side timestamp if needed, or ensure it's always serverTimestamp for updates
   }
-  // Add updatedAt if it's a field in UserProfileType and you want to track updates
-  // dataToUpdate.updatedAt = serverTimestamp(); 
+  // dataToUpdate.updatedAt = serverTimestamp(); // Consider adding an updatedAt field to UserProfile
   await setDoc(userRef, dataToUpdate, { merge: true });
 }
 
-export async function createRestaurant(ownerId: string, name: string, type?: string): Promise<RestaurantProfile> {
+export async function createRestaurant(ownerId: string, name: string, outletType?: OutletType): Promise<RestaurantProfile> {
   if (!db) throw new Error("Firestore is not initialized.");
   const restaurantCol = collection(db, 'restaurants');
   const createdAt = serverTimestamp();
   const restaurantRef = await addDoc(restaurantCol, {
     ownerId,
     name,
-    type: type || '',
+    outletType: outletType || 'restaurant', // Default if not provided
     createdAt,
   });
   return {
     id: restaurantRef.id,
     ownerId,
     name,
-    type: type || '',
+    outletType: outletType || 'restaurant',
     createdAt: Timestamp.now(), 
   } as RestaurantProfile;
 }

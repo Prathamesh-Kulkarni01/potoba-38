@@ -1,3 +1,4 @@
+
 import type { User as FirebaseUser } from 'firebase/auth';
 import type { Timestamp } from 'firebase/firestore';
 
@@ -22,20 +23,41 @@ export interface UserProfile {
   isAnonymous?: boolean; 
 }
 
+export type OutletType = 
+  | 'restaurant' 
+  | 'cafe' 
+  | 'bar' 
+  | 'restobar' 
+  | 'qsr' 
+  | 'bakery'
+  | 'food_truck'
+  | 'other';
+
+export const outletTypes: { value: OutletType; label: string }[] = [
+  { value: 'restaurant', label: 'Restaurant (General)' },
+  { value: 'cafe', label: 'Cafe / Coffee Shop' },
+  { value: 'bar', label: 'Bar / Pub' },
+  { value: 'restobar', label: 'Restobar (Restaurant & Bar)' },
+  { value: 'qsr', label: 'Quick Service (QSR) / Fast Food' },
+  { value: 'bakery', label: 'Bakery' },
+  { value: 'food_truck', label: 'Food Truck' },
+  { value: 'other', label: 'Other' },
+];
+
 export interface TaxConfig {
-  id: string; // unique id for the tax (e.g. 'cgst', 'sgst', 'igst', 'service_charge')
-  name: string; // e.g. 'CGST', 'SGST', 'IGST', 'Service Charge'
-  rate: number; // percentage (e.g. 2.5 for 2.5%)
-  type: 'percentage' | 'fixed'; // type of tax
-  isDefault?: boolean; // is this a default tax for the restaurant
-  isInclusive?: boolean; // is this tax included in price
+  id: string; 
+  name: string; 
+  rate: number; 
+  type: 'percentage' | 'fixed'; 
+  isDefault?: boolean; 
+  isInclusive?: boolean; 
 }
 
 export interface RestaurantProfile {
   id: string;
   ownerId: string;
   name: string;
-  type?: string; 
+  outletType?: OutletType; // Changed from 'type' to 'outletType'
   createdAt: Timestamp; 
   subscriptionPlan?: string; 
   stripeCustomerId?: string;
@@ -47,7 +69,7 @@ export interface RestaurantProfile {
     notificationEmail?: string;
     customDomain?: string | null; 
   };
-  taxes?: TaxConfig[]; // List of taxes for the restaurant
+  taxes?: TaxConfig[]; 
 }
 
 export interface MenuCategory {
@@ -57,7 +79,7 @@ export interface MenuCategory {
   order: number; 
   createdAt: Timestamp;
   updatedAt: Timestamp;
-  taxOverrides?: TaxConfig[]; // Category-specific tax overrides
+  taxOverrides?: TaxConfig[]; 
 }
 
 export interface MenuSubcategory {
@@ -111,7 +133,7 @@ export interface MenuItem {
   portionSize?: string | null;
   createdAt: Timestamp;
   updatedAt: Timestamp;
-  taxOverrides?: TaxConfig[]; // Item-specific tax overrides
+  taxOverrides?: TaxConfig[]; 
 }
 
 export type TableStatus = 'available' | 'occupied' | 'reserved' | 'needs_cleaning';
@@ -149,12 +171,14 @@ export interface OrderItem {
   totalPrice: number; 
   variantChoices?: { variantName: string; optionName: string; optionPrice: number }[]; 
   notes?: string; 
+  categoryId?: string; // Added for tax calculation
+  taxOverrides?: TaxConfig[]; // Added for tax calculation
 }
 
 export interface Order {
   id: string; 
   restaurantId: string;
-  userId?: string | null; // Allow null for userId
+  userId?: string | null; 
   tableId?: string | null; 
   tableNumber?: string | null; 
   items: OrderItem[];
@@ -171,17 +195,17 @@ export interface Order {
   kitchenNotes?: string; 
   paymentMethod?: string;
   transactionId?: string;
-  groupId?: string | null; // Allow null for groupId
+  groupId?: string | null; 
   createdAt: Timestamp; 
   updatedAt: Timestamp; 
-  taxBreakup?: { taxId: string; name: string; amount: number; rate: number; }[]; // Detailed tax breakup
+  taxBreakup?: { taxId: string; name: string; amount: number; rate: number; }[]; 
 }
 
 export interface ClientOrder extends Omit<Order, 'createdAt' | 'updatedAt' | 'userId' | 'groupId'> {
   createdAt: string; 
   updatedAt: string; 
-  userId?: string; // Keep userId optional in ClientOrder
-  groupId?: string; // Keep groupId optional in ClientOrder
+  userId?: string; 
+  groupId?: string; 
 }
 
 export interface GroupCartItem extends OrderItem {
@@ -192,7 +216,7 @@ export interface GroupCartItem extends OrderItem {
 export interface TableGroupMember {
   uid: string | null; 
   name: string;
-  phone?: string | null; // Phone is optional for members
+  phone?: string | null; 
 }
 
 export interface TableGroup {
@@ -201,7 +225,7 @@ export interface TableGroup {
   tableId: string;
   tableNumber: string; 
   creatorName: string;
-  creatorPhone: string; // Creator phone is required
+  creatorPhone: string; 
   creatorUid?: string | null; 
   members: TableGroupMember[];
   status: 'active' | 'ordering' | 'locked' | 'ordered' | 'closed';
@@ -215,7 +239,7 @@ export interface ClientTableGroup extends Omit<TableGroup, 'createdAt' | 'update
   updatedAt: string;
 }
 
-export interface PopularItem { // Type for popular items on dashboard
+export interface PopularItem { 
   menuItemId: string;
   menuItemName: string;
   orderCount: number;

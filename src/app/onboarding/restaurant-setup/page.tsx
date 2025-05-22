@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -7,19 +8,21 @@ import * as z from 'zod';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth/context';
 import { getRestaurant, updateRestaurantProfile, updateUserProfile } from '@/lib/firebase/firestore';
-import type { RestaurantProfile } from '@/types';
+import type { RestaurantProfile, OutletType } from '@/types';
+import { outletTypes } from '@/types'; // Import outletTypes
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label'; // Direct use for non-form hook elements if any
+import { Label } from '@/components/ui/label'; 
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import LoadingSpinner from '@/components/shared/loading-spinner';
-import { Store, Utensils } from 'lucide-react'; // Added Utensils icon
+import { Store, Utensils } from 'lucide-react';
 
 const formSchema = z.object({
   name: z.string().min(2, { message: 'Restaurant name must be at least 2 characters.' }),
-  type: z.string().optional(), // e.g., Cafe, Fine Dining, Italian
+  outletType: z.string().min(1, {message: "Please select an outlet type."}) as z.ZodType<OutletType>, // Use OutletType
 });
 
 export default function RestaurantSetupPage() {
@@ -27,13 +30,13 @@ export default function RestaurantSetupPage() {
   const router = useRouter();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [pageLoading, setPageLoading] = useState(true); // For fetching initial restaurant data
+  const [pageLoading, setPageLoading] = useState(true); 
   
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: '',
-      type: '',
+      outletType: 'restaurant', // Default to 'restaurant'
     },
   });
 
@@ -45,7 +48,7 @@ export default function RestaurantSetupPage() {
         if (restaurant) {
           form.reset({
             name: restaurant.name,
-            type: restaurant.type || '',
+            outletType: restaurant.outletType || 'restaurant',
           });
         } else {
           toast({
@@ -53,14 +56,12 @@ export default function RestaurantSetupPage() {
             title: 'Error',
             description: 'Could not load your restaurant data. Please try again.',
           });
-          // Potentially redirect or offer retry
         }
         setPageLoading(false);
       };
       fetchRestaurantData();
     } else if (!authInitialLoading && (!user || !user.restaurantId)) {
-        // This case should be handled by onboarding layout (redirect if no user or no restaurantId for owner)
-        setPageLoading(false); // Stop page loading if no user/restaurantId
+        setPageLoading(false); 
     }
   }, [user, authInitialLoading, form, toast]);
 
@@ -73,10 +74,8 @@ export default function RestaurantSetupPage() {
     try {
       await updateRestaurantProfile(user.restaurantId, {
         name: values.name,
-        type: values.type,
+        outletType: values.outletType,
       });
-      // Optionally, mark this step as complete if there were sub-steps for restaurant setup
-      // For now, proceed directly to subscription
       toast({ title: 'Restaurant Details Saved', description: 'Next, choose your subscription plan.' });
       router.push('/onboarding/subscription');
     } catch (error: any) {
@@ -128,13 +127,24 @@ export default function RestaurantSetupPage() {
             />
             <FormField
               control={form.control}
-              name="type"
+              name="outletType"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Restaurant Type (Optional)</FormLabel>
-                  <FormControl>
-                    <Input placeholder="e.g., Cafe, Italian, Fine Dining" {...field} />
-                  </FormControl>
+                  <FormLabel>Type of Outlet</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select the type of your outlet" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {outletTypes.map((type) => (
+                        <SelectItem key={type.value} value={type.value}>
+                          {type.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )}

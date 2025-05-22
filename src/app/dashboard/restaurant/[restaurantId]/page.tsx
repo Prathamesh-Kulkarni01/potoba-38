@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -5,11 +6,12 @@ import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth/context';
 import { getRestaurant } from '@/lib/firebase/firestore';
 import type { RestaurantProfile } from '@/types';
+import { outletTypes } from '@/types'; // Import outletTypes for display
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Store, Edit3, Utensils, Users, Settings as SettingsIcon } from 'lucide-react'; // Renamed Settings to SettingsIcon
+import { Store, Edit3, Utensils, Users, Settings as SettingsIcon, Info } from 'lucide-react'; 
 import LoadingSpinner from '@/components/shared/loading-spinner';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
@@ -33,19 +35,17 @@ export default function RestaurantDetailsPage() {
       return;
     }
 
-    if (user && role !== 'owner' && role !== 'staff') { // Staff might view some details
+    if (user && role !== 'owner' && role !== 'staff') { 
         toast({ variant: 'destructive', title: 'Access Denied', description: 'You do not have permission to view this page.' });
         router.push('/dashboard');
         return;
     }
     
-    // For staff, check if their user.restaurantId matches params.restaurantId
     if (user && role === 'staff' && user.restaurantId !== restaurantId) {
         toast({ variant: 'destructive', title: 'Access Denied', description: 'You do not have permission to view this restaurant.' });
         router.push('/dashboard');
         return;
     }
-
 
     setLoading(true);
     getRestaurant(restaurantId)
@@ -86,12 +86,12 @@ export default function RestaurantDetailsPage() {
     );
   }
   
-  // Basic form for editing - in a real app, this would be more comprehensive with react-hook-form
-  // For now, it's illustrative
   const handleSaveChanges = (e: React.FormEvent) => {
       e.preventDefault();
       toast({title: "Demo Action", description: "Saving changes is not implemented in this demo."});
   }
+
+  const currentOutletTypeLabel = outletTypes.find(ot => ot.value === restaurant.outletType)?.label || restaurant.outletType || 'Not specified';
 
   return (
     <div className="space-y-6">
@@ -110,8 +110,8 @@ export default function RestaurantDetailsPage() {
                 </Button>
             )}
           </div>
-          <CardDescription>
-            Manage details and settings for {restaurant.name}. Type: {restaurant.type || 'Not specified'}
+          <CardDescription className="flex items-center">
+             <Info className="mr-2 h-4 w-4 text-muted-foreground" /> Type: {currentOutletTypeLabel}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-8">
@@ -132,8 +132,9 @@ export default function RestaurantDetailsPage() {
                 <Input id="restaurantName" type="text" defaultValue={restaurant.name} className="mt-1" />
               </div>
               <div>
-                <Label htmlFor="restaurantType">Restaurant Type</Label>
-                <Input id="restaurantType" type="text" defaultValue={restaurant.type || ''} className="mt-1" />
+                <Label htmlFor="restaurantOutletType">Restaurant Type</Label>
+                <Input id="restaurantOutletType" type="text" defaultValue={currentOutletTypeLabel} className="mt-1" disabled />
+                <p className="text-xs text-muted-foreground mt-1">To change outlet type, go to Restaurant Settings.</p>
               </div>
               <Button type="submit" className="bg-accent hover:bg-accent/90 text-accent-foreground">
                 <Edit3 className="mr-2 h-4 w-4" /> Save Changes (Demo)
@@ -142,14 +143,14 @@ export default function RestaurantDetailsPage() {
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
-            <Link href={`/dashboard/recipes/${restaurantId}`} className="block">
+            <Link href={`/dashboard/menu-management/${restaurantId}`} className="block">
                 <Card className="hover:shadow-xl transition-shadow cursor-pointer h-full">
                     <CardHeader className="flex-row items-center gap-3">
                         <Utensils className="h-8 w-8 text-accent"/>
-                        <CardTitle className="text-xl">Recipe Management</CardTitle>
+                        <CardTitle className="text-xl">Menu Management</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <CardDescription>Create, view, and manage recipes for {restaurant.name}.</CardDescription>
+                        <CardDescription>Create, view, and manage menu for {restaurant.name}.</CardDescription>
                     </CardContent>
                 </Card>
             </Link>

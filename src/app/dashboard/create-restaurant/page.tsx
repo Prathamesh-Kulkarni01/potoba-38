@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -10,14 +11,17 @@ import { createRestaurant } from '@/lib/firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import LoadingSpinner from '@/components/shared/loading-spinner';
 import { Store, PlusCircle } from 'lucide-react';
+import type { OutletType } from '@/types';
+import { outletTypes } from '@/types';
 
 const formSchema = z.object({
   name: z.string().min(2, { message: 'Restaurant name must be at least 2 characters.' }),
-  type: z.string().optional(), // e.g., Cafe, Fine Dining, Italian
+  outletType: z.string().min(1, {message: "Please select an outlet type."}) as z.ZodType<OutletType>,
 });
 
 export default function CreateRestaurantPage() {
@@ -30,7 +34,7 @@ export default function CreateRestaurantPage() {
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: '',
-      type: '',
+      outletType: 'restaurant',
     },
   });
 
@@ -41,13 +45,11 @@ export default function CreateRestaurantPage() {
     }
     setLoading(true);
     try {
-      const newRestaurant = await createRestaurant(user.uid, values.name, values.type);
+      const newRestaurant = await createRestaurant(user.uid, values.name, values.outletType);
       toast({ title: 'Restaurant Created!', description: `Successfully created ${newRestaurant.name}.` });
-      // Update localStorage to select the new restaurant
       localStorage.setItem(`selectedRestaurant_${user.uid}`, newRestaurant.id);
-      // Redirect to the dashboard, layout will pick up the new selection or refetch
       router.push('/dashboard'); 
-      router.refresh(); // Force refresh of layout to pick up new restaurant in selector
+      router.refresh(); 
     } catch (error: any) {
       console.error('Create restaurant error:', error);
       toast({
@@ -61,7 +63,6 @@ export default function CreateRestaurantPage() {
   }
 
   if (user?.role !== 'owner') {
-    // Redirect if not an owner
     if (typeof window !== 'undefined') router.replace('/dashboard');
     return <LoadingSpinner className="m-auto h-10 w-10 text-primary" />;
   }
@@ -96,13 +97,24 @@ export default function CreateRestaurantPage() {
               />
               <FormField
                 control={form.control}
-                name="type"
+                name="outletType"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Restaurant Type (Optional)</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g., French, Pizzeria, Cafe" {...field} />
-                    </FormControl>
+                    <FormLabel>Type of Outlet</FormLabel>
+                     <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                        <SelectTrigger>
+                            <SelectValue placeholder="Select the type of your outlet" />
+                        </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                        {outletTypes.map((type) => (
+                            <SelectItem key={type.value} value={type.value}>
+                            {type.label}
+                            </SelectItem>
+                        ))}
+                        </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}
