@@ -13,13 +13,13 @@ import {
   Timestamp,
   writeBatch,
   where,
-  startOfDay,
-  endOfDay,
+  type WriteBatch, // Explicitly import WriteBatch type
 } from 'firebase/firestore';
 import { db } from './config';
 import type { InventoryItem, StockTransaction, StockTransactionType, UnitOfMeasure, OrderItem as ClientOrderItem, MenuItem, DailyStockSummary } from '@/types'; 
 import { convertFirebaseTimestampToString } from './utils';
 import { getMenuItemByIdFromGroup } from './menu'; 
+import { startOfDay, endOfDay } from 'date-fns'; // Import from date-fns
 
 const getInventoryCollectionPath = (restaurantId: string) => `restaurants/${restaurantId}/inventoryItems`;
 const getStockTransactionsCollectionPath = (restaurantId: string) => `restaurants/${restaurantId}/stockTransactions`;
@@ -183,25 +183,40 @@ async function addStockTransactionInternal(
   };
   localBatch.set(newTransactionRef, transactionPayload);
 
-  const itemSnap = await (batch ? batch.get(inventoryItemRef) : getDoc(inventoryItemRef));
-  
   let currentStock = 0;
-  if (itemSnap.exists()) {
-    currentStock = (itemSnap.data() as InventoryItem).currentStock;
-  } else if (transactionType !== 'initial_stock') {
-    console.warn(`Inventory item ${inventoryItemId} not found for transaction type ${transactionType}. Assuming 0 current stock.`);
-    // Optionally throw error or create item if policies allow
+  try {
+    const itemSnap = await (batch ? localBatch.get(inventoryItemRef) : getDoc(inventoryItemRef));
+     if (itemSnap && typeof (itemSnap as any).exists === 'function' && (itemSnap as any).exists()) { // Type guard for DocumentSnapshot
+      currentStock = ((itemSnap as any).data() as InventoryItem).currentStock;
+    } else if (transactionType !== 'initial_stock') {
+      console.warn(`Inventory item ${inventoryItemId} not found for transaction type ${transactionType}. Assuming 0 current stock.`);
+    }
+  } catch (e) {
+     // This can happen if the document doesn't exist and we're in a transaction.
+     // For initial_stock, this is fine. For others, it's a warning.
+     if (transactionType !== 'initial_stock') {
+        console.warn(`Error reading inventory item ${inventoryItemId} during transaction (might not exist yet):`, e);
+     }
   }
+
 
   const newStockLevel = currentStock + quantityChange;
 
-  localBatch.update(inventoryItemRef, {
-    currentStock: newStockLevel,
-    lastStockUpdatedAt: transactionDate, 
-    updatedAt: transactionDate, 
-  });
+  if (transactionType === 'initial_stock') {
+    localBatch.set(inventoryItemRef, {
+      currentStock: newStockLevel,
+      lastStockUpdatedAt: transactionDate,
+      updatedAt: transactionDate,
+    }, { merge: true });
+  } else {
+    localBatch.update(inventoryItemRef, {
+      currentStock: newStockLevel,
+      lastStockUpdatedAt: transactionDate, 
+      updatedAt: transactionDate, 
+    });
+  }
   
-  if (!batch) { // If we created the batch locally, commit it
+  if (!batch) { 
     await localBatch.commit();
   }
 
@@ -245,10 +260,8 @@ export async function deductStockForSoldItems(restaurantId: string, orderId: str
       const menuItem = menuItemResult.menuItem;
       for (const ingredient of menuItem.recipeIngredients) {
         const inventoryItemRef = doc(db, getInventoryCollectionPath(restaurantId), ingredient.inventoryItemId);
-        // In a real batched scenario, we might need to fetch item data before the loop or handle potential race conditions
-        // if multiple orders are processed simultaneously. For simplicity, direct getDoc here.
-        // For higher consistency, one might read all necessary inventory items first, then perform updates in batch.
-        const inventoryItemSnap = await getDoc(inventoryItemRef);
+        
+        const inventoryItemSnap = await getDoc(inventoryItemRef); // Read before batch operation
 
         if (inventoryItemSnap.exists()) {
           const inventoryItemData = inventoryItemSnap.data() as InventoryItem;
@@ -286,7 +299,7 @@ export async function getStockTransactions(restaurantId: string, inventoryItemId
     if (!db) throw new Error("Firestore is not initialized.");
     const transactionsCol = collection(db, getStockTransactionsCollectionPath(restaurantId));
     let q;
-    const queryConstraints: QueryConstraint[] = [orderBy('transactionDate', 'desc')];
+    const queryConstraints: any[] = [orderBy('transactionDate', 'desc')]; // Use any[] for queryConstraints
     if (inventoryItemId) {
         queryConstraints.unshift(where('inventoryItemId', '==', inventoryItemId));
     }
@@ -326,13 +339,13 @@ export async function getDailyStockTransactionSummary(restaurantId: string): Pro
   const transactionsCol = collection(db, getStockTransactionsCollectionPath(restaurantId));
   
   const today = new Date();
-  const startOfToday = Timestamp.fromDate(startOfDay(today));
-  const endOfToday = Timestamp.fromDate(endOfDay(today));
+  const startOfTodayTimestamp = Timestamp.fromDate(startOfDay(today));
+  const endOfTodayTimestamp = Timestamp.fromDate(endOfDay(today));
 
   const q = query(
     transactionsCol,
-    where('transactionDate', '>=', startOfToday),
-    where('transactionDate', '<=', endOfToday)
+    where('transactionDate', '>=', startOfTodayTimestamp),
+    where('transactionDate', '<=', endOfTodayTimestamp)
   );
 
   const snapshot = await getDocs(q);
