@@ -4,14 +4,14 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth/context';
-import { getRestaurant } from '@/lib/firebase/firestore';
-import type { RestaurantProfile } from '@/types';
+import { getRestaurant, updateRestaurantProfile } from '@/lib/firebase/firestore'; 
+import type { RestaurantProfile, TaxConfig, OutletType } from '@/types';
 import { outletTypes } from '@/types'; // Import outletTypes for display
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Store, Edit3, Utensils, Users, Settings as SettingsIcon, Info } from 'lucide-react'; 
+import { Store, Edit3, Utensils, Users, Settings as SettingsIcon, Info, Coffee, Zap, Beer } from 'lucide-react'; 
 import LoadingSpinner from '@/components/shared/loading-spinner';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
@@ -93,6 +93,24 @@ export default function RestaurantDetailsPage() {
 
   const currentOutletTypeLabel = outletTypes.find(ot => ot.value === restaurant.outletType)?.label || restaurant.outletType || 'Not specified';
 
+  const OutletFocusMessage = () => {
+    if (!restaurant.outletType) {
+        return <p className="text-sm text-muted-foreground">Outlet type not specified. General features apply.</p>;
+    }
+    switch (restaurant.outletType) {
+      case 'qsr':
+        return <p className="text-sm text-muted-foreground flex items-start"><Zap className="h-4 w-4 mr-2 mt-0.5 text-yellow-500 flex-shrink-0"/>Tailored for quick service and high efficiency. Streamlined ordering and fast preparation are key!</p>;
+      case 'cafe':
+        return <p className="text-sm text-muted-foreground flex items-start"><Coffee className="h-4 w-4 mr-2 mt-0.5 text-orange-700 flex-shrink-0"/>Emphasis on a cozy atmosphere, excellent coffee, and light bites. Customer experience is paramount.</p>;
+      case 'bar':
+        return <p className="text-sm text-muted-foreground flex items-start"><Beer className="h-4 w-4 mr-2 mt-0.5 text-amber-600 flex-shrink-0"/>Focus on beverage service, ambiance, and potentially bar snacks or a limited food menu.</p>;
+      case 'restaurant':
+        return <p className="text-sm text-muted-foreground flex items-start"><Utensils className="h-4 w-4 mr-2 mt-0.5 text-gray-600 flex-shrink-0"/>Geared towards a full dining experience, with a diverse menu and table service.</p>;
+      default:
+        return <p className="text-sm text-muted-foreground">This outlet type ({currentOutletTypeLabel}) has specific operational considerations. Features will be tailored soon.</p>;
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Card className="shadow-lg">
@@ -123,9 +141,19 @@ export default function RestaurantDetailsPage() {
                 className="w-full h-64 object-cover rounded-lg shadow-md"
                 data-ai-hint="restaurant interior"
             />
+            
+            <Card className="bg-muted/30 border-primary/10">
+              <CardHeader>
+                <CardTitle className="text-xl font-semibold text-foreground">Outlet Focus</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <OutletFocusMessage />
+              </CardContent>
+            </Card>
+
 
           {role === 'owner' && (
-            <form onSubmit={handleSaveChanges} className="space-y-6 max-w-2xl p-4 border rounded-lg bg-card">
+            <form onSubmit={handleSaveChanges} className="space-y-6 max-w-2xl p-4 border rounded-lg bg-card mt-8">
                 <h3 className="text-xl font-semibold mb-2 text-foreground">Edit Restaurant Details (Demo)</h3>
               <div>
                 <Label htmlFor="restaurantName">Restaurant Name</Label>
@@ -173,3 +201,4 @@ export default function RestaurantDetailsPage() {
     </div>
   );
 }
+
