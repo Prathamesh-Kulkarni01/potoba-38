@@ -15,8 +15,9 @@ import {
   where,
 } from 'firebase/firestore';
 import { db } from './config';
-import type { InventoryItem, StockTransaction, StockTransactionType } from '@/types'; 
+import type { InventoryItem, StockTransaction, StockTransactionType, UnitOfMeasure, OrderItem as ClientOrderItem, MenuItem } from '@/types'; 
 import { convertFirebaseTimestampToString } from './utils';
+import { getMenuItemByIdFromGroup } from './menu'; // To fetch menu item details
 
 const getInventoryCollectionPath = (restaurantId: string) => `restaurants/${restaurantId}/inventoryItems`;
 const getStockTransactionsCollectionPath = (restaurantId: string) => `restaurants/${restaurantId}/stockTransactions`;
@@ -40,15 +41,6 @@ export async function addInventoryItem(
 
   // Record initial stock as a transaction
   if (itemData.currentStock > 0) {
-    const transactionData: Omit<StockTransaction, 'id' | 'restaurantId' | 'transactionDate'> = {
-      inventoryItemId: docRef.id,
-      inventoryItemName: itemData.name,
-      transactionType: 'initial_stock',
-      quantity: itemData.currentStock,
-      unitOfMeasure: itemData.unitOfMeasure,
-      costPerUnitAtTransaction: itemData.costPerUnit,
-      notes: 'Initial stock entry',
-    };
     await addStockTransactionInternal(restaurantId, docRef.id, itemData.name, itemData.unitOfMeasure, 'initial_stock', itemData.currentStock, itemData.costPerUnit, 'Initial stock entry', null);
   }
 
@@ -111,10 +103,7 @@ export async function updateInventoryItem(
 
   const updateData:any = { ...data, updatedAt: serverTimestamp() };
 
-  // If currentStock is explicitly part of the update AND it's different from current
   if (data.currentStock !== undefined && data.currentStock !== currentItemData.currentStock) {
-    updateData.lastStockUpdatedAt = serverTimestamp();
-    // Record an adjustment transaction
     const stockDifference = data.currentStock - currentItemData.currentStock;
     const transactionType: StockTransactionType = stockDifference > 0 ? 'adjustment_in' : 'adjustment_out';
     
@@ -124,26 +113,19 @@ export async function updateInventoryItem(
       data.name || currentItemData.name, 
       data.unitOfMeasure || currentItemData.unitOfMeasure, 
       transactionType, 
-      stockDifference, // This is the change, not the new total
+      stockDifference,
       data.costPerUnit !== undefined ? data.costPerUnit : currentItemData.costPerUnit,
       'Manual stock adjustment',
-      null // No user ID for now
+      null 
     );
-    // The addStockTransactionInternal will handle updating the item's stock again via batch, which is slightly redundant here
-    // but ensures the transaction is logged. We'll just let it run.
-    // The updateDoc below will then ensure other fields (like name, category etc.) are updated.
   }
-  // The update of currentStock on the item itself is now handled by addStockTransactionInternal if stock changed.
-  // If only other fields changed, this updateDoc will handle it.
-  // If stock changed, addStockTransactionInternal already updated currentStock and lastStockUpdatedAt.
-  // We only need to update other non-stock fields if they are present in 'data'.
   const nonStockData: Partial<Omit<InventoryItem, 'currentStock'>> = {...data};
-  delete (nonStockData as any).currentStock; // remove currentStock if it was part of data
+  delete (nonStockData as any).currentStock; 
 
   if (Object.keys(nonStockData).length > 0) {
     await updateDoc(itemRef, {...nonStockData, updatedAt: serverTimestamp()});
-  } else if (data.currentStock === undefined) { // if only non-stock fields were in `data` and there were none
-     await updateDoc(itemRef, { updatedAt: serverTimestamp() }); // just update timestamp
+  } else if (data.currentStock === undefined) { 
+     await updateDoc(itemRef, { updatedAt: serverTimestamp() });
   }
 
 }
@@ -155,7 +137,6 @@ export async function deleteInventoryItem(restaurantId: string, itemId: string):
   const itemRef = doc(db, getInventoryCollectionPath(restaurantId), itemId);
   batch.delete(itemRef);
 
-  // Optionally, delete related stock transactions
   const transactionsCol = collection(db, getStockTransactionsCollectionPath(restaurantId));
   const q = query(transactionsCol, where('inventoryItemId', '==', itemId));
   const transactionsSnapshot = await getDocs(q);
@@ -164,15 +145,13 @@ export async function deleteInventoryItem(restaurantId: string, itemId: string):
   await batch.commit();
 }
 
-
-// Internal helper for adding stock transaction and updating item stock atomically
 async function addStockTransactionInternal(
   restaurantId: string,
   inventoryItemId: string,
   inventoryItemName: string,
   unitOfMeasure: UnitOfMeasure,
   transactionType: StockTransactionType,
-  quantity: number, // Can be positive (purchase, adj_in) or negative (sale, wastage, adj_out)
+  quantityChange: number, 
   costPerUnitAtTransaction?: number | null,
   notes?: string | null,
   userId?: string | null,
@@ -187,15 +166,14 @@ async function addStockTransactionInternal(
   
   const batch = writeBatch(db);
 
-  // 1. Create new StockTransaction document
-  const newTransactionRef = doc(transactionsCol); // Auto-generate ID
+  const newTransactionRef = doc(transactionsCol); 
   const transactionPayload: StockTransaction = {
-    id: newTransactionRef.id, // Will be overwritten by Firestore, but good for type
+    id: newTransactionRef.id, 
     restaurantId,
     inventoryItemId,
     inventoryItemName,
     transactionType,
-    quantity,
+    quantity: quantityChange, // Store the change in quantity
     unitOfMeasure,
     transactionDate,
     costPerUnitAtTransaction: costPerUnitAtTransaction === undefined ? null : costPerUnitAtTransaction,
@@ -206,27 +184,22 @@ async function addStockTransactionInternal(
   };
   batch.set(newTransactionRef, transactionPayload);
 
-  // 2. Update InventoryItem's currentStock and lastStockUpdatedAt
-  // It's safer to read the current stock within a transaction if this function were to be called concurrently
-  // For now, we assume it's called in contexts where a prior read of item might be stale if not careful.
-  // A more robust solution would use Firestore transactions if direct concurrent updates are expected.
-  // However, batch writes are atomic for these two operations.
-  const itemSnap = await getDoc(inventoryItemRef);
+  const itemSnap = await getDoc(inventoryItemRef); // Get current stock inside the transaction logic if not using Firestore transactions
   if (!itemSnap.exists()) {
     throw new Error(`Inventory item with ID ${inventoryItemId} not found during transaction.`);
   }
   const currentItemData = itemSnap.data() as InventoryItem;
-  const newStockLevel = currentItemData.currentStock + quantity;
+  const newStockLevel = currentItemData.currentStock + quantityChange; // Apply the change
 
   batch.update(inventoryItemRef, {
     currentStock: newStockLevel,
-    lastStockUpdatedAt: transactionDate, // Use transaction date as the last stock update time
-    updatedAt: transactionDate, // Also update the item's general updatedAt
+    lastStockUpdatedAt: transactionDate, 
+    updatedAt: transactionDate, 
   });
   
   await batch.commit();
 
-  return { ...transactionPayload, id: newTransactionRef.id }; // Return with the actual ID
+  return { ...transactionPayload, id: newTransactionRef.id }; 
 }
 
 export async function recordPurchase(
@@ -235,7 +208,7 @@ export async function recordPurchase(
   quantityReceived: number,
   costPerUnit: number | null,
   notes?: string | null,
-  supplierName?: string | null // Simple supplier name for now
+  supplierName?: string | null 
 ) {
   const item = await getInventoryItem(restaurantId, inventoryItemId);
   if (!item) throw new Error(`Item ${inventoryItemId} not found.`);
@@ -246,11 +219,66 @@ export async function recordPurchase(
     item.name,
     item.unitOfMeasure,
     'purchase',
-    quantityReceived,
+    quantityReceived, // Positive for purchase
     costPerUnit,
     notes || `Purchased from ${supplierName || 'supplier'}`,
-    null // userId - can be added if a user is logged in performing this
+    null 
   );
+}
+
+export async function deductStockForSoldItems(restaurantId: string, orderId: string, orderItems: ClientOrderItem[]): Promise<void> {
+  if (!db) throw new Error("Firestore is not initialized.");
+  if (orderItems.length === 0) return;
+
+  const batch = writeBatch(db);
+  let transactionCount = 0;
+
+  for (const orderItem of orderItems) {
+    const menuItemResult = await getMenuItemByIdFromGroup(orderItem.menuItemId);
+    if (menuItemResult && menuItemResult.menuItem.recipeIngredients && menuItemResult.menuItem.recipeIngredients.length > 0) {
+      const menuItem = menuItemResult.menuItem;
+      for (const ingredient of menuItem.recipeIngredients) {
+        const inventoryItemRef = doc(db, getInventoryCollectionPath(restaurantId), ingredient.inventoryItemId);
+        const inventoryItemSnap = await getDoc(inventoryItemRef); // Ideally use transaction.get if in a Firestore transaction
+
+        if (inventoryItemSnap.exists()) {
+          const inventoryItemData = inventoryItemSnap.data() as InventoryItem;
+          // TODO: Unit conversion logic if ingredient.unitOfMeasureUsed is different from inventoryItemData.unitOfMeasure
+          const quantityToDeduct = ingredient.quantityUsed * orderItem.quantity;
+
+          // Create stock transaction document
+          const transactionRef = doc(collection(db, getStockTransactionsCollectionPath(restaurantId)));
+          const transactionData: Omit<StockTransaction, 'id' | 'restaurantId' | 'transactionDate'> = {
+            inventoryItemId: ingredient.inventoryItemId,
+            inventoryItemName: ingredient.inventoryItemName,
+            transactionType: 'sale_usage',
+            quantity: -quantityToDeduct, // Negative for deduction
+            unitOfMeasure: ingredient.unitOfMeasureUsed, // Or inventoryItemData.unitOfMeasure if no conversion
+            costPerUnitAtTransaction: inventoryItemData.costPerUnit, // Use current cost
+            relatedOrderId: orderId,
+            notes: `Used in ${orderItem.quantity}x ${menuItem.name}`,
+          };
+          batch.set(transactionRef, { ...transactionData, restaurantId, transactionDate: serverTimestamp()});
+          transactionCount++;
+
+          // Update inventory item stock
+          const newStock = inventoryItemData.currentStock - quantityToDeduct;
+          batch.update(inventoryItemRef, {
+            currentStock: newStock,
+            lastStockUpdatedAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+        } else {
+          console.warn(`Inventory item ${ingredient.inventoryItemId} for menu item ${menuItem.name} not found.`);
+        }
+      }
+    }
+  }
+
+  if (transactionCount > 0) {
+    await batch.commit();
+    console.log(`Successfully deducted stock for ${transactionCount} ingredients for order ${orderId}.`);
+  }
 }
 
 

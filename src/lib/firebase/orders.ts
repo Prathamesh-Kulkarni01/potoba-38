@@ -1,7 +1,5 @@
+
 // src/lib/firebase/orders.ts
-// Removed 'use server' directive as listenToRestaurantOrders uses onSnapshot (client-side listener)
-// and server actions must be async. If other functions in this file were intended as server actions
-// for form submissions, they might need to be refactored or this file split.
 
 import {
   collection,
@@ -31,6 +29,7 @@ import { startOfDay, endOfDay, subDays } from 'date-fns';
 import { getRestaurant } from './firestore';
 import { getMenuCategories } from './menu';
 import { calculateOrderTaxes } from '../taxEngine';
+import { deductStockForSoldItems } from './inventory'; // Import the new function
 
 const safeString = (value: any): string | undefined => typeof value === 'string' ? value : undefined;
 const safeNumber = (value: any): number | undefined => typeof value === 'number' && !isNaN(value) ? value : undefined;
@@ -73,23 +72,17 @@ export async function createOrder(restaurantId: string, orderData: Omit<Order, '
   const createdAt = serverTimestamp(); 
   const updatedAt = serverTimestamp(); 
 
-  // --- TAX ENGINE INTEGRATION ---
-  // 1. Fetch restaurant profile (with taxes)
   const restaurant = await getRestaurant(restaurantId);
   if (!restaurant) throw new Error('Restaurant not found');
-  // 2. Fetch all categories for this restaurant
   const categories = await getMenuCategories(restaurantId);
   const categoryMap = Object.fromEntries(categories.map(cat => [cat.id, cat]));
-  // 3. Prepare items for tax engine (need MenuItem shape)
-  //    orderData.items: OrderItem[] (need to fetch MenuItem for each)
-  //    For now, assume orderData.items have enough info (id, price, categoryId, taxOverrides)
-  //    If not, you may need to fetch each MenuItem by id
+  
   const itemsForTax = orderData.items.map(item => ({
     item: {
       id: item.menuItemId,
       itemIdString: item.menuItemId,
       restaurantId,
-      categoryId: (item as any).categoryId || '', // Use categoryId from OrderItem if present
+      categoryId: (item as any).categoryId || '', 
       name: item.menuItemName,
       description: '',
       price: item.unitPrice,
@@ -97,7 +90,7 @@ export async function createOrder(restaurantId: string, orderData: Omit<Order, '
       order: 0,
       createdAt: createdAt as Timestamp,
       updatedAt: updatedAt as Timestamp,
-      // taxOverrides: ... // If you have this info, pass it
+      taxOverrides: (item as any).taxOverrides || undefined,
     },
     quantity: item.quantity,
   }));
@@ -122,6 +115,16 @@ export async function createOrder(restaurantId: string, orderData: Omit<Order, '
   };
 
   const docRef = await addDoc(ordersCol, dataToSave);
+  
+  // After order is created, deduct stock
+  try {
+    await deductStockForSoldItems(restaurantId, docRef.id, orderData.items as ClientOrderItem[]);
+  } catch (error) {
+    console.error(`Failed to deduct stock for order ${docRef.id}:`, error);
+    // Decide on error handling: should order creation fail? Or just log?
+    // For now, we'll let the order be created and log the stock deduction error.
+  }
+
   return {
     id: docRef.id,
     ...orderData, 
@@ -395,8 +398,8 @@ export function listenToRestaurantOrders(
     callback(orders);
   }, (error) => {
     console.error(`Error listening to orders for restaurant ${restaurantId}:`, error);
-    // Optionally, you could propagate this error to the UI
   });
 
   return unsubscribe;
 }
+

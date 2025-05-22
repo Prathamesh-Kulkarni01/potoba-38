@@ -108,6 +108,13 @@ export interface AvailabilityRule {
   endTime: string;   
 }
 
+export interface RecipeIngredientItem {
+  inventoryItemId: string;
+  inventoryItemName: string; // For display convenience
+  quantityUsed: number;
+  unitOfMeasureUsed: UnitOfMeasure; // Unit used in recipe (e.g., 'g', 'ml', 'pcs')
+}
+
 export interface MenuItem {
   id: string; 
   itemIdString: string; 
@@ -128,6 +135,7 @@ export interface MenuItem {
   upsellItems?: string[]; 
   variants?: MenuItemVariant[]; 
   availabilitySchedule?: AvailabilityRule[]; 
+  recipeIngredients?: RecipeIngredientItem[]; // Added for recipe mapping
   isVegetarian?: boolean | null;
   currency?: string | null;
   portionSize?: string | null;
@@ -309,7 +317,7 @@ export interface StockTransaction {
   inventoryItemId: string;
   inventoryItemName: string; 
   transactionType: StockTransactionType;
-  quantity: number; // Positive for additions, negative for deductions
+  quantity: number; // Positive for additions, negative for deductions (sale_usage, wastage, adjustment_out, transfer_out are negative)
   unitOfMeasure: UnitOfMeasure; 
   transactionDate: Timestamp;
   costPerUnitAtTransaction?: number | null; 

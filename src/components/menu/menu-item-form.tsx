@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -12,14 +13,16 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import type { MenuItem, MenuItemVariant, AvailabilityRule, MenuItemVariantOption, TaxConfig, RestaurantProfile } from '@/types';
+import type { MenuItem, MenuItemVariant, AvailabilityRule, MenuItemVariantOption, TaxConfig, RestaurantProfile, RecipeIngredientItem, InventoryItem, UnitOfMeasure } from '@/types';
+import { unitsOfMeasure } from '@/types';
 import LoadingSpinner from '@/components/shared/loading-spinner';
-import { Sparkles, PlusCircle, Trash2 } from 'lucide-react';
+import { Sparkles, PlusCircle, Trash2, ClipboardList } from 'lucide-react';
 import { generateMenuItemDescription } from '@/ai/flows/generate-menu-item-description-flow';
 import { useToast } from '@/hooks/use-toast';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card } from '../ui/card';
 import { MultiSelect } from '@/components/ui/multiselect';
+import { getInventoryItems } from '@/lib/firebase/inventory'; // For fetching inventory items
 
 const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/; // HH:mm format
 
@@ -42,6 +45,15 @@ const availabilityRuleSchema = z.object({
   path: ["endTime"],
 });
 
+const recipeIngredientItemSchema = z.object({
+  inventoryItemId: z.string().min(1, "Inventory item ID is required."),
+  inventoryItemName: z.string().min(1, "Inventory item name is required."),
+  quantityUsed: z.coerce.number().positive("Quantity must be positive."),
+  unitOfMeasureUsed: z.custom<UnitOfMeasure>((val) => unitsOfMeasure.map(u => u.value).includes(val as UnitOfMeasure), {
+    message: "Please select a valid unit of measure.",
+  }),
+});
+
 const menuItemFormSchema = z.object({
   name: z.string().min(1, { message: 'Item name is required.' }),
   description: z.string().optional(),
@@ -59,6 +71,7 @@ const menuItemFormSchema = z.object({
 
   variants: z.array(menuItemVariantSchema).optional(),
   availabilitySchedule: z.array(availabilityRuleSchema).optional(),
+  recipeIngredients: z.array(recipeIngredientItemSchema).optional(),
 });
 
 export type MenuItemFormValues = z.infer<typeof menuItemFormSchema>;
@@ -77,6 +90,7 @@ interface MenuItemFormProps {
 }
 
 export default function MenuItemForm({
+  restaurantId, // Added restaurantId to props
   menuItem,
   onSubmit,
   onClose,
@@ -86,6 +100,8 @@ export default function MenuItemForm({
   const { toast } = useToast();
   const [isGeneratingDescription, setIsGeneratingDescription] = useState(false);
   const [taxOverrides, setTaxOverrides] = useState<TaxConfig[]>(menuItem?.taxOverrides || []);
+  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
+  const [inventoryLoading, setInventoryLoading] = useState(false);
 
   const form = useForm<MenuItemFormValues>({
     resolver: zodResolver(menuItemFormSchema),
@@ -104,18 +120,36 @@ export default function MenuItemForm({
       upsellItems: menuItem?.upsellItems || [],
       variants: menuItem?.variants || [],
       availabilitySchedule: menuItem?.availabilitySchedule || [],
+      recipeIngredients: menuItem?.recipeIngredients || [],
     },
   });
 
   const { fields: variantFields, append: appendVariant, remove: removeVariant } = useFieldArray({
-    control: form.control,
-    name: "variants",
+    control: form.control, name: "variants",
   });
-
   const { fields: scheduleFields, append: appendSchedule, remove: removeSchedule } = useFieldArray({
-    control: form.control,
-    name: "availabilitySchedule",
+    control: form.control, name: "availabilitySchedule",
   });
+  const { fields: ingredientFields, append: appendIngredient, remove: removeIngredient } = useFieldArray({
+    control: form.control, name: "recipeIngredients",
+  });
+  
+  useEffect(() => {
+    const fetchInvItems = async () => {
+      if (restaurantId) {
+        setInventoryLoading(true);
+        try {
+          const items = await getInventoryItems(restaurantId);
+          setInventoryItems(items);
+        } catch (error) {
+          toast({ variant: "destructive", title: "Error", description: "Could not load inventory items." });
+        } finally {
+          setInventoryLoading(false);
+        }
+      }
+    };
+    fetchInvItems();
+  }, [restaurantId, toast]);
 
 
   const handleGenerateDescription = async () => {
@@ -143,6 +177,7 @@ export default function MenuItemForm({
       calories: values.calories === null || values.calories === undefined || isNaN(values.calories) ? undefined : Number(values.calories),
       variants: values.variants && values.variants.length > 0 ? values.variants : undefined,
       availabilitySchedule: values.availabilitySchedule && values.availabilitySchedule.length > 0 ? values.availabilitySchedule : undefined,
+      recipeIngredients: values.recipeIngredients && values.recipeIngredients.length > 0 ? values.recipeIngredients : undefined,
       taxOverrides,
     };
      if (dataToSubmit.imageUrl === '') dataToSubmit.imageUrl = null;
@@ -153,7 +188,6 @@ export default function MenuItemForm({
   
   const daysOfWeek: AvailabilityRule['dayOfWeek'][] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun', 'Everyday'];
 
-
   return (
     <DialogContent className="sm:max-w-3xl">
       <DialogHeader>
@@ -162,9 +196,10 @@ export default function MenuItemForm({
       <Form {...form}>
         <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-0">
           <Tabs defaultValue="general" className="w-full">
-            <TabsList className="grid w-full grid-cols-4">
+            <TabsList className="grid w-full grid-cols-5"> {/* Adjusted grid-cols */}
               <TabsTrigger value="general">General</TabsTrigger>
               <TabsTrigger value="variants">Variants</TabsTrigger>
+              <TabsTrigger value="recipe">Recipe</TabsTrigger> {/* Added Recipe Tab */}
               <TabsTrigger value="availability">Availability</TabsTrigger>
               <TabsTrigger value="advanced">Advanced</TabsTrigger>
             </TabsList>
@@ -222,6 +257,53 @@ export default function MenuItemForm({
                 ))}
                 <Button type="button" variant="outline" onClick={() => appendVariant({ name: '', options: [{ name: '', price: 0 }] })}><PlusCircle className="mr-2 h-4 w-4" /> Add Variant Type</Button>
               </TabsContent>
+              
+              <TabsContent value="recipe" className="space-y-4 p-1">
+                <div className="flex items-center justify-between">
+                    <h4 className="text-md font-semibold">Recipe Ingredients</h4>
+                    <Button type="button" variant="outline" size="sm" onClick={() => appendIngredient({ inventoryItemId: '', inventoryItemName: '', quantityUsed: 1, unitOfMeasureUsed: 'g' })} disabled={inventoryLoading}>
+                        <ClipboardList className="mr-2 h-4 w-4" /> Add Ingredient
+                    </Button>
+                </div>
+                {inventoryLoading && <LoadingSpinner className="mx-auto my-4 h-6 w-6 text-primary" />}
+                {ingredientFields.map((ingredientField, index) => (
+                  <Card key={ingredientField.id} className="p-3 space-y-2 bg-muted/50">
+                    <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_auto] gap-2 items-end">
+                      <FormField
+                        control={form.control}
+                        name={`recipeIngredients.${index}.inventoryItemId`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-xs">Ingredient</FormLabel>
+                            <Select
+                              onValueChange={(value) => {
+                                const selectedInvItem = inventoryItems.find(inv => inv.id === value);
+                                field.onChange(value);
+                                form.setValue(`recipeIngredients.${index}.inventoryItemName`, selectedInvItem?.name || '');
+                                form.setValue(`recipeIngredients.${index}.unitOfMeasureUsed`, selectedInvItem?.unitOfMeasure || 'g');
+                              }}
+                              defaultValue={field.value}
+                            >
+                              <FormControl><SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Select ingredient" /></SelectTrigger></FormControl>
+                              <SelectContent>
+                                {inventoryItems.map(invItem => (
+                                  <SelectItem key={invItem.id} value={invItem.id} className="text-xs">{invItem.name} ({invItem.unitOfMeasure})</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                       <FormField control={form.control} name={`recipeIngredients.${index}.quantityUsed`} render={({ field }) => ( <FormItem> <FormLabel className="text-xs">Qty Used</FormLabel> <FormControl><Input type="number" step="any" placeholder="e.g., 100" {...field} className="h-9 text-xs" /></FormControl> <FormMessage /> </FormItem> )} />
+                       <FormField control={form.control} name={`recipeIngredients.${index}.unitOfMeasureUsed`} render={({ field }) => ( <FormItem> <FormLabel className="text-xs">Unit</FormLabel> <Select onValueChange={field.onChange} defaultValue={field.value}> <FormControl><SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Unit" /></SelectTrigger></FormControl> <SelectContent>{unitsOfMeasure.map(unit => (<SelectItem key={unit.value} value={unit.value} className="text-xs">{unit.label}</SelectItem>))}</SelectContent> </Select> <FormMessage /> </FormItem> )} />
+                      <Button type="button" variant="ghost" size="icon" onClick={() => removeIngredient(index)} className="h-9 w-9 p-0 text-destructive hover:text-destructive/80"><Trash2 className="h-4 w-4" /></Button>
+                    </div>
+                  </Card>
+                ))}
+                {ingredientFields.length === 0 && !inventoryLoading && <p className="text-sm text-muted-foreground text-center py-3">No ingredients added for this recipe yet.</p>}
+              </TabsContent>
+
 
               <TabsContent value="availability" className="space-y-4 p-1">
                  <FormField control={form.control} name="availability" render={({ field }) => ( <FormItem className="flex flex-row items-center space-x-3 space-y-0 rounded-md border p-3 shadow-sm bg-card"> <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl> <div className="space-y-1 leading-none"><FormLabel>Globally Available</FormLabel><FormDescription>Master switch to make item available/unavailable.</FormDescription></div> </FormItem> )} />

@@ -1,3 +1,4 @@
+
 import {
   collection,
   addDoc,
@@ -19,7 +20,7 @@ import {
   documentId, 
 } from 'firebase/firestore';
 import { db } from './config';
-import type { MenuCategory, MenuSubcategory, MenuItem, MenuItemVariant, AvailabilityRule } from '@/types';
+import type { MenuCategory, MenuSubcategory, MenuItem, MenuItemVariant, AvailabilityRule, RecipeIngredientItem } from '@/types';
 
 // --- MenuCategory Functions ---
 
@@ -238,6 +239,8 @@ export async function addMenuItem(
 
   if (!itemData.variants || itemData.variants.length === 0) delete dataToSave.variants;
   if (!itemData.availabilitySchedule || itemData.availabilitySchedule.length === 0) delete dataToSave.availabilitySchedule;
+  if (!itemData.recipeIngredients || itemData.recipeIngredients.length === 0) delete dataToSave.recipeIngredients;
+
 
   await setDoc(newMenuItemDocRef, dataToSave); 
 
@@ -299,7 +302,7 @@ export async function updateMenuItem(
         cleanedData[key] = null;
     }
     
-    if ((key === 'variants' || key === 'availabilitySchedule' || key === 'dietaryTags' || key === 'allergenInfo' || key === 'crossSellItems' || key === 'upsellItems') && (!cleanedData[key] || (Array.isArray(cleanedData[key]) && cleanedData[key].length === 0))) {
+    if ((key === 'variants' || key === 'availabilitySchedule' || key === 'dietaryTags' || key === 'allergenInfo' || key === 'crossSellItems' || key === 'upsellItems' || key === 'recipeIngredients') && (!cleanedData[key] || (Array.isArray(cleanedData[key]) && cleanedData[key].length === 0))) {
        cleanedData[key] = null; 
     }
   });
@@ -418,6 +421,7 @@ export async function batchAddMenuItems(restaurantId: string, itemsToImport: Arr
       upsellItems: [],
       variants: [],
       availabilitySchedule: [],
+      recipeIngredients: [], // Initialize empty for batch import
     };
     
     const dataToSave = {
