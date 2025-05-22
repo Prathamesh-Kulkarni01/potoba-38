@@ -17,7 +17,7 @@ import {
   type QueryConstraint,
 } from 'firebase/firestore';
 import { db } from './config';
-import type { InventoryItem, StockTransaction, StockTransactionType, UnitOfMeasure, OrderItem as ClientOrderItem, MenuItem, DailyStockSummary, SupplierInfo, InventoryItemCategory } from '@/types'; 
+import type { InventoryItem, StockTransaction, StockTransactionType, UnitOfMeasure, OrderItem as ClientOrderItem, MenuItem, DailyStockSummary, SupplierInfo, InventoryItemCategory, RecipeIngredientItem } from '@/types'; 
 import { convertFirebaseTimestampToString } from './utils';
 import { getMenuItemByIdFromGroup } from './menu'; 
 import { startOfDay, endOfDay } from 'date-fns';
@@ -139,7 +139,7 @@ export async function updateInventoryItem(
       data.name || currentItemData.name, 
       data.unitOfMeasure || currentItemData.unitOfMeasure, 
       transactionType, 
-      stockDifference, // This is the change amount, not the new total
+      stockDifference, 
       data.costPerUnit !== undefined ? data.costPerUnit : currentItemData.costPerUnit,
       'Manual stock adjustment via item edit',
       null,
@@ -177,7 +177,7 @@ async function addStockTransactionInternal(
   costPerUnitAtTransaction?: number | null,
   notes?: string | null,
   userId?: string | null,
-  batchParam?: WriteBatch, // Optional batch for atomicity
+  batchParam?: WriteBatch, 
   relatedOrderId?: string | null,
   relatedPurchaseId?: string | null,
   supplierName?: string | null,
@@ -200,7 +200,7 @@ async function addStockTransactionInternal(
     inventoryItemId,
     inventoryItemName,
     transactionType,
-    quantity: quantityChange, // This should be the change amount (+ve for in, -ve for out)
+    quantity: quantityChange, 
     unitOfMeasure,
     transactionDate,
     costPerUnitAtTransaction: costPerUnitAtTransaction === undefined ? null : costPerUnitAtTransaction,
@@ -217,26 +217,29 @@ async function addStockTransactionInternal(
   localBatch.set(newTransactionRef, transactionPayload);
 
   let currentStock = 0;
-  if (transactionType !== 'initial_stock') {
-    // For existing items, we need to fetch the current stock to calculate the new stock.
-    // This read should happen *before* the batch update if not part of the same transaction creation.
-    // If this is part of a larger batched operation where inventoryItemRef might not exist yet
-    // or is being created in the same batch, this logic might need adjustment.
-    // For isolated stock transactions, this is generally fine.
-    const itemSnap = await getDoc(inventoryItemRef); // Read current stock if item exists
-    if (itemSnap.exists()) {
-      currentStock = (itemSnap.data() as InventoryItem).currentStock;
-    } else if (transactionType !== 'purchase' && transactionType !== 'adjustment_in'){ 
-      // If it's an outflow and item doesn't exist, that's an issue.
-      // For purchase/adj_in, it might be okay if this function is called right after item creation in same batch
-      console.warn(`Inventory item ${inventoryItemId} not found for transaction type ${transactionType}. Assuming 0 current stock for update, but this might be an error.`);
+  // If this is part of a larger batch (like creating an item AND its initial stock),
+  // the item might not exist yet when getDoc is called.
+  // We rely on transaction for atomic update of stock level.
+  if (!batchParam || transactionType !== 'initial_stock') {
+    try {
+      const itemSnap = await (batchParam ? (batchParam as any)._firestore.getDocFromServer(inventoryItemRef) : getDoc(inventoryItemRef));
+      if (itemSnap.exists()) {
+        currentStock = (itemSnap.data() as InventoryItem).currentStock;
+      } else if (transactionType !== 'purchase' && transactionType !== 'adjustment_in' && transactionType !== 'initial_stock'){ 
+        console.warn(`Inventory item ${inventoryItemId} not found for transaction type ${transactionType}. Assuming 0 current stock for update, but this might be an error.`);
+      }
+    } catch (e) {
+       // This can happen if the document doesn't exist yet and we're in a transaction/batch that's creating it.
+       // In this case, currentStock remains 0, which is correct for an initial_stock or first purchase.
+       if (transactionType !== 'initial_stock' && transactionType !== 'purchase' && transactionType !== 'adjustment_in') {
+         console.warn(`Failed to read inventory item ${inventoryItemId} during transaction, assuming 0 stock. Error: ${e}`);
+       }
     }
   }
   
   const newStockLevel = currentStock + quantityChange;
 
-  // Update the main inventory item's stock level and last update timestamp
-  localBatch.set(inventoryItemRef, { // Use set with merge:true or update
+  localBatch.set(inventoryItemRef, { 
     currentStock: newStockLevel,
     lastStockUpdatedAt: transactionDate,
     updatedAt: transactionDate,
@@ -252,7 +255,7 @@ async function addStockTransactionInternal(
 export async function recordPurchase(
   restaurantId: string,
   inventoryItemId: string,
-  quantityReceived: number, // Should be positive
+  quantityReceived: number, 
   costPerUnit: number | null,
   notes?: string | null,
   supplierName?: string | null,
@@ -270,13 +273,13 @@ export async function recordPurchase(
     item.name,
     item.unitOfMeasure,
     'purchase',
-    quantityReceived, // Positive for purchase
+    quantityReceived, 
     costPerUnit,
     notes,
-    null, // userId
-    undefined, // No batch passed from here
-    undefined, // relatedOrderId
-    undefined, // relatedPurchaseId (could be self-referential if we create a purchase doc)
+    null, 
+    undefined, 
+    undefined, 
+    undefined, 
     supplierName,
     invoiceNumber,
     batchNumber,
@@ -288,10 +291,10 @@ export async function recordPurchase(
 export async function recordStockOutflow(
   restaurantId: string,
   inventoryItemId: string,
-  quantityOut: number, // Should be positive (will be converted to negative internally)
+  quantityOut: number, 
   transactionType: 'wastage' | 'adjustment_out' | 'internal_consumption',
   notes?: string | null,
-  userId?: string | null // Optional user ID who performed the action
+  userId?: string | null 
 ): Promise<StockTransaction> {
   const item = await getInventoryItem(restaurantId, inventoryItemId);
   if (!item) throw new Error(`Inventory item ${inventoryItemId} not found.`);
@@ -303,11 +306,11 @@ export async function recordStockOutflow(
     item.name,
     item.unitOfMeasure,
     transactionType,
-    -Math.abs(quantityOut), // Ensure it's negative for outflow
-    item.costPerUnit, // Use current cost for valuation of outflow
+    -Math.abs(quantityOut), 
+    item.costPerUnit, 
     notes,
     userId,
-    undefined // No batch passed from here
+    undefined 
   );
 }
 
@@ -320,33 +323,41 @@ export async function deductStockForSoldItems(restaurantId: string, orderId: str
   let transactionCount = 0;
 
   for (const orderItem of orderItems) {
-    // Assuming getMenuItemByIdFromGroup is efficient and fetches necessary data.
-    // If not, consider fetching all menu items once or optimizing this lookup.
     const menuItemResult = await getMenuItemByIdFromGroup(orderItem.menuItemId); 
     
     if (menuItemResult && menuItemResult.menuItem.recipeIngredients && menuItemResult.menuItem.recipeIngredients.length > 0) {
       const menuItem = menuItemResult.menuItem;
       for (const ingredient of menuItem.recipeIngredients) {
-        // Note: Reading inventoryItemData inside the loop to get costPerUnit for each transaction.
-        // This could be optimized if performance becomes an issue by fetching all relevant inventory items upfront.
+        // UNIT CONVERSION LOGIC NEEDED HERE for advanced system
+        // For now, assumes recipe unit directly matches inventory unit or is manually converted by user input
+        // e.g., if InventoryItem 'Flour' is in KG, and recipe needs 500g,
+        // RecipeIngredientItem should be { inventoryItemId: 'flour_id', quantityUsed: 0.5, unitOfMeasureUsed: 'kg' }
+        // OR { inventoryItemId: 'flour_id', quantityUsed: 500, unitOfMeasureUsed: 'g' } AND 'Flour' is stocked in 'g'.
+        // A proper conversion system would look up conversion factors (e.g., 1kg = 1000g).
         const inventoryItemRef = doc(db, getInventoryCollectionPath(restaurantId), ingredient.inventoryItemId);
-        const inventoryItemSnap = await getDoc(inventoryItemRef);
+        const inventoryItemSnap = await getDoc(inventoryItemRef); // Consider transaction read if in strict transaction
 
         if (inventoryItemSnap.exists()) {
           const inventoryItemData = inventoryItemSnap.data() as InventoryItem;
+          
+          // Basic check: if recipe unit is different than stock unit, log warning.
+          // This is a placeholder for a proper conversion system.
+          if (ingredient.unitOfMeasureUsed !== inventoryItemData.unitOfMeasure) {
+            console.warn(`Unit mismatch for ${inventoryItemData.name}: Stocked in ${inventoryItemData.unitOfMeasure}, recipe uses ${ingredient.unitOfMeasureUsed}. Assuming direct deduction. Implement unit conversion.`);
+          }
+
           const quantityToDeduct = ingredient.quantityUsed * orderItem.quantity;
 
-          // addStockTransactionInternal handles batching and updating currentStock
           await addStockTransactionInternal(
             restaurantId,
             ingredient.inventoryItemId,
-            ingredient.inventoryItemName, // Using the name stored in recipe for consistency
-            ingredient.unitOfMeasureUsed, 
+            ingredient.inventoryItemName, 
+            ingredient.unitOfMeasureUsed, // Using the unit from the recipe here
             'sale_usage',
-            -Math.abs(quantityToDeduct), // Ensure negative for deduction
-            inventoryItemData.costPerUnit, // Cost at the time of sale usage
+            -Math.abs(quantityToDeduct), 
+            inventoryItemData.costPerUnit, 
             `Used in ${orderItem.quantity}x ${menuItem.name}`,
-            null, // userId, could be system or cashier user
+            null, 
             batch,
             orderId
           );
@@ -389,7 +400,7 @@ export async function getStockTransactions(
     queryConstraints.push(where('transactionDate', '>=', Timestamp.fromDate(filters.startDate)));
   }
   if (filters?.endDate) {
-    const endOfDayForFilter = endOfDay(filters.endDate); // Ensure we capture the whole day
+    const endOfDayForFilter = endOfDay(filters.endDate); 
     queryConstraints.push(where('transactionDate', '<=', Timestamp.fromDate(endOfDayForFilter)));
   }
 

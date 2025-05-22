@@ -16,13 +16,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import type { MenuItem, MenuItemVariant, AvailabilityRule, MenuItemVariantOption, TaxConfig, RestaurantProfile, RecipeIngredientItem, InventoryItem, UnitOfMeasure } from '@/types';
 import { unitsOfMeasure } from '@/types';
 import LoadingSpinner from '@/components/shared/loading-spinner';
-import { Sparkles, PlusCircle, Trash2, ClipboardList } from 'lucide-react';
+import { Sparkles, PlusCircle, Trash2, ClipboardList, Info } from 'lucide-react';
 import { generateMenuItemDescription } from '@/ai/flows/generate-menu-item-description-flow';
 import { useToast } from '@/hooks/use-toast';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card } from '../ui/card';
 import { MultiSelect } from '@/components/ui/multiselect';
-import { getInventoryItems } from '@/lib/firebase/inventory'; // For fetching inventory items
+import { getInventoryItems } from '@/lib/firebase/inventory'; 
 
 const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/; // HH:mm format
 
@@ -90,7 +90,7 @@ interface MenuItemFormProps {
 }
 
 export default function MenuItemForm({
-  restaurantId, // Added restaurantId to props
+  restaurantId, 
   menuItem,
   onSubmit,
   onClose,
@@ -142,7 +142,7 @@ export default function MenuItemForm({
           const items = await getInventoryItems(restaurantId);
           setInventoryItems(items);
         } catch (error) {
-          toast({ variant: "destructive", title: "Error", description: "Could not load inventory items." });
+          toast({ variant: "destructive", title: "Error", description: "Could not load inventory items for recipe mapping." });
         } finally {
           setInventoryLoading(false);
         }
@@ -196,10 +196,10 @@ export default function MenuItemForm({
       <Form {...form}>
         <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-0">
           <Tabs defaultValue="general" className="w-full">
-            <TabsList className="grid w-full grid-cols-5"> {/* Adjusted grid-cols */}
+            <TabsList className="grid w-full grid-cols-5"> 
               <TabsTrigger value="general">General</TabsTrigger>
               <TabsTrigger value="variants">Variants</TabsTrigger>
-              <TabsTrigger value="recipe">Recipe</TabsTrigger> {/* Added Recipe Tab */}
+              <TabsTrigger value="recipe">Recipe</TabsTrigger> 
               <TabsTrigger value="availability">Availability</TabsTrigger>
               <TabsTrigger value="advanced">Advanced</TabsTrigger>
             </TabsList>
@@ -265,6 +265,21 @@ export default function MenuItemForm({
                         <ClipboardList className="mr-2 h-4 w-4" /> Add Ingredient
                     </Button>
                 </div>
+                 <div className="p-2 border border-blue-300 bg-blue-50 rounded-md text-blue-700 text-xs flex items-start gap-2">
+                  <Info className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                  <span>
+                    Link ingredients from your inventory to auto-deduct stock when this item is sold. 
+                    Ensure "Unit Used" matches how the inventory item is tracked (e.g., if Flour is in KG, and recipe uses 500g, enter 0.5 KG or 500 G depending on your inventory item's unit).
+                    Automatic unit conversion is planned for a future update.
+                  </span>
+                </div>
+                <div className="p-2 border border-yellow-400 bg-yellow-50 rounded-md text-yellow-800 text-xs flex items-start gap-2">
+                  <Info className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                  <span>
+                    Recipe costing (preview total cost per dish) will be available in a future update.
+                  </span>
+                </div>
+
                 {inventoryLoading && <LoadingSpinner className="mx-auto my-4 h-6 w-6 text-primary" />}
                 {ingredientFields.map((ingredientField, index) => (
                   <Card key={ingredientField.id} className="p-3 space-y-2 bg-muted/50">
@@ -280,6 +295,7 @@ export default function MenuItemForm({
                                 const selectedInvItem = inventoryItems.find(inv => inv.id === value);
                                 field.onChange(value);
                                 form.setValue(`recipeIngredients.${index}.inventoryItemName`, selectedInvItem?.name || '');
+                                // Set the unitOfMeasureUsed to the inventory item's unit by default
                                 form.setValue(`recipeIngredients.${index}.unitOfMeasureUsed`, selectedInvItem?.unitOfMeasure || 'g');
                               }}
                               defaultValue={field.value}
@@ -287,7 +303,7 @@ export default function MenuItemForm({
                               <FormControl><SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Select ingredient" /></SelectTrigger></FormControl>
                               <SelectContent>
                                 {inventoryItems.map(invItem => (
-                                  <SelectItem key={invItem.id} value={invItem.id} className="text-xs">{invItem.name} ({invItem.unitOfMeasure})</SelectItem>
+                                  <SelectItem key={invItem.id} value={invItem.id} className="text-xs">{invItem.name} (Stocked in: {unitsOfMeasure.find(u => u.value === invItem.unitOfMeasure)?.label || invItem.unitOfMeasure})</SelectItem>
                                 ))}
                               </SelectContent>
                             </Select>
@@ -296,7 +312,7 @@ export default function MenuItemForm({
                         )}
                       />
                        <FormField control={form.control} name={`recipeIngredients.${index}.quantityUsed`} render={({ field }) => ( <FormItem> <FormLabel className="text-xs">Qty Used</FormLabel> <FormControl><Input type="number" step="any" placeholder="e.g., 100" {...field} className="h-9 text-xs" /></FormControl> <FormMessage /> </FormItem> )} />
-                       <FormField control={form.control} name={`recipeIngredients.${index}.unitOfMeasureUsed`} render={({ field }) => ( <FormItem> <FormLabel className="text-xs">Unit</FormLabel> <Select onValueChange={field.onChange} defaultValue={field.value}> <FormControl><SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Unit" /></SelectTrigger></FormControl> <SelectContent>{unitsOfMeasure.map(unit => (<SelectItem key={unit.value} value={unit.value} className="text-xs">{unit.label}</SelectItem>))}</SelectContent> </Select> <FormMessage /> </FormItem> )} />
+                       <FormField control={form.control} name={`recipeIngredients.${index}.unitOfMeasureUsed`} render={({ field }) => ( <FormItem> <FormLabel className="text-xs">Unit Used</FormLabel> <Select onValueChange={field.onChange} value={field.value} /* defaultValue is already set when item is selected */ > <FormControl><SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Unit" /></SelectTrigger></FormControl> <SelectContent>{unitsOfMeasure.map(unit => (<SelectItem key={unit.value} value={unit.value} className="text-xs">{unit.label}</SelectItem>))}</SelectContent> </Select> <FormMessage /> </FormItem> )} />
                       <Button type="button" variant="ghost" size="icon" onClick={() => removeIngredient(index)} className="h-9 w-9 p-0 text-destructive hover:text-destructive/80"><Trash2 className="h-4 w-4" /></Button>
                     </div>
                   </Card>
@@ -353,3 +369,4 @@ export default function MenuItemForm({
     </DialogContent>
   );
 }
+
