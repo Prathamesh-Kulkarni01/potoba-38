@@ -7,7 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { useAuth, type UserRole } from "@/lib/auth/context";
-import AppLoadingScreen from '@/components/shared/app-loading-screen'; 
+import AppLoadingScreen from '@/components/shared/app-loading-screen';
 import UserNav from "@/components/dashboard/user-nav";
 import {
   SidebarProvider,
@@ -19,7 +19,7 @@ import {
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
-  SidebarMenuSubContent, 
+  SidebarMenuSubContent,
   SidebarMenuBadge,
   SidebarSeparator,
   SidebarInset,
@@ -54,20 +54,21 @@ import {
   ListOrdered,
   Briefcase,
   ExternalLink,
-  Table as TableIconLucide, 
+  Table as TableIconLucide,
   List,
   Settings2,
   CookingPot,
   ChevronDown,
   LogOut,
   ChevronsLeftRight,
-  Archive, 
-  BarChart3, 
+  Archive,
+  BarChart3,
   ScanText,
-  PackagePlus, 
-  PackageMinus, 
-  Trash2, 
-} from "lucide-react"; 
+  PackagePlus,
+  PackageMinus,
+  Trash2,
+  Layers // New icon for collapsible groups
+} from "lucide-react";
 import type { RestaurantProfile } from "@/types";
 import {
   getRestaurantsByOwner,
@@ -95,7 +96,8 @@ interface NavItem {
   children?: NavItem[];
   isHeader?: boolean;
   badgeCount?: number;
-  isGroup?: boolean;
+  isGroup?: boolean; // Indicates this item is a collapsible group header
+  isTopLevel?: boolean; // Indicates this item should not be in a group even if it has children
 }
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
@@ -183,7 +185,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           setRestaurantsLoading(false);
         });
     } else if (authContextRole === 'staff' && user?.restaurantId) {
-        setSelectedRestaurantId(user.restaurantId); 
+        setSelectedRestaurantId(user.restaurantId);
     }
   }, [authContextRole, user?.uid, user?.restaurantId, toast]);
 
@@ -193,7 +195,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         `selectedRestaurant_${user.uid}`,
         selectedRestaurantId
       );
-      if (user.restaurantId !== selectedRestaurantId && authContextRole === 'owner') { 
+      if (user.restaurantId !== selectedRestaurantId && authContextRole === 'owner') {
         updateUserProfile(user.uid, {
           restaurantId: selectedRestaurantId,
         }).catch((err) =>
@@ -214,95 +216,65 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     setSelectedRestaurantId(restaurantId);
   };
 
-  const commonNavItems: NavItem[] = useMemo(() => [
+  const baseNavItems: NavItem[] = useMemo(() => [
     {
       href: "/dashboard",
       label: "Dashboard",
       icon: LayoutDashboard,
       roles: ["owner", "staff", "admin", "user"],
+      isTopLevel: true,
     },
   ], []);
 
-  const getOwnerNavItems = useCallback((currentRestaurantId: string | null): NavItem[] => {
+  const getRestaurantOperationNavItems = useCallback((currentRestaurantId: string | null): NavItem[] => {
     if (!currentRestaurantId || currentRestaurantId.trim() === "") {
-      return [
-        {
-          href: `/dashboard/create-restaurant`,
-          label: "Create Restaurant",
-          icon: PlusCircle,
-          roles: ["owner"],
-          hint: "add new restaurant",
-        },
-      ];
+      return [];
     }
-    return [
+    const items: NavItem[] = [
       {
-        label: "Manage Restaurant",
-        icon: Store,
-        roles: ["owner"],
-        hint: "manage specific restaurant settings and operations",
-        isGroup: true,
-        children: [
-          {
-            href: `/dashboard/restaurant/${currentRestaurantId}`,
-            label: "Overview",
-            icon: Store,
-            roles: ["owner"],
-            hint: "restaurant details",
-          },
-          {
-            href: `/dashboard/menu-management/${currentRestaurantId}`,
-            label: "Menu Management",
-            icon: BookCopy,
-            roles: ["owner"],
-            hint: "manage menu",
-          },
-          {
-            href: `/dashboard/table-management/${currentRestaurantId}`,
-            label: "Table Management",
-            icon: TableIconLucide, 
-            roles: ["owner"],
-            hint: "manage tables",
-          },
-          {
-            href: `/dashboard/orders/${currentRestaurantId}`,
-            label: "Order Management",
-            icon: ListOrdered,
-            roles: ["owner", "staff"],
-            hint: "view orders",
-          },
-          {
-            href: `/dashboard/restaurant/${currentRestaurantId}/kitchen`,
-            label: "KOT",
-            icon: CookingPot,
-            roles: ["owner", "kitchen"],
-            hint: "kitchen order tickets",
-          },
-          {
-            href: `/dashboard/staff/${currentRestaurantId}`,
-            label: "Staff Management",
-            icon: Users,
-            roles: ["owner"],
-            hint: "manage staff",
-          },
-          {
-            href: `/dashboard/restaurant/${currentRestaurantId}/settings`,
-            label: "Restaurant Settings",
-            icon: Settings,
-            roles: ["owner"],
-            hint: "specific settings",
-          },
-        ],
+        href: `/dashboard/menu-management/${currentRestaurantId}`,
+        label: "Menu Management",
+        icon: BookCopy,
+        roles: ["owner", "staff"],
+        hint: "manage menu",
+        isTopLevel: true,
+      },
+      {
+        href: `/dashboard/orders/${currentRestaurantId}`,
+        label: "Order Management",
+        icon: ListOrdered,
+        roles: ["owner", "staff"],
+        hint: "view orders",
+        isTopLevel: true,
+      },
+      {
+        href: `/dashboard/restaurant/${currentRestaurantId}/kitchen`,
+        label: "KOT",
+        icon: CookingPot,
+        roles: ["owner", "staff"], // Assuming staff can also access KOT
+        hint: "kitchen order tickets",
+        isTopLevel: true,
       },
     ];
-  }, []);
-  
-  const getInventoryNavItems = useCallback((currentRestaurantId: string | null): NavItem[] => {
-    if (!currentRestaurantId || currentRestaurantId.trim() === "") {
-      return []; 
+    if (authContextRole === 'owner') {
+      items.splice(2,0, { // Insert Table Management after Menu for owners
+        href: `/dashboard/table-management/${currentRestaurantId}`,
+        label: "Table Management",
+        icon: TableIconLucide,
+        roles: ["owner"],
+        hint: "manage tables",
+        isTopLevel: true,
+      });
     }
-    return [
-      {
+    return items;
+  }, [authContextRole]);
+
+
+  const getInventoryNavItemsGroup = useCallback((currentRestaurantId: string | null): NavItem | null => {
+    if (!currentRestaurantId || currentRestaurantId.trim() === "") {
+      return null;
+    }
+    return {
         label: "Inventory",
         icon: Archive,
         roles: ["owner", "staff"],
@@ -324,14 +296,14 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             hint: "View and manage all stock items",
           },
           {
-            href: `/dashboard/inventory/${currentRestaurantId}/stock-in`, 
+            href: `/dashboard/inventory/${currentRestaurantId}/stock-in`,
             label: "Stock In",
             icon: PackagePlus,
             roles: ["owner", "staff"],
             hint: "Record incoming stock",
           },
           {
-            href: `/dashboard/inventory/${currentRestaurantId}/stock-out`, 
+            href: `/dashboard/inventory/${currentRestaurantId}/stock-out`,
             label: "Stock Out",
             icon: PackageMinus,
             roles: ["owner", "staff"],
@@ -345,13 +317,49 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             hint: "Log wasted or spoiled items",
           },
         ],
-      },
-    ];
+      };
   }, []);
 
+  const getRestaurantManagementNavItemsGroup = useCallback((currentRestaurantId: string | null): NavItem | null => {
+    if (!currentRestaurantId || currentRestaurantId.trim() === "" || authContextRole !== 'owner') {
+      return null;
+    }
+    return {
+      label: "Manage Restaurant",
+      icon: Store, // Consider a more generic "manage" icon if Store is too specific for group header
+      roles: ["owner"],
+      hint: "Restaurant-specific settings and management",
+      isGroup: true,
+      children: [
+        {
+          href: `/dashboard/restaurant/${currentRestaurantId}`,
+          label: "Restaurant Overview",
+          icon: Briefcase, // Changed from Store to avoid repetition
+          roles: ["owner"],
+          hint: "restaurant details",
+        },
+        {
+          href: `/dashboard/staff/${currentRestaurantId}`,
+          label: "Staff Management",
+          icon: Users,
+          roles: ["owner"],
+          hint: "manage staff",
+        },
+        {
+          href: `/dashboard/restaurant/${currentRestaurantId}/settings`,
+          label: "Restaurant Settings",
+          icon: Settings,
+          roles: ["owner"],
+          hint: "specific settings",
+        },
+      ]
+    };
+  }, [authContextRole]);
 
-  const platformAdminNavItems: NavItem[] = useMemo(() => [
-    {
+
+  const platformAdminNavItemsGroup: NavItem | null = useMemo(() => {
+    if (authContextRole !== 'admin') return null;
+    return {
       label: "Platform Admin",
       icon: ShieldCheck,
       roles: ["admin"],
@@ -375,14 +383,14 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         {
           href: "/dashboard/admin/analytics",
           label: "Platform Analytics",
-          icon: BarChart3, 
+          icon: BarChart3,
           roles: ["admin"],
           hint: "admin analytics",
         },
         {
           href: "/dashboard/admin/content",
           label: "Content Moderation",
-          icon: ScanText, 
+          icon: ScanText,
           roles: ["admin"],
           hint: "admin content",
         },
@@ -394,73 +402,62 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           hint: "admin settings",
         },
       ],
-    },
-  ], []);
+    };
+  }, [authContextRole]);
 
-  const settingsNavItems: NavItem[] = useMemo(() => [
-    {
-      label: "General Settings",
-      icon: Settings2,
-      roles: ["owner", "staff", "admin", "user"],
-      hint: "App and Profile Settings",
-      isGroup: true,
-      children: [
-        {
-          href: "/dashboard/profile",
-          label: "My Profile",
-          icon: ChefHat,
-          roles: ["owner", "staff", "user", "admin"],
-          hint: "user profile",
-        },
-        {
-          href: "/dashboard/settings/theme",
-          label: "Theme & Branding",
-          icon: Settings,
-          roles: ["owner", "admin"],
-          hint: "theme settings",
-        },
-      ],
-    },
-  ], []);
+  const generalSettingsNavItemsGroup: NavItem = useMemo(() => ({
+    label: "General Settings",
+    icon: Settings2,
+    roles: ["owner", "staff", "admin", "user"],
+    hint: "App and Profile Settings",
+    isGroup: true,
+    children: [
+      {
+        href: "/dashboard/profile",
+        label: "My Profile",
+        icon: ChefHat,
+        roles: ["owner", "staff", "user", "admin"],
+        hint: "user profile",
+      },
+      {
+        href: "/dashboard/settings/theme",
+        label: "Theme & Branding",
+        icon: Settings, // Consider a more specific theme icon if available
+        roles: ["owner", "admin"],
+        hint: "theme settings",
+      },
+    ],
+  }), []);
 
   const desktopNavItems = useMemo((): NavItem[] => {
-    let items: NavItem[] = [...commonNavItems];
-    if (authContextRole === "owner") {
-      items = [
-        ...items,
-        ...getOwnerNavItems(selectedRestaurantId),
-        ...getInventoryNavItems(selectedRestaurantId),
-      ];
-    } else if (authContextRole === "staff") {
-      const staffRestaurantId = user?.restaurantId;
-      if (staffRestaurantId) {
-        const staffOwnerNavs = getOwnerNavItems(staffRestaurantId);
-        const staffAccessibleTopLevel = staffOwnerNavs.find(item => item.label === "Manage Restaurant");
-        if (staffAccessibleTopLevel && staffAccessibleTopLevel.children) {
-          const staffSpecificItems = staffAccessibleTopLevel.children.filter(child => 
-              child.label === "Order Management" || 
-              child.label === "KOT"
-          );
-          if (staffSpecificItems.length > 0) {
-            items.push({
-              ...staffAccessibleTopLevel,
-              children: staffSpecificItems
-            });
-          }
-        }
-        items = [...items, ...getInventoryNavItems(staffRestaurantId)];
-      }
+    let items: NavItem[] = [...baseNavItems];
+    
+    // Add top-level restaurant operations items
+    if (authContextRole === "owner" || authContextRole === "staff") {
+        const restaurantOpsItems = getRestaurantOperationNavItems(selectedRestaurantId);
+        items = [...items, ...restaurantOpsItems];
     }
+    
+    // Add Inventory Group
+    const inventoryGroup = getInventoryNavItemsGroup(selectedRestaurantId);
+    if (inventoryGroup) items.push(inventoryGroup);
+    
+    // Add Restaurant Management Group (Owner only)
+    const restaurantMgmtGroup = getRestaurantManagementNavItemsGroup(selectedRestaurantId);
+    if (restaurantMgmtGroup) items.push(restaurantMgmtGroup);
+    
+    // Add Platform Admin Group (Admin only)
+    if (platformAdminNavItemsGroup) items.push(platformAdminNavItemsGroup);
 
-    if (authContextRole === "admin") {
-      items = [...items, ...platformAdminNavItems];
-    }
-    items = [...items, ...settingsNavItems];
+    // Add General Settings Group
+    items.push(generalSettingsNavItemsGroup);
+    
     return items;
-  }, [authContextRole, selectedRestaurantId, user?.restaurantId, commonNavItems, getOwnerNavItems, getInventoryNavItems, platformAdminNavItems, settingsNavItems]);
+  }, [authContextRole, selectedRestaurantId, baseNavItems, getRestaurantOperationNavItems, getInventoryNavItemsGroup, getRestaurantManagementNavItemsGroup, platformAdminNavItemsGroup, generalSettingsNavItemsGroup]);
+
 
   if (
-    initialLoading || 
+    initialLoading ||
     authContextLoading ||
     (authContextRole === "owner" &&
       restaurantsLoading &&
@@ -621,18 +618,18 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                   </SidebarMenuButton>
                 </CollapsibleTrigger>
                 <CollapsibleContent>
-                  <SidebarMenuSubContent> 
+                  <SidebarMenuSubContent>
                     {renderNavMenu(item.children, true)}
                   </SidebarMenuSubContent>
                 </CollapsibleContent>
               </Collapsible>
             ) : (
               <SidebarMenuButton
-                asChild={!!item.href} 
+                asChild={!!item.href}
                 isActive={
-                  item.href ? (pathname === item.href || 
-                  (item.href && 
-                    item.href !== "/dashboard" &&
+                  item.href ? (pathname === item.href ||
+                  (item.href &&
+                    item.href !== "/dashboard" && // Ensure dashboard itself is only active if path is exactly /dashboard
                     pathname.startsWith(
                       item.href.split("[")[0].replace(/\/(undefined|null)$/, "")
                     ))) : false
@@ -644,11 +641,11 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                   align: "center",
                 }}
                 size={isSubmenu ? "sm" : "default"}
-                disabled={!item.href} 
+                disabled={!item.href} // Disable button if no href (e.g. for a header that's not a group)
               >
-                {item.href ? ( 
+                {item.href ? (
                   <Link
-                    href={item.href} 
+                    href={item.href}
                     target={item.target}
                     rel={item.rel}
                     className="flex items-center justify-between w-full"
@@ -671,21 +668,23 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                     )}
                   </Link>
                 ) : (
+                  // Render non-linkable item (e.g. a header if needed, or just text if isHeader is true)
                   <div className="flex items-center justify-between w-full">
-                    <div className="flex items-center gap-2">
+                     <div className="flex items-center gap-2">
                       <item.icon
                         className={cn("h-5 w-5", isSubmenu && "h-4 w-4")}
                       />
                       <span
                         className={cn(
                           "ml-1 group-data-[collapsible=icon]:hidden truncate",
-                          isSubmenu && "text-sm"
+                          isSubmenu && "text-sm",
+                          item.isHeader && "font-semibold text-muted-foreground"
                         )}
                       >
                         {item.label}
                       </span>
                     </div>
-                    {item.badgeCount && item.badgeCount > 0 && (
+                     {item.badgeCount && item.badgeCount > 0 && (
                       <SidebarMenuBadge>{item.badgeCount}</SidebarMenuBadge>
                     )}
                   </div>
@@ -885,4 +884,3 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     </>
   );
 }
-
