@@ -2,15 +2,16 @@
 import {
   doc, setDoc, getDoc, serverTimestamp, Timestamp,
   collection, addDoc, writeBatch, query, where, getDocs,
-  collectionGroup, limit, orderBy, updateDoc
+  collectionGroup, limit, orderBy, updateDoc, WriteBatch, documentId, FieldPath
 } from 'firebase/firestore';
 import { db } from './config';
 import type { UserRole, UserProfile as UserProfileType, RestaurantProfile, OutletType, StaffInvitation, StaffPermissions } from '@/types';
+import { defaultStaffPermissions } from '@/types'; // Import defaultStaffPermissions
 
 export async function createUserProfile(
   uid: string,
   email: string | null,
-  role: UserRole,
+  role: UserRole, // This is the role selected on the signup form
   restaurantData?: { name: string; outletType?: OutletType },
   phoneNumber?: string | null,
   isAnonymous?: boolean
@@ -19,14 +20,17 @@ export async function createUserProfile(
 
   let restaurantId: string | null = null;
   let onboardingComplete = true;
-  let finalRole = role;
+  let finalRole = role; 
   let staffPermissions: StaffPermissions | undefined = undefined;
+  const batch = writeBatch(db);
 
-  // Check for pending staff invitations
-  if (!isAnonymous && email) {
+  const normalizedSignupEmail = email ? email.toLowerCase() : null;
+
+  
+  if (!isAnonymous && normalizedSignupEmail) {
     const invitationsQuery = query(
       collectionGroup(db, 'staffInvitations'),
-      where('email', '==', email),
+      where('email', '==', normalizedSignupEmail), 
       where('status', '==', 'pending'),
       limit(1)
     );
@@ -36,35 +40,38 @@ export async function createUserProfile(
       const invitationDoc = invitationsSnapshot.docs[0];
       const invitationData = invitationDoc.data() as StaffInvitation;
 
-      console.log(`Staff invitation found for ${email} for restaurant ${invitationData.restaurantId}. Assigning role 'staff'.`);
+      console.log(`Staff invitation found for ${email} (normalized: ${normalizedSignupEmail}) for restaurant ${invitationData.restaurantId}. Assigning role 'staff'. Permissions:`, invitationData.permissions);
 
-      finalRole = 'staff';
+      finalRole = 'staff'; 
       restaurantId = invitationData.restaurantId;
-      onboardingComplete = true;
-      staffPermissions = invitationData.permissions || { // Default staff permissions if not set in invite
-        canManageMenu: false,
-        canManageOrders: true,
-        canManageTables: true,
-        canManageInventory: false,
-        canAccessSettings: false,
-      };
+      onboardingComplete = true; 
+      staffPermissions = invitationData.permissions || { ...defaultStaffPermissions };
 
-      await updateDoc(invitationDoc.ref, {
+      batch.update(invitationDoc.ref, {
         status: 'accepted',
         acceptedAt: serverTimestamp(),
         acceptedByUid: uid,
       });
-      console.log(`Invitation for ${email} to restaurant ${restaurantId} accepted by user ${uid}. Permissions:`, staffPermissions);
+    } else if (role === 'staff') {
+      
+      console.warn(`User ${email} (normalized: ${normalizedSignupEmail}) selected 'staff' role but no pending invitation found. Creating as 'user' role without restaurant assignment.`);
+      finalRole = 'user';
+      restaurantId = null;
+      onboardingComplete = true; 
+      staffPermissions = undefined;
     }
   }
 
 
-  if (finalRole === 'owner' && !restaurantId) {
+  if (finalRole === 'owner' && !restaurantId) { 
     if (!restaurantData?.name) {
       throw new Error("Restaurant name is required for owner sign-up.");
     }
-    onboardingComplete = false;
-    const newRestaurantRef = await addDoc(collection(db, 'restaurants'), {
+    onboardingComplete = false; 
+    const newRestaurantRef = doc(collection(db, 'restaurants')); 
+    restaurantId = newRestaurantRef.id;
+    batch.set(newRestaurantRef, {
+      id: restaurantId, 
       ownerId: uid,
       name: restaurantData.name,
       outletType: restaurantData.outletType || 'restaurant',
@@ -78,41 +85,39 @@ export async function createUserProfile(
       },
       taxes: [],
     });
-    restaurantId = newRestaurantRef.id;
   }
 
   const userRef = doc(db, 'users', uid);
   const profileData: UserProfileType = {
     uid,
-    email,
+    email: normalizedSignupEmail, 
     role: finalRole,
     restaurantId,
     onboardingComplete,
     phoneNumber: phoneNumber || null,
     isAnonymous: isAnonymous || false,
-    createdAt: serverTimestamp() as Timestamp,
-    displayName: email?.split('@')[0] || 'User',
+    createdAt: serverTimestamp() as Timestamp, 
+    displayName: email?.split('@')[0] || 'User', 
     photoURL: null,
     lastLoginAt: serverTimestamp() as Timestamp,
     lastActiveAt: serverTimestamp() as Timestamp,
     status: 'active',
     preferences: {},
     metadata: {},
-    ...(finalRole === 'staff' && { staffPermissions: staffPermissions || { // Ensure staffPermissions is set for staff
-        canManageMenu: false,
-        canManageOrders: true,
-        canManageTables: true,
-        canManageInventory: false,
-        canAccessSettings: false,
-    }}),
+    staffPermissions: finalRole === 'staff' ? (staffPermissions || { ...defaultStaffPermissions }) : undefined,
   };
 
-  await setDoc(userRef, profileData);
+  batch.set(userRef, profileData);
+  await batch.commit();
+  
   const now = Timestamp.now();
   return {
     userProfile: {
       ...profileData,
-      createdAt: profileData.createdAt instanceof Timestamp ? profileData.createdAt : now
+      email: email, 
+      createdAt: profileData.createdAt instanceof Timestamp ? profileData.createdAt : now, 
+      lastLoginAt: profileData.lastLoginAt instanceof Timestamp ? profileData.lastLoginAt : now,
+      lastActiveAt: profileData.lastActiveAt instanceof Timestamp ? profileData.lastActiveAt : now,
     },
     restaurantId: restaurantId ?? undefined
   };
@@ -131,7 +136,7 @@ export async function getUserProfile(uid: string): Promise<UserProfileType | nul
     const data = docSnap.data();
     return {
       uid: data.uid,
-      email: data.email,
+      email: data.email, // This will be the stored (potentially lowercase) email
       displayName: data.displayName || data.email?.split('@')[0] || null,
       photoURL: data.photoURL || null,
       role: data.role,
@@ -145,7 +150,7 @@ export async function getUserProfile(uid: string): Promise<UserProfileType | nul
       status: data.status || 'active',
       preferences: data.preferences || {},
       metadata: data.metadata || {},
-      staffPermissions: data.staffPermissions || undefined, // Fetch staffPermissions
+      staffPermissions: data.staffPermissions || undefined,
     } as UserProfileType;
   } else {
     return null;
@@ -157,7 +162,10 @@ export async function updateUserProfile(uid: string, data: Partial<UserProfileTy
   const userRef = doc(db, 'users', uid);
   const dataToUpdate: any = { ...data, updatedAt: serverTimestamp() };
   
-  // Ensure staffPermissions are either set or explicitly nulled if passed
+  if (data.email) {
+    dataToUpdate.email = data.email.toLowerCase(); // Normalize email if updated
+  }
+
   if (data.hasOwnProperty('staffPermissions')) {
     dataToUpdate.staffPermissions = data.staffPermissions === undefined ? null : data.staffPermissions;
   }
@@ -169,7 +177,11 @@ export async function createRestaurant(ownerId: string, name: string, outletType
   if (!db) throw new Error("Firestore is not initialized.");
   const restaurantCol = collection(db, 'restaurants');
   const now = serverTimestamp();
-  const restaurantRef = await addDoc(restaurantCol, {
+  const newRestaurantRef = doc(restaurantCol); // Generate ID client-side
+  const restaurantId = newRestaurantRef.id;
+
+  const restaurantData = {
+    id: restaurantId,
     ownerId,
     name,
     outletType: outletType || 'restaurant',
@@ -182,21 +194,13 @@ export async function createRestaurant(ownerId: string, name: string, outletType
       customDomain: null,
     },
     taxes: [],
-  });
+  };
+  await setDoc(newRestaurantRef, restaurantData);
+
   return {
-    id: restaurantRef.id,
-    ownerId,
-    name,
-    outletType: outletType || 'restaurant',
-    createdAt: Timestamp.now(),
-    updatedAt: Timestamp.now(),
-    settings: {
-        onlineOrderingEnabled: false,
-        tableReservationsEnabled: false,
-        notificationEmail: `orders@${name.toLowerCase().replace(/\s+/g, '')}.example.com`,
-        customDomain: null,
-    },
-    taxes: [],
+    ...restaurantData,
+    createdAt: Timestamp.now(), // For immediate client use
+    updatedAt: Timestamp.now(), // For immediate client use
   } as RestaurantProfile;
 }
 
@@ -230,10 +234,10 @@ export async function getRestaurantsByOwner(ownerId: string): Promise<Restaurant
   const q = query(restaurantsCol, where('ownerId', '==', ownerId), orderBy('createdAt', 'desc'));
   const querySnapshot = await getDocs(q);
   const restaurants: RestaurantProfile[] = [];
-  querySnapshot.forEach((doc) => {
-    const data = doc.data();
+  querySnapshot.forEach((docSnap) => { 
+    const data = docSnap.data();
     restaurants.push({
-      id: doc.id,
+      id: docSnap.id,
       ...data,
       createdAt: data.createdAt as Timestamp,
       updatedAt: data.updatedAt as Timestamp,
@@ -259,37 +263,33 @@ export async function inviteStaffMember(
   if (!restaurantId) throw new Error("Restaurant ID is required to invite staff.");
   if (!staffEmail) throw new Error("Staff email is required.");
 
+  const normalizedStaffEmail = staffEmail.toLowerCase(); 
+
   const invitationsCol = collection(db, `restaurants/${restaurantId}/staffInvitations`);
 
-  const q = query(invitationsCol, where('email', '==', staffEmail), where('status', '==', 'pending'));
+  const q = query(invitationsCol, where('email', '==', normalizedStaffEmail), where('status', '==', 'pending'));
   const existingInvites = await getDocs(q);
   if (!existingInvites.empty) {
     throw new Error(`An active invitation already exists for ${staffEmail} for this restaurant.`);
   }
 
   const createdAt = serverTimestamp();
-  const newInvitationRef = doc(invitationsCol);
+  const newInvitationRef = doc(invitationsCol); 
 
   const invitationData: StaffInvitation = {
-    id: newInvitationRef.id,
+    id: newInvitationRef.id, 
     restaurantId,
-    email: staffEmail,
+    email: normalizedStaffEmail, 
     role: 'staff',
     status: 'pending',
     invitedBy: invitingOwnerId,
-    createdAt: createdAt as Timestamp,
-    permissions: permissions || { // Default permissions if none provided
-      canManageMenu: false,
-      canManageOrders: true,
-      canManageTables: true,
-      canManageInventory: false,
-      canAccessSettings: false,
-    },
+    createdAt: createdAt as Timestamp, 
+    permissions: permissions || { ...defaultStaffPermissions },
   };
 
   await setDoc(newInvitationRef, invitationData);
-  console.log(`Staff invitation created for ${staffEmail} for restaurant ${restaurantId} with permissions:`, invitationData.permissions);
-  return { ...invitationData, createdAt: Timestamp.now() };
+  console.log(`Staff invitation created for ${staffEmail} (normalized: ${normalizedStaffEmail}) for restaurant ${restaurantId} with permissions:`, invitationData.permissions);
+  return { ...invitationData, createdAt: Timestamp.now() }; 
 }
 
 export async function getStaffForRestaurant(restaurantId: string): Promise<UserProfileType[]> {
@@ -298,8 +298,8 @@ export async function getStaffForRestaurant(restaurantId: string): Promise<UserP
   const q = query(usersCol, where('role', '==', 'staff'), where('restaurantId', '==', restaurantId));
   const querySnapshot = await getDocs(q);
   const staffList: UserProfileType[] = [];
-  querySnapshot.forEach((doc) => {
-    staffList.push({ uid: doc.id, ...doc.data() } as UserProfileType);
+  querySnapshot.forEach((docSnap) => { 
+    staffList.push({ uid: docSnap.id, ...docSnap.data() } as UserProfileType);
   });
   return staffList;
 }
@@ -315,6 +315,9 @@ export async function getPendingStaffInvitations(restaurantId: string): Promise<
       id: docSnap.id,
       ...data,
       createdAt: data.createdAt as Timestamp,
+      acceptedAt: data.acceptedAt as Timestamp | undefined,
+      acceptedByUid: data.acceptedByUid as string | undefined,
+      permissions: data.permissions as StaffPermissions | undefined,
     } as StaffInvitation;
   });
 }
@@ -323,8 +326,15 @@ export async function updateStaffPermissions(userId: string, restaurantId: strin
   if (!db) throw new Error("Firestore is not initialized.");
   const userRef = doc(db, 'users', userId);
   const userSnap = await getDoc(userRef);
-  if (!userSnap.exists() || userSnap.data()?.role !== 'staff' || userSnap.data()?.restaurantId !== restaurantId) {
-    throw new Error("Staff member not found or not associated with this restaurant.");
+  if (!userSnap.exists()) {
+    throw new Error("Staff member user profile not found.");
   }
-  await updateDoc(userRef, { staffPermissions: permissions, updatedAt: serverTimestamp() });
+  const userData = userSnap.data();
+  if (userData?.role !== 'staff' || userData?.restaurantId !== restaurantId) {
+    throw new Error("User is not a staff member of this restaurant or restaurantId mismatch.");
+  }
+  await updateDoc(userRef, { 
+    staffPermissions: permissions, 
+    updatedAt: serverTimestamp() 
+  });
 }

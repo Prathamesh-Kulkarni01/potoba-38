@@ -12,6 +12,16 @@ export interface StaffPermissions {
   canAccessSettings?: boolean; // e.g., restaurant-specific settings
 }
 
+// Define and export defaultStaffPermissions
+export const defaultStaffPermissions: StaffPermissions = {
+  canManageMenu: false,
+  canManageOrders: true, // Staff can usually manage orders
+  canManageTables: true, // Staff can usually manage tables
+  canManageInventory: false,
+  canAccessSettings: false,
+};
+
+
 export interface AuthUser extends FirebaseUser {
   role: UserRole | null;
   restaurantId: string | null;
@@ -182,14 +192,14 @@ export type TableStatus = 'available' | 'occupied' | 'reserved' | 'needs_cleanin
 export interface Table {
   id: string;
   restaurantId: string;
-  tableDocId: string;
+  tableDocId: string; // This should be the same as 'id' for tables collection
   tableNumber: string;
   capacity: number;
   status: TableStatus;
   qrCodeValue: string;
   currentOrderIds?: string[];
-  createdAt: string; // Changed to string for client components
-  updatedAt: string; // Changed to string for client components
+  createdAt: string; 
+  updatedAt: string; 
 }
 
 export type OrderStatus =
@@ -212,8 +222,8 @@ export interface OrderItem {
   totalPrice: number;
   variantChoices?: { variantName: string; optionName: string; optionPrice: number }[];
   notes?: string;
-  categoryId?: string;
-  taxOverrides?: TaxConfig[];
+  categoryId?: string; // For tax calculation
+  taxOverrides?: TaxConfig[]; // For tax calculation
 }
 
 export interface Order {
@@ -236,12 +246,13 @@ export interface Order {
   kitchenNotes?: string;
   paymentMethod?: string;
   transactionId?: string;
-  groupId?: string | null;
+  groupId?: string | null; // For group orders
   createdAt: Timestamp;
   updatedAt: Timestamp;
   taxBreakup?: { taxId: string; name: string; amount: number; rate: number; }[];
 }
 
+// For client-side usage where Timestamps are converted to strings for serializability
 export interface ClientOrder extends Omit<Order, 'createdAt' | 'updatedAt' | 'userId' | 'groupId'> {
   createdAt: string;
   updatedAt: string;
@@ -249,27 +260,28 @@ export interface ClientOrder extends Omit<Order, 'createdAt' | 'updatedAt' | 'us
   groupId?: string;
 }
 
+
 export interface GroupCartItem extends OrderItem {
-  addedByUid: string;
-  addedByName?: string;
+  addedByUid: string; // UID of the user who added the item
+  addedByName?: string; // Display name of the user
 }
 
 export interface TableGroupMember {
-  uid: string | null;
+  uid: string | null; // UID for registered users, null/temp for guests
   name: string;
-  phone?: string | null;
+  phone?: string | null; // Optional phone for contact/identification
 }
 
 export interface TableGroup {
-  id: string;
+  id: string; // The 4-digit group code, also document ID
   restaurantId: string;
   tableId: string;
   tableNumber: string;
   creatorName: string;
   creatorPhone: string;
-  creatorUid?: string | null;
+  creatorUid?: string | null; // UID if the creator is a registered user
   members: TableGroupMember[];
-  status: 'active' | 'ordering' | 'locked' | 'ordered' | 'closed';
+  status: 'active' | 'ordering' | 'locked' | 'ordered' | 'closed'; // 'ordering' could be a sub-state of active
   cartItems: GroupCartItem[];
   createdAt: Timestamp;
   updatedAt: Timestamp;
@@ -280,6 +292,7 @@ export interface ClientTableGroup extends Omit<TableGroup, 'createdAt' | 'update
   updatedAt: string;
 }
 
+
 export interface PopularItem {
   menuItemId: string;
   menuItemName: string;
@@ -287,6 +300,7 @@ export interface PopularItem {
   totalRevenue: number;
 }
 
+// --- Inventory Types ---
 export type InventoryItemCategory = 'raw_material' | 'semi_finished' | 'finished_good' | 'other';
 export const inventoryItemCategories: { value: InventoryItemCategory; label: string }[] = [
   { value: 'raw_material', label: 'Raw Material' },
@@ -313,44 +327,45 @@ export interface InventoryItem {
   reorderLevel?: number | null;
   supplierInfo?: SupplierInfo | null;
   costPerUnit?: number | null;
-  unitConversionNotes?: string | null;
+  unitConversionNotes?: string | null; // e.g., "1 case = 24 units"
   lastStockUpdatedAt: Timestamp;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
 
 export type StockTransactionType =
-  | 'purchase'
-  | 'sale_usage'
-  | 'wastage'
-  | 'adjustment_in'
-  | 'adjustment_out'
-  | 'initial_stock'
-  | 'transfer_in'
-  | 'transfer_out'
-  | 'internal_consumption';
+  | 'purchase'            // Stock in
+  | 'sale_usage'          // Stock out (linked to an order)
+  | 'wastage'             // Stock out
+  | 'adjustment_in'       // Stock in (manual correction)
+  | 'adjustment_out'      // Stock out (manual correction)
+  | 'initial_stock'       // Stock in (when item is first created)
+  | 'transfer_in'         // Stock in (from another location/outlet)
+  | 'transfer_out'        // Stock out (to another location/outlet)
+  | 'internal_consumption'; // Stock out (e.g., staff meals, samples)
 
 
 export interface StockTransaction {
   id: string;
   restaurantId: string;
   inventoryItemId: string;
-  inventoryItemName: string;
+  inventoryItemName: string; // Denormalized for easier display
   transactionType: StockTransactionType;
-  quantity: number;
+  quantity: number; // Positive for stock-in, negative for stock-out
   unitOfMeasure: UnitOfMeasure;
   transactionDate: Timestamp;
-  costPerUnitAtTransaction?: number | null;
+  costPerUnitAtTransaction?: number | null; // Cost at the time of this transaction
   notes?: string | null;
-  supplierName?: string | null;
-  invoiceNumber?: string | null;
-  batchNumber?: string | null;
-  expiryDate?: Timestamp | null;
-  paymentMode?: string | null;
-  relatedOrderId?: string | null;
-  relatedPurchaseId?: string | null;
-  userId?: string | null;
+  supplierName?: string | null; // For purchase transactions
+  invoiceNumber?: string | null; // For purchase transactions
+  batchNumber?: string | null; // For traceability
+  expiryDate?: Timestamp | null; // For perishable items
+  paymentMode?: string | null; // For purchase transactions
+  relatedOrderId?: string | null; // If stock out due to a sale
+  relatedPurchaseId?: string | null; // If this is linked to a larger purchase order
+  userId?: string | null; // User who performed/authorized the transaction
 }
+
 
 export interface DailyStockSummary {
   stockInQuantity: number;
@@ -361,12 +376,12 @@ export interface DailyStockSummary {
 export interface StaffInvitation {
   id: string;
   restaurantId: string;
-  email: string;
-  role: 'staff'; // Fixed for staff invitations
+  email: string; // Should be stored in lowercase for case-insensitive matching
+  role: 'staff'; 
   status: 'pending' | 'accepted' | 'declined' | 'expired';
   invitedBy: string; // UID of the owner who sent the invitation
   createdAt: Timestamp;
   acceptedAt?: Timestamp;
-  acceptedByUid?: string;
-  permissions?: StaffPermissions; // Added
+  acceptedByUid?: string; 
+  permissions?: StaffPermissions; 
 }
