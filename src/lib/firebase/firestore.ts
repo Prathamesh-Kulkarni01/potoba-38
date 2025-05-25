@@ -1,20 +1,24 @@
 
-import { doc, setDoc, getDoc, serverTimestamp, Timestamp, collection, addDoc, writeBatch, query, where, getDocs, collectionGroup, limit } from 'firebase/firestore';
+import {
+  doc, setDoc, getDoc, serverTimestamp, Timestamp,
+  collection, addDoc, writeBatch, query, where, getDocs,
+  collectionGroup, limit, orderBy // Added orderBy here
+} from 'firebase/firestore';
 import { db } from './config';
-import type { UserRole, UserProfile as UserProfileType, RestaurantProfile, OutletType, StaffInvitation } from '@/types'; 
+import type { UserRole, UserProfile as UserProfileType, RestaurantProfile, OutletType, StaffInvitation } from '@/types';
 
 export async function createUserProfile(
   uid: string,
   email: string | null,
-  role: UserRole, 
+  role: UserRole,
   restaurantData?: { name: string; outletType?: OutletType },
-  phoneNumber?: string | null, 
-  isAnonymous?: boolean 
+  phoneNumber?: string | null,
+  isAnonymous?: boolean
 ): Promise<{ userProfile: UserProfileType; restaurantId?: string }> {
   if (!db) throw new Error("Firestore is not initialized.");
 
   let restaurantId: string | null = null;
-  let onboardingComplete = true; 
+  let onboardingComplete = true;
   let finalRole = role;
 
   // Check for pending staff invitations
@@ -26,7 +30,7 @@ export async function createUserProfile(
     if (!invitationsSnapshot.empty) {
       const invitationDoc = invitationsSnapshot.docs[0];
       const invitationData = invitationDoc.data() as StaffInvitation;
-      
+
       console.log(`Staff invitation found for ${email} at restaurant ${invitationData.restaurantId}`);
 
       finalRole = 'staff'; // Override role to staff
@@ -49,27 +53,27 @@ export async function createUserProfile(
     if (!restaurantData?.name) {
       throw new Error("Restaurant name is required for owner sign-up.");
     }
-    onboardingComplete = false; 
+    onboardingComplete = false;
     const newRestaurantRef = await addDoc(collection(db, 'restaurants'), {
       ownerId: uid,
       name: restaurantData.name,
-      outletType: restaurantData.outletType || 'restaurant', 
+      outletType: restaurantData.outletType || 'restaurant',
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
     restaurantId = newRestaurantRef.id;
   }
-  
+
   const userRef = doc(db, 'users', uid);
   const profileData: UserProfileType = {
     uid,
     email,
-    role: finalRole, 
-    restaurantId, 
+    role: finalRole,
+    restaurantId,
     onboardingComplete,
-    phoneNumber: phoneNumber || null, 
-    isAnonymous: isAnonymous || false, 
-    createdAt: serverTimestamp() as Timestamp, 
+    phoneNumber: phoneNumber || null,
+    isAnonymous: isAnonymous || false,
+    createdAt: serverTimestamp() as Timestamp,
     displayName: email?.split('@')[0] || 'User', // Basic display name
     photoURL: null, // Default photoURL
     // Default other fields if necessary
@@ -82,12 +86,12 @@ export async function createUserProfile(
 
   await setDoc(userRef, profileData);
   const now = Timestamp.now();
-  return { 
-    userProfile: { 
-      ...profileData, 
-      createdAt: profileData.createdAt instanceof Timestamp ? profileData.createdAt : now 
-    }, 
-    restaurantId: restaurantId ?? undefined 
+  return {
+    userProfile: {
+      ...profileData,
+      createdAt: profileData.createdAt instanceof Timestamp ? profileData.createdAt : now
+    },
+    restaurantId: restaurantId ?? undefined
   };
 }
 
@@ -108,11 +112,11 @@ export async function getUserProfile(uid: string): Promise<UserProfileType | nul
       displayName: data.displayName || data.email?.split('@')[0] || null,
       photoURL: data.photoURL || null,
       role: data.role,
-      restaurantId: data.restaurantId || null, 
+      restaurantId: data.restaurantId || null,
       onboardingComplete: typeof data.onboardingComplete === 'boolean' ? data.onboardingComplete : false,
-      phoneNumber: data.phoneNumber || null, 
-      isAnonymous: typeof data.isAnonymous === 'boolean' ? data.isAnonymous : false, 
-      createdAt: data.createdAt as Timestamp, 
+      phoneNumber: data.phoneNumber || null,
+      isAnonymous: typeof data.isAnonymous === 'boolean' ? data.isAnonymous : false,
+      createdAt: data.createdAt as Timestamp,
       lastLoginAt: data.lastLoginAt as Timestamp,
       lastActiveAt: data.lastActiveAt as Timestamp,
       status: data.status || 'active',
@@ -127,7 +131,7 @@ export async function getUserProfile(uid: string): Promise<UserProfileType | nul
 export async function updateUserProfile(uid: string, data: Partial<UserProfileType>): Promise<void> {
   if (!db) throw new Error("Firestore is not initialized.");
   const userRef = doc(db, 'users', uid);
-  const dataToUpdate = { ...data, updatedAt: serverTimestamp() }; 
+  const dataToUpdate = { ...data, updatedAt: serverTimestamp() };
   if (data.createdAt && !(data.createdAt instanceof Timestamp)) {
     // Handle potential client-side timestamp if needed, or ensure it's always serverTimestamp for updates
   }
@@ -141,7 +145,7 @@ export async function createRestaurant(ownerId: string, name: string, outletType
   const restaurantRef = await addDoc(restaurantCol, {
     ownerId,
     name,
-    outletType: outletType || 'restaurant', 
+    outletType: outletType || 'restaurant',
     createdAt: now,
     updatedAt: now,
   });
@@ -150,8 +154,8 @@ export async function createRestaurant(ownerId: string, name: string, outletType
     ownerId,
     name,
     outletType: outletType || 'restaurant',
-    createdAt: Timestamp.now(), 
-    updatedAt: Timestamp.now(), 
+    createdAt: Timestamp.now(),
+    updatedAt: Timestamp.now(),
   } as RestaurantProfile;
 }
 
@@ -165,8 +169,8 @@ export async function getRestaurant(restaurantId: string): Promise<RestaurantPro
 
   if (docSnap.exists()) {
     const data = docSnap.data();
-    return { 
-      id: docSnap.id, 
+    return {
+      id: docSnap.id,
       ...data,
       createdAt: data.createdAt as Timestamp, // Cast to Timestamp
       updatedAt: data.updatedAt as Timestamp, // Cast to Timestamp
@@ -187,8 +191,8 @@ export async function getRestaurantsByOwner(ownerId: string): Promise<Restaurant
   const restaurants: RestaurantProfile[] = [];
   querySnapshot.forEach((doc) => {
     const data = doc.data();
-    restaurants.push({ 
-      id: doc.id, 
+    restaurants.push({
+      id: doc.id,
       ...data,
       createdAt: data.createdAt as Timestamp, // Cast to Timestamp
       updatedAt: data.updatedAt as Timestamp, // Cast to Timestamp
@@ -210,7 +214,7 @@ export async function inviteStaffMember(restaurantId: string, staffEmail: string
   if (!staffEmail) throw new Error("Staff email is required.");
 
   const invitationsCol = collection(db, `restaurants/${restaurantId}/staffInvitations`);
-  
+
   // Check if an active pending invitation already exists for this email for this restaurant
   const q = query(invitationsCol, where('email', '==', staffEmail), where('status', '==', 'pending'));
   const existingInvites = await getDocs(q);
@@ -254,8 +258,8 @@ export async function getPendingStaffInvitations(restaurantId: string): Promise<
   const snapshot = await getDocs(q);
   return snapshot.docs.map(docSnap => {
     const data = docSnap.data();
-    return { 
-      id: docSnap.id, 
+    return {
+      id: docSnap.id,
       ...data,
       createdAt: data.createdAt as Timestamp, // Assuming createdAt is a Timestamp
     } as StaffInvitation;
