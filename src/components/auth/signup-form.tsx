@@ -21,6 +21,8 @@ import LoadingSpinner from '@/components/shared/loading-spinner';
 import type { UserRole, OutletType } from '@/types';
 import { outletTypes } from '@/types'; // Import outletTypes
 
+const outletTypeValues = outletTypes.map(o => o.value) as [OutletType, ...OutletType[]];
+
 const formSchema = z.object({
   restaurantName: z.string().optional(),
   email: z.string().email({ message: 'Invalid email address.' }),
@@ -29,23 +31,24 @@ const formSchema = z.object({
   role: z.enum(['owner', 'staff', 'user'], {
     required_error: "Please select a role.",
   }),
-  outletType: z.custom<OutletType>().optional(),
+  outletType: z.enum(outletTypeValues).optional(),
 }).refine(data => data.password === data.confirmPassword, {
   message: "Passwords don't match",
   path: ['confirmPassword'],
 }).superRefine((data, ctx) => {
   if (data.role === 'owner') {
-    if (!data.restaurantName || data.restaurantName.length < 2) {
+    if (!data.restaurantName || data.restaurantName.trim().length < 2) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "Restaurant name is required for owners and must be at least 2 characters.",
         path: ['restaurantName'],
       });
     }
-    if (!data.outletType) {
+    // If role is owner, outletType must be one of the defined OutletType values
+    if (!data.outletType || !outletTypeValues.includes(data.outletType)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Outlet type is required for owners.",
+        message: "A valid outlet type is required for owners.",
         path: ['outletType'],
       });
     }
@@ -64,7 +67,7 @@ export default function SignupForm() {
       password: '',
       confirmPassword: '',
       role: 'owner',
-      outletType: 'restaurant', // Default outlet type
+      outletType: 'restaurant', 
     },
   });
 
@@ -79,14 +82,14 @@ export default function SignupForm() {
       console.log("Firebase Auth user created:", userCredential.user.uid);
 
       const restaurantCreationData = values.role === 'owner'
-        ? { name: values.restaurantName!, outletType: values.outletType! } // outletType will be validated by Zod for owners
+        ? { name: values.restaurantName!, outletType: values.outletType! }
         : undefined;
       
       console.log("Calling createUserProfile with role:", values.role, "and restaurantData:", restaurantCreationData);
       await createUserProfile(
         userCredential.user.uid,
-        userCredential.user.email,
-        values.role, 
+        values.email, // Pass the email from form values for consistency
+        values.role as UserRole, 
         restaurantCreationData
       );
       console.log("User profile created in Firestore.");
@@ -256,3 +259,4 @@ export default function SignupForm() {
     </Card>
   );
 }
+
