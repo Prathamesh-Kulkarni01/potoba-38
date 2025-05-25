@@ -2,7 +2,7 @@
 import {
   doc, setDoc, getDoc, serverTimestamp, Timestamp,
   collection, addDoc, writeBatch, query, where, getDocs,
-  collectionGroup, limit, orderBy // Added orderBy here
+  collectionGroup, limit, orderBy, updateDoc // Added updateDoc
 } from 'firebase/firestore';
 import { db } from './config';
 import type { UserRole, UserProfile as UserProfileType, RestaurantProfile, OutletType, StaffInvitation } from '@/types';
@@ -22,34 +22,39 @@ export async function createUserProfile(
   let finalRole = role;
 
   // Check for pending staff invitations
-  if (!isAnonymous && email) { // Only check for non-anonymous users with an email
-    const invitationsSnapshot = await getDocs(
-      query(collectionGroup(db, 'staffInvitations'), where('email', '==', email), where('status', '==', 'pending'), limit(1))
+  if (!isAnonymous && email) { 
+    const invitationsQuery = query(
+      collectionGroup(db, 'staffInvitations'), 
+      where('email', '==', email), 
+      where('status', '==', 'pending'), 
+      limit(1)
     );
+    const invitationsSnapshot = await getDocs(invitationsQuery);
 
     if (!invitationsSnapshot.empty) {
       const invitationDoc = invitationsSnapshot.docs[0];
       const invitationData = invitationDoc.data() as StaffInvitation;
 
-      console.log(`Staff invitation found for ${email} at restaurant ${invitationData.restaurantId}`);
+      console.log(`Staff invitation found for ${email} for restaurant ${invitationData.restaurantId}. Assigning role 'staff'.`);
 
-      finalRole = 'staff'; // Override role to staff
+      finalRole = 'staff'; 
       restaurantId = invitationData.restaurantId;
-      onboardingComplete = true; // Staff are considered onboarded
+      onboardingComplete = true; 
 
-      // Update invitation status
+      
       await updateDoc(invitationDoc.ref, {
         status: 'accepted',
         acceptedAt: serverTimestamp(),
         acceptedByUid: uid,
       });
-      toast({ title: "Invitation Accepted!", description: `You've been added as staff to restaurant ID ${restaurantId}.` });
+      // Using console.log instead of toast as this is a backend function
+      console.log(`Invitation for ${email} to restaurant ${restaurantId} accepted by user ${uid}.`);
     }
   }
 
 
   // If still an owner role after checking invitations (or no invitation found for staff/user role)
-  if (finalRole === 'owner' && !restaurantId) { // Ensure restaurantId isn't already set by an invitation override
+  if (finalRole === 'owner' && !restaurantId) { 
     if (!restaurantData?.name) {
       throw new Error("Restaurant name is required for owner sign-up.");
     }
@@ -60,6 +65,14 @@ export async function createUserProfile(
       outletType: restaurantData.outletType || 'restaurant',
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
+      // Initialize settings and taxes if needed
+      settings: {
+        onlineOrderingEnabled: false,
+        tableReservationsEnabled: false,
+        notificationEmail: `orders@${restaurantData.name.toLowerCase().replace(/\s+/g, '')}.example.com`,
+        customDomain: null,
+      },
+      taxes: [], // Initialize with an empty array or default taxes
     });
     restaurantId = newRestaurantRef.id;
   }
@@ -74,9 +87,8 @@ export async function createUserProfile(
     phoneNumber: phoneNumber || null,
     isAnonymous: isAnonymous || false,
     createdAt: serverTimestamp() as Timestamp,
-    displayName: email?.split('@')[0] || 'User', // Basic display name
-    photoURL: null, // Default photoURL
-    // Default other fields if necessary
+    displayName: email?.split('@')[0] || 'User', 
+    photoURL: null, 
     lastLoginAt: serverTimestamp() as Timestamp,
     lastActiveAt: serverTimestamp() as Timestamp,
     status: 'active',
@@ -148,6 +160,13 @@ export async function createRestaurant(ownerId: string, name: string, outletType
     outletType: outletType || 'restaurant',
     createdAt: now,
     updatedAt: now,
+    settings: {
+      onlineOrderingEnabled: false,
+      tableReservationsEnabled: false,
+      notificationEmail: `orders@${name.toLowerCase().replace(/\s+/g, '')}.example.com`,
+      customDomain: null,
+    },
+    taxes: [], 
   });
   return {
     id: restaurantRef.id,
@@ -156,6 +175,13 @@ export async function createRestaurant(ownerId: string, name: string, outletType
     outletType: outletType || 'restaurant',
     createdAt: Timestamp.now(),
     updatedAt: Timestamp.now(),
+    settings: {
+        onlineOrderingEnabled: false,
+        tableReservationsEnabled: false,
+        notificationEmail: `orders@${name.toLowerCase().replace(/\s+/g, '')}.example.com`,
+        customDomain: null,
+    },
+    taxes: [],
   } as RestaurantProfile;
 }
 
@@ -172,8 +198,8 @@ export async function getRestaurant(restaurantId: string): Promise<RestaurantPro
     return {
       id: docSnap.id,
       ...data,
-      createdAt: data.createdAt as Timestamp, // Cast to Timestamp
-      updatedAt: data.updatedAt as Timestamp, // Cast to Timestamp
+      createdAt: data.createdAt as Timestamp, 
+      updatedAt: data.updatedAt as Timestamp, 
     } as RestaurantProfile;
   } else {
     return null;
@@ -194,8 +220,8 @@ export async function getRestaurantsByOwner(ownerId: string): Promise<Restaurant
     restaurants.push({
       id: doc.id,
       ...data,
-      createdAt: data.createdAt as Timestamp, // Cast to Timestamp
-      updatedAt: data.updatedAt as Timestamp, // Cast to Timestamp
+      createdAt: data.createdAt as Timestamp, 
+      updatedAt: data.updatedAt as Timestamp, 
     } as RestaurantProfile);
   });
   return restaurants;
@@ -215,7 +241,7 @@ export async function inviteStaffMember(restaurantId: string, staffEmail: string
 
   const invitationsCol = collection(db, `restaurants/${restaurantId}/staffInvitations`);
 
-  // Check if an active pending invitation already exists for this email for this restaurant
+  
   const q = query(invitationsCol, where('email', '==', staffEmail), where('status', '==', 'pending'));
   const existingInvites = await getDocs(q);
   if (!existingInvites.empty) {
@@ -223,20 +249,20 @@ export async function inviteStaffMember(restaurantId: string, staffEmail: string
   }
 
   const createdAt = serverTimestamp();
-  const newInvitationRef = doc(invitationsCol); // Generate a new ID
+  const newInvitationRef = doc(invitationsCol); 
 
   const invitationData: StaffInvitation = {
     id: newInvitationRef.id,
     restaurantId,
     email: staffEmail,
-    role: 'staff', // Default role for invited staff
+    role: 'staff', 
     status: 'pending',
     invitedBy: invitingOwnerId,
-    createdAt: createdAt as Timestamp, // Will be server timestamp
+    createdAt: createdAt as Timestamp, 
   };
 
   await setDoc(newInvitationRef, invitationData);
-  return { ...invitationData, createdAt: Timestamp.now() }; // Return with client-side timestamp for immediate use
+  return { ...invitationData, createdAt: Timestamp.now() }; 
 }
 
 export async function getStaffForRestaurant(restaurantId: string): Promise<UserProfileType[]> {
@@ -261,12 +287,12 @@ export async function getPendingStaffInvitations(restaurantId: string): Promise<
     return {
       id: docSnap.id,
       ...data,
-      createdAt: data.createdAt as Timestamp, // Assuming createdAt is a Timestamp
+      createdAt: data.createdAt as Timestamp, 
     } as StaffInvitation;
   });
 }
 
 // This is just a placeholder for toast, assuming you have a toast system
-const toast = ({ title, description, variant }: { title: string; description: string; variant?: string }) => {
-  console.log(`Toast (${variant || 'default'}): ${title} - ${description}`);
-};
+// const toast = ({ title, description, variant }: { title: string; description: string; variant?: string }) => {
+//   console.log(`Toast (${variant || 'default'}): ${title} - ${description}`);
+// };
