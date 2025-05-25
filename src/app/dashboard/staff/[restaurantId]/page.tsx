@@ -7,15 +7,15 @@ import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth/context";
 import { useEffect, useState, useCallback } from "react";
-import { getRestaurant, inviteStaffMember, getStaffForRestaurant, getPendingStaffInvitations, updateStaffPermissions } from "@/lib/firebase/firestore";
+import { getRestaurant, inviteStaffMember, getStaffForRestaurant, getPendingStaffInvitations, updateStaffPermissions, type UserProfile as UserProfileType } from "@/lib/firebase/firestore"; // Ensure UserProfileType is imported if it's a distinct type in firestore.ts
 import LoadingSpinner from "@/components/shared/loading-spinner";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogClose } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger, DialogClose } from '@/components/ui/dialog'; // Corrected import
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import type { UserProfile, StaffInvitation, StaffPermissions } from "@/types";
+import type { StaffInvitation, StaffPermissions } from "@/types";
 import { format } from 'date-fns';
 
 const defaultPermissions: StaffPermissions = {
@@ -37,7 +37,7 @@ const permissionLabels: Record<keyof StaffPermissions, string> = {
 interface EditPermissionsDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  staffMember: UserProfile;
+  staffMember: UserProfileType; // Use imported UserProfileType
   onSave: (permissions: StaffPermissions) => Promise<void>;
   isSaving: boolean;
 }
@@ -46,6 +46,12 @@ function EditStaffPermissionsDialog({ isOpen, onClose, staffMember, onSave, isSa
   const [currentPermissions, setCurrentPermissions] = useState<StaffPermissions>(
     staffMember.staffPermissions || { ...defaultPermissions }
   );
+
+  // Reset currentPermissions when staffMember changes or dialog reopens
+  useEffect(() => {
+    setCurrentPermissions(staffMember.staffPermissions || { ...defaultPermissions });
+  }, [staffMember, isOpen]);
+
 
   const handlePermissionChange = (permissionKey: keyof StaffPermissions, checked: boolean) => {
     setCurrentPermissions(prev => ({ ...prev, [permissionKey]: checked }));
@@ -66,18 +72,18 @@ function EditStaffPermissionsDialog({ isOpen, onClose, staffMember, onSave, isSa
           {Object.keys(permissionLabels).map((key) => (
             <div key={key} className="flex items-center space-x-2">
               <Checkbox
-                id={`perm-${key}`}
+                id={`perm-${key}-${staffMember.uid}`} // Ensure unique ID for checkbox
                 checked={currentPermissions[key as keyof StaffPermissions] || false}
                 onCheckedChange={(checked) => handlePermissionChange(key as keyof StaffPermissions, !!checked)}
               />
-              <Label htmlFor={`perm-${key}`} className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+              <Label htmlFor={`perm-${key}-${staffMember.uid}`} className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
                 {permissionLabels[key as keyof StaffPermissions]}
               </Label>
             </div>
           ))}
         </div>
         <DialogFooter>
-          <DialogClose asChild><Button type="button" variant="outline" disabled={isSaving}>Cancel</Button></DialogClose>
+          <DialogClose asChild><Button type="button" variant="outline" disabled={isSaving} onClick={onClose}>Cancel</Button></DialogClose>
           <Button onClick={handleSave} disabled={isSaving} className="bg-primary hover:bg-primary/90 text-primary-foreground">
             {isSaving ? <LoadingSpinner className="mr-2 h-4 w-4" /> : "Save Permissions"}
           </Button>
@@ -96,7 +102,7 @@ export default function StaffManagementPage() {
   const { toast } = useToast();
 
   const [restaurantName, setRestaurantName] = useState<string | null>(null);
-  const [activeStaff, setActiveStaff] = useState<UserProfile[]>([]);
+  const [activeStaff, setActiveStaff] = useState<UserProfileType[]>([]);
   const [pendingInvitations, setPendingInvitations] = useState<StaffInvitation[]>([]);
   const [loading, setLoading] = useState(true);
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
@@ -104,7 +110,7 @@ export default function StaffManagementPage() {
   const [invitePermissions, setInvitePermissions] = useState<StaffPermissions>({ ...defaultPermissions });
   const [isInviting, setIsInviting] = useState(false);
 
-  const [editingStaffMember, setEditingStaffMember] = useState<UserProfile | null>(null);
+  const [editingStaffMember, setEditingStaffMember] = useState<UserProfileType | null>(null);
   const [isEditPermissionsDialogOpen, setIsEditPermissionsDialogOpen] = useState(false);
   const [isSavingPermissions, setIsSavingPermissions] = useState(false);
 
@@ -159,7 +165,7 @@ export default function StaffManagementPage() {
       setStaffEmailToInvite('');
       setInvitePermissions({ ...defaultPermissions });
       setIsInviteDialogOpen(false);
-      fetchData();
+      fetchData(); // Re-fetch pending invitations
     } catch (error: any) {
       toast({ variant: "destructive", title: "Invitation Failed", description: error.message });
     } finally {
@@ -171,9 +177,14 @@ export default function StaffManagementPage() {
     setInvitePermissions(prev => ({ ...prev, [permissionKey]: checked }));
   };
 
-  const handleOpenEditPermissions = (staff: UserProfile) => {
+  const handleOpenEditPermissions = (staff: UserProfileType) => {
     setEditingStaffMember(staff);
     setIsEditPermissionsDialogOpen(true);
+  };
+  
+  const handleCloseEditPermissions = () => {
+    setIsEditPermissionsDialogOpen(false);
+    setEditingStaffMember(null); // Clear editing state
   };
 
   const handleSaveStaffPermissions = async (permissions: StaffPermissions) => {
@@ -182,8 +193,7 @@ export default function StaffManagementPage() {
     try {
       await updateStaffPermissions(editingStaffMember.uid, restaurantId, permissions);
       toast({ title: "Permissions Updated", description: `Permissions for ${editingStaffMember.displayName || editingStaffMember.email} have been saved.` });
-      setIsEditPermissionsDialogOpen(false);
-      setEditingStaffMember(null);
+      handleCloseEditPermissions();
       fetchData(); // Refresh staff list
     } catch (error: any) {
       toast({ variant: "destructive", title: "Update Failed", description: error.message });
@@ -258,7 +268,7 @@ export default function StaffManagementPage() {
                     ))}
                 </div>
                 <DialogFooter>
-                  <DialogClose asChild><Button type="button" variant="outline" disabled={isInviting}>Cancel</Button></DialogClose>
+                  <DialogClose asChild><Button type="button" variant="outline" disabled={isInviting} onClick={()=> setIsInviteDialogOpen(false)}>Cancel</Button></DialogClose>
                   <Button type="submit" disabled={isInviting} className="bg-primary hover:bg-primary/90 text-primary-foreground">
                     {isInviting ? <LoadingSpinner className="mr-2 h-4 w-4" /> : "Send Invitation"}
                   </Button>
@@ -289,13 +299,13 @@ export default function StaffManagementPage() {
                     </div>
                     <div className="text-xs text-muted-foreground mb-3 space-y-1">
                         <p className="font-medium text-foreground/80">Permissions:</p>
-                        {staff.staffPermissions && Object.keys(staff.staffPermissions).length > 0 ? (
+                        {staff.staffPermissions && Object.values(staff.staffPermissions).some(v => v) ? (
                             <ul className="list-disc list-inside pl-2">
                             {Object.entries(staff.staffPermissions).map(([key, value]) => value && (
                                 <li key={key} className="text-xs">{permissionLabels[key as keyof StaffPermissions]}</li>
                             ))}
                             </ul>
-                        ) : ( <p className="text-xs italic">Default permissions</p> )
+                        ) : ( <p className="text-xs italic">Default (limited) permissions</p> )
                         }
                     </div>
                     <Button variant="outline" size="sm" onClick={() => handleOpenEditPermissions(staff)} className="w-full text-xs">
@@ -312,7 +322,7 @@ export default function StaffManagementPage() {
           {editingStaffMember && (
             <EditStaffPermissionsDialog
               isOpen={isEditPermissionsDialogOpen}
-              onClose={() => setIsEditPermissionsDialogOpen(false)}
+              onClose={handleCloseEditPermissions}
               staffMember={editingStaffMember}
               onSave={handleSaveStaffPermissions}
               isSaving={isSavingPermissions}
