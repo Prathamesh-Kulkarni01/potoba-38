@@ -26,6 +26,7 @@ import { useToast } from "@/hooks/use-toast";
 import type { StaffInvitation, StaffPermissions, StaffRole } from "@/types";
 import { STAFF_ROLES_ARRAY, DEFAULT_PERMISSIONS_BY_ROLE, defaultStaffPermissions } from "@/types";
 import { format } from 'date-fns';
+import { Badge } from "@/components/ui/badge";
 
 const permissionLabels: Record<keyof StaffPermissions, string> = {
   canViewDashboardInsights: "View Dashboard Insights",
