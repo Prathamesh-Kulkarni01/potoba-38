@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -17,22 +18,38 @@ import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { UserPlus } from 'lucide-react';
 import LoadingSpinner from '@/components/shared/loading-spinner';
-import type { UserRole } from '@/types';
+import type { UserRole, OutletType } from '@/types';
+import { outletTypes } from '@/types'; // Import outletTypes
 
 const formSchema = z.object({
-  restaurantName: z.string().min(2, { message: 'Restaurant name must be at least 2 characters.' }).optional(),
+  restaurantName: z.string().optional(),
   email: z.string().email({ message: 'Invalid email address.' }),
   password: z.string().min(6, { message: 'Password must be at least 6 characters.' }),
   confirmPassword: z.string(),
   role: z.enum(['owner', 'staff', 'user'], {
     required_error: "Please select a role.",
   }),
+  outletType: z.custom<OutletType>().optional(),
 }).refine(data => data.password === data.confirmPassword, {
   message: "Passwords don't match",
   path: ['confirmPassword'],
-}).refine(data => data.role !== 'owner' || (data.role === 'owner' && data.restaurantName && data.restaurantName.length >= 2), {
-  message: "Restaurant name is required for owners and must be at least 2 characters.",
-  path: ['restaurantName'],
+}).superRefine((data, ctx) => {
+  if (data.role === 'owner') {
+    if (!data.restaurantName || data.restaurantName.length < 2) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Restaurant name is required for owners and must be at least 2 characters.",
+        path: ['restaurantName'],
+      });
+    }
+    if (!data.outletType) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Outlet type is required for owners.",
+        path: ['outletType'],
+      });
+    }
+  }
 });
 
 export default function SignupForm() {
@@ -46,36 +63,46 @@ export default function SignupForm() {
       email: '',
       password: '',
       confirmPassword: '',
-      role: 'owner', 
+      role: 'owner',
+      outletType: 'restaurant', // Default outlet type
     },
   });
 
   const selectedRole = form.watch('role');
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
+    console.log("Signup onSubmit called with values:", values);
     setLoading(true);
     try {
+      console.log("Attempting createUserWithEmailAndPassword...");
       const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
-      
-      const restaurantData = values.role === 'owner' ? { name: values.restaurantName! } : undefined;
+      console.log("Firebase Auth user created:", userCredential.user.uid);
 
+      const restaurantCreationData = values.role === 'owner'
+        ? { name: values.restaurantName!, outletType: values.outletType! } // outletType will be validated by Zod for owners
+        : undefined;
+      
+      console.log("Calling createUserProfile with role:", values.role, "and restaurantData:", restaurantCreationData);
       await createUserProfile(
         userCredential.user.uid,
         userCredential.user.email,
-        values.role, // values.role is guaranteed by Zod schema
-        restaurantData
+        values.role, 
+        restaurantCreationData
       );
+      console.log("User profile created in Firestore.");
 
       toast({ title: 'Signup Successful', description: 'Your account has been created.' });
 
       if (values.role === 'owner') {
-        router.push('/onboarding/restaurant-setup'); 
-      } else { // staff or user
+        console.log("Redirecting owner to onboarding/restaurant-setup");
+        router.push('/onboarding/restaurant-setup');
+      } else { 
+        console.log("Redirecting staff/user to dashboard");
         router.push('/dashboard');
       }
 
     } catch (error: any) {
-      console.error('Signup error:', error);
+      console.error('Signup error in onSubmit:', error);
       if (error.code === 'auth/email-already-in-use') {
         toast({
           variant: 'destructive',
@@ -90,6 +117,7 @@ export default function SignupForm() {
         });
       }
     } finally {
+      console.log("Signup onSubmit finished.");
       setLoading(false);
     }
   }
@@ -130,19 +158,45 @@ export default function SignupForm() {
             />
 
             {selectedRole === 'owner' && (
-              <FormField
-                control={form.control}
-                name="restaurantName"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Restaurant Name</FormLabel>
-                    <FormControl>
-                      <Input placeholder="My Awesome Eatery" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <>
+                <FormField
+                  control={form.control}
+                  name="restaurantName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Restaurant Name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="My Awesome Eatery" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="outletType"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Type of Outlet</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select the type of your outlet" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {outletTypes.map((type) => (
+                            <SelectItem key={type.value} value={type.value}>
+                              {type.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </>
             )}
             
             <FormField
