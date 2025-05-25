@@ -7,85 +7,120 @@ import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth/context";
 import { useEffect, useState, useCallback } from "react";
-import { getRestaurant, inviteStaffMember, getStaffForRestaurant, getPendingStaffInvitations, updateStaffPermissions, type UserProfile as UserProfileType } from "@/lib/firebase/firestore"; // Ensure UserProfileType is imported if it's a distinct type in firestore.ts
+import { 
+  getRestaurant, 
+  inviteStaffMember, 
+  getStaffForRestaurant, 
+  getPendingStaffInvitations, 
+  updateStaffRoleAndPermissions, // Changed from updateStaffPermissions
+  type UserProfile as UserProfileType 
+} from "@/lib/firebase/firestore";
 import LoadingSpinner from "@/components/shared/loading-spinner";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger, DialogClose } from '@/components/ui/dialog'; // Corrected import
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger, DialogClose } from '@/components/ui/dialog';
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import type { StaffInvitation, StaffPermissions } from "@/types";
+import type { StaffInvitation, StaffPermissions, StaffRole } from "@/types";
+import { STAFF_ROLES_ARRAY, DEFAULT_PERMISSIONS_BY_ROLE, defaultStaffPermissions } from "@/types";
 import { format } from 'date-fns';
 
-const defaultPermissions: StaffPermissions = {
-  canManageMenu: false,
-  canManageOrders: true,
-  canManageTables: true,
-  canManageInventory: false,
-  canAccessSettings: false,
-};
-
 const permissionLabels: Record<keyof StaffPermissions, string> = {
+  canViewDashboardInsights: "View Dashboard Insights",
+  canManageAllOrders: "Manage All Orders",
+  canTakeTableOrders: "Take Table Orders",
+  canSettleBills: "Settle Bills",
   canManageMenu: "Manage Menu",
-  canManageOrders: "Manage Orders",
   canManageTables: "Manage Tables",
-  canManageInventory: "Manage Inventory",
+  canManageInventoryItems: "Manage Inventory Items",
+  canRecordStockIn: "Record Stock In",
+  canRecordStockOut: "Record Stock Out",
+  canViewInventoryReports: "View Inventory Reports",
   canAccessSettings: "Access Restaurant Settings",
+  canManageStaff: "Manage Staff",
+  canViewFinancialReports: "View Financial Reports",
+  canViewKitchenOrders: "View Kitchen Orders (KOT)",
 };
 
 interface EditPermissionsDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  staffMember: UserProfileType; // Use imported UserProfileType
-  onSave: (permissions: StaffPermissions) => Promise<void>;
+  staffMember: UserProfileType;
+  onSave: (newRole: StaffRole, permissions: StaffPermissions) => Promise<void>;
   isSaving: boolean;
 }
 
 function EditStaffPermissionsDialog({ isOpen, onClose, staffMember, onSave, isSaving }: EditPermissionsDialogProps) {
+  const [currentRole, setCurrentRole] = useState<StaffRole>(staffMember.staffRole || 'Custom');
   const [currentPermissions, setCurrentPermissions] = useState<StaffPermissions>(
-    staffMember.staffPermissions || { ...defaultPermissions }
+    staffMember.staffPermissions || DEFAULT_PERMISSIONS_BY_ROLE[currentRole] || { ...defaultStaffPermissions }
   );
 
-  // Reset currentPermissions when staffMember changes or dialog reopens
   useEffect(() => {
-    setCurrentPermissions(staffMember.staffPermissions || { ...defaultPermissions });
+    const initialRole = staffMember.staffRole || 'Custom';
+    setCurrentRole(initialRole);
+    setCurrentPermissions(staffMember.staffPermissions || DEFAULT_PERMISSIONS_BY_ROLE[initialRole] || { ...defaultStaffPermissions });
   }, [staffMember, isOpen]);
 
+  const handleRoleChange = (newRole: StaffRole) => {
+    setCurrentRole(newRole);
+    setCurrentPermissions(DEFAULT_PERMISSIONS_BY_ROLE[newRole] || { ...defaultStaffPermissions });
+  };
 
   const handlePermissionChange = (permissionKey: keyof StaffPermissions, checked: boolean) => {
     setCurrentPermissions(prev => ({ ...prev, [permissionKey]: checked }));
+    // If individual permission is changed, role might become 'Custom' implicitly if not already
+    if (currentRole !== 'Custom' && JSON.stringify(currentPermissions) !== JSON.stringify(DEFAULT_PERMISSIONS_BY_ROLE[currentRole])) {
+       // UI could reflect this, but saving 'Custom' role is based on user explicitly choosing it or dev logic.
+       // For now, let's allow overriding defaults for a selected role.
+    }
   };
 
   const handleSave = () => {
-    onSave(currentPermissions);
+    onSave(currentRole, currentPermissions);
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Edit Permissions for {staffMember.displayName || staffMember.email}</DialogTitle>
-          <DialogDescription>Select the access level for this staff member.</DialogDescription>
+          <DialogTitle>Edit Role & Permissions for {staffMember.displayName || staffMember.email}</DialogTitle>
+          <DialogDescription>Select role and customize access level.</DialogDescription>
         </DialogHeader>
-        <div className="space-y-4 py-3">
-          {Object.keys(permissionLabels).map((key) => (
-            <div key={key} className="flex items-center space-x-2">
-              <Checkbox
-                id={`perm-${key}-${staffMember.uid}`} // Ensure unique ID for checkbox
-                checked={currentPermissions[key as keyof StaffPermissions] || false}
-                onCheckedChange={(checked) => handlePermissionChange(key as keyof StaffPermissions, !!checked)}
-              />
-              <Label htmlFor={`perm-${key}-${staffMember.uid}`} className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                {permissionLabels[key as keyof StaffPermissions]}
-              </Label>
-            </div>
-          ))}
+        <div className="space-y-4 py-3 max-h-[60vh] overflow-y-auto pr-2">
+          <div className="space-y-1">
+            <Label htmlFor="staffRoleSelect">Staff Role</Label>
+            <Select value={currentRole} onValueChange={(value) => handleRoleChange(value as StaffRole)}>
+              <SelectTrigger id="staffRoleSelect"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {STAFF_ROLES_ARRAY.map(roleValue => (
+                  <SelectItem key={roleValue} value={roleValue}>{roleValue}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <Label className="text-sm font-medium mt-3 block">Permissions:</Label>
+          <div className="space-y-2 border p-3 rounded-md bg-muted/30">
+            {Object.keys(permissionLabels).map((key) => (
+              <div key={key} className="flex items-center space-x-2">
+                <Checkbox
+                  id={`edit-perm-${key}-${staffMember.uid}`}
+                  checked={currentPermissions[key as keyof StaffPermissions] || false}
+                  onCheckedChange={(checked) => handlePermissionChange(key as keyof StaffPermissions, !!checked)}
+                />
+                <Label htmlFor={`edit-perm-${key}-${staffMember.uid}`} className="text-xs font-normal leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                  {permissionLabels[key as keyof StaffPermissions]}
+                </Label>
+              </div>
+            ))}
+          </div>
         </div>
         <DialogFooter>
           <DialogClose asChild><Button type="button" variant="outline" disabled={isSaving} onClick={onClose}>Cancel</Button></DialogClose>
           <Button onClick={handleSave} disabled={isSaving} className="bg-primary hover:bg-primary/90 text-primary-foreground">
-            {isSaving ? <LoadingSpinner className="mr-2 h-4 w-4" /> : "Save Permissions"}
+            {isSaving ? <LoadingSpinner className="mr-2 h-4 w-4" /> : "Save Changes"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -107,18 +142,18 @@ export default function StaffManagementPage() {
   const [loading, setLoading] = useState(true);
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
   const [staffEmailToInvite, setStaffEmailToInvite] = useState('');
-  const [invitePermissions, setInvitePermissions] = useState<StaffPermissions>({ ...defaultPermissions });
+  const [inviteStaffRole, setInviteStaffRole] = useState<StaffRole>('Waiter'); // Default role for new invites
+  const [invitePermissions, setInvitePermissions] = useState<StaffPermissions>(DEFAULT_PERMISSIONS_BY_ROLE['Waiter'] || { ...defaultStaffPermissions });
   const [isInviting, setIsInviting] = useState(false);
 
   const [editingStaffMember, setEditingStaffMember] = useState<UserProfileType | null>(null);
   const [isEditPermissionsDialogOpen, setIsEditPermissionsDialogOpen] = useState(false);
   const [isSavingPermissions, setIsSavingPermissions] = useState(false);
 
-
   const fetchData = useCallback(async () => {
     if (!restaurantId || !user || role !== 'owner') {
-        setLoading(false);
-        return;
+      setLoading(false);
+      return;
     }
     setLoading(true);
     try {
@@ -155,26 +190,32 @@ export default function StaffManagementPage() {
     }
   }, [restaurantId, user, role, router, fetchData]);
 
+  const handleInviteRoleChange = (newRole: StaffRole) => {
+    setInviteStaffRole(newRole);
+    setInvitePermissions(DEFAULT_PERMISSIONS_BY_ROLE[newRole] || { ...defaultStaffPermissions });
+  };
+  
+  const handleInvitePermissionChange = (permissionKey: keyof StaffPermissions, checked: boolean) => {
+    setInvitePermissions(prev => ({ ...prev, [permissionKey]: checked }));
+  };
+
   const handleInviteStaff = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!staffEmailToInvite || !user || !restaurantId || !restaurantName) return;
     setIsInviting(true);
     try {
-      await inviteStaffMember(restaurantId, staffEmailToInvite, user.uid, invitePermissions);
+      await inviteStaffMember(restaurantId, staffEmailToInvite, user.uid, inviteStaffRole, invitePermissions);
       toast({ title: "Invitation Sent", description: `An invitation has been sent to ${staffEmailToInvite}.` });
       setStaffEmailToInvite('');
-      setInvitePermissions({ ...defaultPermissions });
+      setInviteStaffRole('Waiter'); // Reset to default
+      setInvitePermissions(DEFAULT_PERMISSIONS_BY_ROLE['Waiter'] || { ...defaultStaffPermissions });
       setIsInviteDialogOpen(false);
-      fetchData(); // Re-fetch pending invitations
+      fetchData(); 
     } catch (error: any) {
       toast({ variant: "destructive", title: "Invitation Failed", description: error.message });
     } finally {
       setIsInviting(false);
     }
-  };
-
-  const handleInvitePermissionChange = (permissionKey: keyof StaffPermissions, checked: boolean) => {
-    setInvitePermissions(prev => ({ ...prev, [permissionKey]: checked }));
   };
 
   const handleOpenEditPermissions = (staff: UserProfileType) => {
@@ -184,17 +225,17 @@ export default function StaffManagementPage() {
   
   const handleCloseEditPermissions = () => {
     setIsEditPermissionsDialogOpen(false);
-    setEditingStaffMember(null); // Clear editing state
+    setEditingStaffMember(null); 
   };
 
-  const handleSaveStaffPermissions = async (permissions: StaffPermissions) => {
+  const handleSaveStaffPermissions = async (newRole: StaffRole, permissions: StaffPermissions) => {
     if (!editingStaffMember || !restaurantId) return;
     setIsSavingPermissions(true);
     try {
-      await updateStaffPermissions(editingStaffMember.uid, restaurantId, permissions);
-      toast({ title: "Permissions Updated", description: `Permissions for ${editingStaffMember.displayName || editingStaffMember.email} have been saved.` });
+      await updateStaffRoleAndPermissions(editingStaffMember.uid, restaurantId, newRole, permissions);
+      toast({ title: "Role & Permissions Updated", description: `Settings for ${editingStaffMember.displayName || editingStaffMember.email} have been saved.` });
       handleCloseEditPermissions();
-      fetchData(); // Refresh staff list
+      fetchData(); 
     } catch (error: any) {
       toast({ variant: "destructive", title: "Update Failed", description: error.message });
     } finally {
@@ -226,7 +267,7 @@ export default function StaffManagementPage() {
               Staff Management for {restaurantName}
             </CardTitle>
             <CardDescription>
-              Manage your team members, their permissions, and invite new staff.
+              Manage your team members, their roles & permissions, and invite new staff.
             </CardDescription>
           </div>
           <Dialog open={isInviteDialogOpen} onOpenChange={setIsInviteDialogOpen}>
@@ -238,22 +279,26 @@ export default function StaffManagementPage() {
             <DialogContent className="sm:max-w-lg">
               <DialogHeader>
                 <DialogTitle>Invite Staff Member</DialogTitle>
-                <DialogDescription>Set email and initial permissions for the new staff.</DialogDescription>
+                <DialogDescription>Set email, role, and permissions for the new staff.</DialogDescription>
               </DialogHeader>
-              <form onSubmit={handleInviteStaff} className="space-y-4 py-2">
+              <form onSubmit={handleInviteStaff} className="space-y-3 py-2 max-h-[70vh] overflow-y-auto pr-2">
                 <div>
                   <Label htmlFor="staffEmail">Staff Email Address</Label>
-                  <Input
-                    id="staffEmail"
-                    type="email"
-                    value={staffEmailToInvite}
-                    onChange={(e) => setStaffEmailToInvite(e.target.value)}
-                    placeholder="staffmember@example.com"
-                    required
-                  />
+                  <Input id="staffEmail" type="email" value={staffEmailToInvite} onChange={(e) => setStaffEmailToInvite(e.target.value)} placeholder="staffmember@example.com" required />
                 </div>
-                <div className="space-y-3 border p-3 rounded-md">
-                    <Label className="text-sm font-medium">Initial Permissions:</Label>
+                <div className="space-y-1">
+                  <Label htmlFor="inviteStaffRoleSelect">Assign Role</Label>
+                  <Select value={inviteStaffRole} onValueChange={(value) => handleInviteRoleChange(value as StaffRole)}>
+                    <SelectTrigger id="inviteStaffRoleSelect"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {STAFF_ROLES_ARRAY.map(roleValue => (
+                        <SelectItem key={roleValue} value={roleValue}>{roleValue}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Label className="text-sm font-medium mt-2 block">Permissions (based on role, customizable):</Label>
+                <div className="space-y-1 border p-2 rounded-md bg-muted/20 max-h-48 overflow-y-auto">
                     {Object.keys(permissionLabels).map((key) => (
                         <div key={key} className="flex items-center space-x-2">
                         <Checkbox
@@ -267,7 +312,7 @@ export default function StaffManagementPage() {
                         </div>
                     ))}
                 </div>
-                <DialogFooter>
+                <DialogFooter className="pt-3">
                   <DialogClose asChild><Button type="button" variant="outline" disabled={isInviting} onClick={()=> setIsInviteDialogOpen(false)}>Cancel</Button></DialogClose>
                   <Button type="submit" disabled={isInviting} className="bg-primary hover:bg-primary/90 text-primary-foreground">
                     {isInviting ? <LoadingSpinner className="mr-2 h-4 w-4" /> : "Send Invitation"}
@@ -284,38 +329,41 @@ export default function StaffManagementPage() {
             {activeStaff.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {activeStaff.map(staff => (
-                  <Card key={staff.uid} className="p-4 shadow-sm border-primary/20">
-                    <div className="flex items-center space-x-3 mb-2">
-                      <Image
-                        src={staff.photoURL || `https://picsum.photos/seed/${staff.uid}/40/40`}
-                        alt={staff.displayName || staff.email || 'Staff'}
-                        width={40} height={40} className="rounded-full"
-                        data-ai-hint="user avatar"
-                      />
-                      <div>
-                        <p className="font-medium text-foreground">{staff.displayName || staff.email?.split('@')[0]}</p>
-                        <p className="text-xs text-muted-foreground">{staff.email}</p>
+                  <Card key={staff.uid} className="p-4 shadow-sm border-primary/20 flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center space-x-3 mb-2">
+                        <Image
+                          src={staff.photoURL || `https://picsum.photos/seed/${staff.uid}/40/40`}
+                          alt={staff.displayName || staff.email || 'Staff'}
+                          width={40} height={40} className="rounded-full"
+                          data-ai-hint="user avatar"
+                        />
+                        <div>
+                          <p className="font-medium text-foreground">{staff.displayName || staff.email?.split('@')[0]}</p>
+                          <p className="text-xs text-muted-foreground">{staff.email}</p>
+                        </div>
+                      </div>
+                      <Badge variant="secondary" className="mb-2">{staff.staffRole || 'Custom Role'}</Badge>
+                      <div className="text-xs text-muted-foreground mb-3 space-y-0.5 max-h-20 overflow-y-auto pr-1">
+                          <p className="font-medium text-foreground/80 text-xs">Permissions:</p>
+                          {staff.staffPermissions && Object.values(staff.staffPermissions).some(v => v) ? (
+                              <ul className="list-disc list-inside pl-2">
+                              {Object.entries(staff.staffPermissions).filter(([,value]) => value).map(([key]) => (
+                                  <li key={key} className="text-xs">{permissionLabels[key as keyof StaffPermissions]}</li>
+                              ))}
+                              </ul>
+                          ) : ( <p className="text-xs italic">No specific permissions (default access).</p> )
+                          }
                       </div>
                     </div>
-                    <div className="text-xs text-muted-foreground mb-3 space-y-1">
-                        <p className="font-medium text-foreground/80">Permissions:</p>
-                        {staff.staffPermissions && Object.values(staff.staffPermissions).some(v => v) ? (
-                            <ul className="list-disc list-inside pl-2">
-                            {Object.entries(staff.staffPermissions).map(([key, value]) => value && (
-                                <li key={key} className="text-xs">{permissionLabels[key as keyof StaffPermissions]}</li>
-                            ))}
-                            </ul>
-                        ) : ( <p className="text-xs italic">Default (limited) permissions</p> )
-                        }
-                    </div>
-                    <Button variant="outline" size="sm" onClick={() => handleOpenEditPermissions(staff)} className="w-full text-xs">
-                      <Edit3 className="mr-2 h-3 w-3" /> Edit Permissions
+                    <Button variant="outline" size="sm" onClick={() => handleOpenEditPermissions(staff)} className="w-full text-xs mt-auto">
+                      <Edit3 className="mr-2 h-3 w-3" /> Edit Role & Permissions
                     </Button>
                   </Card>
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground italic">No active staff members found for this restaurant. Invite someone to get started!</p>
+              <p className="text-sm text-muted-foreground italic">No active staff members found. Invite someone to get started!</p>
             )}
           </div>
 
@@ -338,16 +386,18 @@ export default function StaffManagementPage() {
                     <div className="flex items-center space-x-2 mb-2 sm:mb-0">
                       <Mail className="h-5 w-5 text-accent" />
                       <p className="text-sm text-foreground">{invite.email}</p>
+                       <Badge variant="outline" className="text-xs">{invite.staffRole || 'Role not set'}</Badge>
                     </div>
                     <div className="text-xs text-muted-foreground flex items-center">
                       <Clock className="mr-1 h-3 w-3"/>
                       Sent: {invite.createdAt ? format(invite.createdAt.toDate(), 'PPp') : 'N/A'}
                     </div>
+                    {/* Maybe add a "Resend" or "Cancel Invitation" button here later */}
                   </Card>
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground italic">No pending staff invitations for this restaurant.</p>
+              <p className="text-sm text-muted-foreground italic">No pending staff invitations.</p>
             )}
           </div>
         </CardContent>

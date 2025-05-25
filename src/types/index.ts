@@ -4,43 +4,138 @@ import type { Timestamp } from 'firebase/firestore';
 
 export type UserRole = 'admin' | 'user' | 'owner' | 'staff' | 'kitchen';
 
+// Define more granular staff roles
+export type StaffRole = 'Manager' | 'Waiter' | 'KitchenStaff' | 'Biller' | 'Custom';
+
+export const STAFF_ROLES_ARRAY: StaffRole[] = ['Manager', 'Waiter', 'KitchenStaff', 'Biller', 'Custom'];
+
 export interface StaffPermissions {
-  canManageMenu?: boolean;
-  canManageOrders?: boolean;
-  canManageTables?: boolean;
-  canManageInventory?: boolean;
-  canAccessSettings?: boolean; // e.g., restaurant-specific settings
+  canViewDashboardInsights?: boolean; // General dashboard access
+  canManageAllOrders?: boolean;      // Full order management (edit, cancel any)
+  canTakeTableOrders?: boolean;    // Waiter specific: create/modify orders for assigned tables
+  canSettleBills?: boolean;        // Biller/Manager: mark orders as paid
+  canManageMenu?: boolean;         // Add/edit/delete menu items, categories
+  canManageTables?: boolean;       // Configure table layout, status
+  canManageInventoryItems?: boolean; // Add/edit inventory items
+  canRecordStockIn?: boolean;      // Record purchases/stock received
+  canRecordStockOut?: boolean;     // Record wastage/adjustments out
+  canViewInventoryReports?: boolean;
+  canAccessSettings?: boolean;     // Access general restaurant settings
+  canManageStaff?: boolean;        // Invite, edit roles/permissions of other staff (Manager only)
+  canViewFinancialReports?: boolean;
+  canViewKitchenOrders?: boolean;  // For KOT display
 }
 
-// Define and export defaultStaffPermissions
+export const DEFAULT_PERMISSIONS_BY_ROLE: Record<StaffRole, StaffPermissions> = {
+  Manager: {
+    canViewDashboardInsights: true,
+    canManageAllOrders: true,
+    canTakeTableOrders: true,
+    canSettleBills: true,
+    canManageMenu: true,
+    canManageTables: true,
+    canManageInventoryItems: true,
+    canRecordStockIn: true,
+    canRecordStockOut: true,
+    canViewInventoryReports: true,
+    canAccessSettings: true,
+    canManageStaff: true,
+    canViewFinancialReports: true,
+    canViewKitchenOrders: true,
+  },
+  Waiter: {
+    canViewDashboardInsights: false,
+    canManageAllOrders: false, // They manage their orders, not all.
+    canTakeTableOrders: true,
+    canSettleBills: false, // Typically manager or biller
+    canManageMenu: false,
+    canManageTables: false, // Usually view, not manage layout
+    canManageInventoryItems: false,
+    canRecordStockIn: false,
+    canRecordStockOut: false,
+    canViewInventoryReports: false,
+    canAccessSettings: false,
+    canManageStaff: false,
+    canViewFinancialReports: false,
+    canViewKitchenOrders: true, // May need to see status of their orders
+  },
+  KitchenStaff: {
+    canViewDashboardInsights: false,
+    canManageAllOrders: false,
+    canTakeTableOrders: false,
+    canSettleBills: false,
+    canManageMenu: false,
+    canManageTables: false,
+    canManageInventoryItems: true, // Might update stock for used items if granular
+    canRecordStockIn: false, // Usually not
+    canRecordStockOut: true, // For wastage directly from kitchen
+    canViewInventoryReports: false,
+    canAccessSettings: false,
+    canManageStaff: false,
+    canViewFinancialReports: false,
+    canViewKitchenOrders: true,
+  },
+  Biller: {
+    canViewDashboardInsights: true,
+    canManageAllOrders: true, // To view and settle
+    canTakeTableOrders: false,
+    canSettleBills: true,
+    canManageMenu: false,
+    canManageTables: false,
+    canManageInventoryItems: false,
+    canRecordStockIn: false,
+    canRecordStockOut: false,
+    canViewInventoryReports: true, // For end of day reconciliation
+    canAccessSettings: false,
+    canManageStaff: false,
+    canViewFinancialReports: true,
+    canViewKitchenOrders: false,
+  },
+  Custom: { // Default custom role starts with minimal permissions
+    canViewDashboardInsights: false,
+    canManageAllOrders: false,
+    canTakeTableOrders: false,
+    canSettleBills: false,
+    canManageMenu: false,
+    canManageTables: false,
+    canManageInventoryItems: false,
+    canRecordStockIn: false,
+    canRecordStockOut: false,
+    canViewInventoryReports: false,
+    canAccessSettings: false,
+    canManageStaff: false,
+    canViewFinancialReports: false,
+    canViewKitchenOrders: false,
+  },
+};
+
+// Base minimal permissions if no role/custom setup is explicitly defined yet
 export const defaultStaffPermissions: StaffPermissions = {
-  canManageMenu: false,
-  canManageOrders: true, // Staff can usually manage orders
-  canManageTables: true, // Staff can usually manage tables
-  canManageInventory: false,
-  canAccessSettings: false,
+  ...DEFAULT_PERMISSIONS_BY_ROLE.Custom, // Start with the most restrictive
 };
 
 
 export interface AuthUser extends FirebaseUser {
   role: UserRole | null;
+  staffRole?: StaffRole | null; // Added staffRole
   restaurantId: string | null;
   onboardingComplete: boolean;
   isAnonymous: boolean;
   phoneNumber: string | null;
-  staffPermissions?: StaffPermissions; // Added for staff
+  staffPermissions?: StaffPermissions;
 }
 
 export interface UserProfile {
   uid: string;
   email: string | null;
   role: UserRole;
+  staffRole?: StaffRole | null; // Added staffRole
   restaurantId: string | null;
   onboardingComplete: boolean;
   createdAt: Timestamp;
   phoneNumber: string | null;
   isAnonymous?: boolean;
-  staffPermissions?: StaffPermissions; // Added for staff
+  staffPermissions?: StaffPermissions; 
   displayName?: string | null;
   photoURL?: string | null;
   lastLoginAt?: Timestamp;
@@ -84,20 +179,20 @@ export interface RestaurantProfile {
   id: string;
   ownerId: string;
   name: string;
-  outletType?: OutletType;
+  outletType: OutletType; // Made mandatory
   createdAt: Timestamp;
   updatedAt: Timestamp;
   subscriptionPlan?: string;
   stripeCustomerId?: string;
   subscriptionStatus?: 'active' | 'inactive' | 'trialing';
-  taxRate?: number;
+  taxRate?: number; // This might become less relevant if using flexible TaxConfig
   settings?: {
     onlineOrderingEnabled?: boolean;
     tableReservationsEnabled?: boolean;
     notificationEmail?: string;
     customDomain?: string | null;
   };
-  taxes?: TaxConfig[];
+  taxes?: TaxConfig[]; // For flexible tax configurations
 }
 
 export interface MenuCategory {
@@ -122,18 +217,19 @@ export interface MenuSubcategory {
 
 export interface MenuItemVariantOption {
   name: string;
-  price: number;
+  price: number; // This is the price FOR this specific option of this variant.
+                // E.g., Small=$5, Medium=$7. NOT a price *adjustment*.
 }
 
 export interface MenuItemVariant {
-  name: string;
-  options: MenuItemVariantOption[];
+  name: string; // e.g., "Size", "Spice Level"
+  options: MenuItemVariantOption[]; // e.g., [{name: "Small", price: 5}, {name: "Medium", price: 7}]
 }
 
 export interface AvailabilityRule {
   dayOfWeek: 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri' | 'Sat' | 'Sun' | 'Everyday';
-  startTime: string;
-  endTime: string;
+  startTime: string; // HH:mm
+  endTime: string;   // HH:mm
 }
 
 export type UnitOfMeasure = 'kg' | 'g' | 'L' | 'ml' | 'pcs' | 'pack' | 'bottle' | 'can' | 'box' | 'dozen' | 'other';
@@ -153,20 +249,20 @@ export const unitsOfMeasure: { value: UnitOfMeasure; label: string }[] = [
 
 export interface RecipeIngredientItem {
   inventoryItemId: string;
-  inventoryItemName: string;
+  inventoryItemName: string; // Denormalized for easier display in forms
   quantityUsed: number;
   unitOfMeasureUsed: UnitOfMeasure;
 }
 
 export interface MenuItem {
-  id: string;
-  itemIdString: string;
+  id: string; // Document ID
+  itemIdString: string; // This is the actual unique string ID for the item, often same as id.
   restaurantId: string;
   categoryId: string;
-  subcategoryId?: string | null;
+  subcategoryId?: string | null; // Keep optional
   name:string;
   description: string;
-  price: number;
+  price: number; // Base price if no variants, or price of default variant
   imageUrl?: string | null;
   videoUrl?: string | null;
   availability: boolean;
@@ -174,8 +270,8 @@ export interface MenuItem {
   allergenInfo?: string[];
   order: number;
   calories?: number | null;
-  crossSellItems?: string[];
-  upsellItems?: string[];
+  crossSellItems?: string[]; // Array of MenuItem IDs
+  upsellItems?: string[];   // Array of MenuItem IDs
   variants?: MenuItemVariant[];
   availabilitySchedule?: AvailabilityRule[];
   recipeIngredients?: RecipeIngredientItem[];
@@ -184,22 +280,23 @@ export interface MenuItem {
   portionSize?: string | null;
   createdAt: Timestamp;
   updatedAt: Timestamp;
-  taxOverrides?: TaxConfig[];
+  taxOverrides?: TaxConfig[]; // Item-specific tax overrides
 }
+
 
 export type TableStatus = 'available' | 'occupied' | 'reserved' | 'needs_cleaning';
 
 export interface Table {
-  id: string;
+  id: string; // Firestore document ID
   restaurantId: string;
-  tableDocId: string; // This should be the same as 'id' for tables collection
+  tableDocId: string; // Explicitly storing the doc ID here
   tableNumber: string;
   capacity: number;
   status: TableStatus;
   qrCodeValue: string;
-  currentOrderIds?: string[];
-  createdAt: string; 
-  updatedAt: string; 
+  currentOrderIds?: string[]; // IDs of active orders associated with this table
+  createdAt: string; // ISO string
+  updatedAt: string; // ISO string
 }
 
 export type OrderStatus =
@@ -218,9 +315,9 @@ export interface OrderItem {
   menuItemId: string;
   menuItemName: string;
   quantity: number;
-  unitPrice: number;
-  totalPrice: number;
-  variantChoices?: { variantName: string; optionName: string; optionPrice: number }[];
+  unitPrice: number; // Price of the item *at the time of order* (could be variant price)
+  totalPrice: number; // quantity * unitPrice
+  variantChoices?: { variantName: string; optionName: string; optionPrice: number }[]; // Price here is the option's specific price
   notes?: string;
   categoryId?: string; // For tax calculation
   taxOverrides?: TaxConfig[]; // For tax calculation
@@ -229,23 +326,23 @@ export interface OrderItem {
 export interface Order {
   id: string;
   restaurantId: string;
-  userId?: string | null;
+  userId?: string | null; // UID of the customer or staff who placed it
   tableId?: string | null;
   tableNumber?: string | null;
   items: OrderItem[];
   subtotal: number;
   taxAmount?: number;
-  serviceCharge?: number;
+  serviceCharge?: number; // Example additional charge
   discountAmount?: number;
   totalAmount: number;
   status: OrderStatus;
-  customerName?: string | null;
+  customerName?: string | null; // If provided
   customerPhoneNumber?: string | null;
-  customerWhatsapp?: string | null;
+  customerWhatsapp?: string | null; // Optional for WA notifications
   customerNotes?: string;
   kitchenNotes?: string;
   paymentMethod?: string;
-  transactionId?: string;
+  transactionId?: string; // From payment gateway
   groupId?: string | null; // For group orders
   createdAt: Timestamp;
   updatedAt: Timestamp;
@@ -301,11 +398,15 @@ export interface PopularItem {
 }
 
 // --- Inventory Types ---
-export type InventoryItemCategory = 'raw_material' | 'semi_finished' | 'finished_good' | 'other';
+export type InventoryItemCategory = 'raw_material' | 'semi_finished' | 'finished_good' | 'beverage_alcoholic' | 'beverage_nonalcoholic' | 'packaging' | 'cleaning_supply' | 'other';
 export const inventoryItemCategories: { value: InventoryItemCategory; label: string }[] = [
-  { value: 'raw_material', label: 'Raw Material' },
-  { value: 'semi_finished', label: 'Semi-Finished Good' },
-  { value: 'finished_good', label: 'Finished Good' },
+  { value: 'raw_material', label: 'Raw Material (e.g., Flour, Tomato)' },
+  { value: 'semi_finished', label: 'Semi-Finished Good (e.g., Pizza Base, Curry Paste)' },
+  { value: 'finished_good', label: 'Finished Good (e.g., Canned Drink, Sauce Bottle)' },
+  { value: 'beverage_alcoholic', label: 'Beverage - Alcoholic' },
+  { value: 'beverage_nonalcoholic', label: 'Beverage - Non-Alcoholic' },
+  { value: 'packaging', label: 'Packaging Material' },
+  { value: 'cleaning_supply', label: 'Cleaning Supply' },
   { value: 'other', label: 'Other' },
 ];
 
@@ -326,7 +427,7 @@ export interface InventoryItem {
   currentStock: number;
   reorderLevel?: number | null;
   supplierInfo?: SupplierInfo | null;
-  costPerUnit?: number | null;
+  costPerUnit?: number | null; // Average or Last Purchase Cost
   unitConversionNotes?: string | null; // e.g., "1 case = 24 units"
   lastStockUpdatedAt: Timestamp;
   createdAt: Timestamp;
@@ -362,7 +463,7 @@ export interface StockTransaction {
   expiryDate?: Timestamp | null; // For perishable items
   paymentMode?: string | null; // For purchase transactions
   relatedOrderId?: string | null; // If stock out due to a sale
-  relatedPurchaseId?: string | null; // If this is linked to a larger purchase order
+  relatedPurchaseId?: string | null; // If this is linked to a larger purchase order (future use)
   userId?: string | null; // User who performed/authorized the transaction
 }
 
@@ -377,11 +478,12 @@ export interface StaffInvitation {
   id: string;
   restaurantId: string;
   email: string; // Should be stored in lowercase for case-insensitive matching
-  role: 'staff'; 
+  role: 'staff'; // Fixed for staff invitations
+  staffRole?: StaffRole; // Specific role like Manager, Waiter
   status: 'pending' | 'accepted' | 'declined' | 'expired';
   invitedBy: string; // UID of the owner who sent the invitation
   createdAt: Timestamp;
   acceptedAt?: Timestamp;
-  acceptedByUid?: string; 
-  permissions?: StaffPermissions; 
+  acceptedByUid?: string; // UID of the user who accepted
+  permissions?: StaffPermissions; // Permissions assigned at invitation
 }
