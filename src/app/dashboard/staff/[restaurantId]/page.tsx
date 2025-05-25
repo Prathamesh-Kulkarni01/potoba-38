@@ -1,4 +1,5 @@
 
+// src/app/dashboard/staff/[restaurantId]/page.tsx
 'use client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Users, PlusCircle, Mail, Clock } from "lucide-react";
@@ -32,19 +33,30 @@ export default function StaffManagementPage() {
   const [isInviting, setIsInviting] = useState(false);
 
   const fetchData = useCallback(async () => {
-    if (!restaurantId || !user || role !== 'owner') return;
+    if (!restaurantId || !user || role !== 'owner') {
+        setLoading(false); // Ensure loading is false if conditions not met
+        return;
+    }
     setLoading(true);
     try {
-      const [restaurantData, staffData, invitationsData] = await Promise.all([
-        getRestaurant(restaurantId),
-        getStaffForRestaurant(restaurantId),
-        getPendingStaffInvitations(restaurantId)
-      ]);
+      const restaurantData = await getRestaurant(restaurantId);
 
       if (restaurantData && restaurantData.ownerId === user.uid) {
-        setRestaurantName(restaurantData.name);
-        setActiveStaff(staffData);
-        setPendingInvitations(invitationsData);
+        setRestaurantName(restaurantData.name); // Set name first
+
+        // Then fetch staff and invitations
+        try {
+            const [staffData, invitationsData] = await Promise.all([
+                getStaffForRestaurant(restaurantId),
+                getPendingStaffInvitations(restaurantId)
+            ]);
+            setActiveStaff(staffData);
+            setPendingInvitations(invitationsData);
+        } catch (subFetchError: any) {
+            console.error("Error fetching staff/invitations:", subFetchError);
+            toast({ variant: "destructive", title: "Error Loading Staff Details", description: `Could not load staff or invitations: ${subFetchError.message}` });
+            // Keep restaurantName, so page can still render with partial data
+        }
       } else if (restaurantData) {
         toast({ variant: "destructive", title: "Access Denied", description: "You are not the owner of this restaurant." });
         router.push('/dashboard');
@@ -53,7 +65,8 @@ export default function StaffManagementPage() {
         router.push('/dashboard');
       }
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: `Failed to load staff data: ${error.message}` });
+      toast({ variant: "destructive", title: "Error", description: `Failed to load restaurant data: ${error.message}` });
+      router.push('/dashboard'); // Redirect if restaurant data itself fails
     } finally {
       setLoading(false);
     }
@@ -63,13 +76,20 @@ export default function StaffManagementPage() {
     if (user && role === 'owner' && restaurantId) {
       fetchData();
     } else if (user && role !== 'owner') {
+      // Non-owners trying to access this page should be redirected.
+      // The dashboard layout or auth context might handle this more broadly too.
+      toast({ variant: "destructive", title: "Access Denied", description: "Only restaurant owners can manage staff."});
       router.push('/dashboard');
+      setLoading(false); // Ensure loading state is false after redirect decision
+    } else if (!user) {
+        // If user is null (e.g., still loading auth state or logged out), wait or let auth context handle.
+        // setLoading(true) might be appropriate if we expect user to become available.
     }
   }, [restaurantId, user, role, router, fetchData]);
 
   const handleInviteStaff = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!staffEmailToInvite || !user || !restaurantId) return;
+    if (!staffEmailToInvite || !user || !restaurantId || !restaurantName) return;
     setIsInviting(true);
     try {
       await inviteStaffMember(restaurantId, staffEmailToInvite, user.uid);
@@ -88,7 +108,7 @@ export default function StaffManagementPage() {
     return <div className="flex justify-center items-center h-full"><LoadingSpinner /></div>;
   }
 
-  if (!restaurantName && !loading) {
+  if (!restaurantName && !loading) { // This condition should now be less likely to be hit for valid owners
     return (
       <Card>
         <CardHeader><CardTitle>Access Denied or Restaurant Not Found</CardTitle></CardHeader>
@@ -100,7 +120,7 @@ export default function StaffManagementPage() {
   return (
     <div className="space-y-8">
       <Card className="shadow-xl">
-        <CardHeader className="flex flex-row justify-between items-center">
+        <CardHeader className="flex flex-col md:flex-row justify-between items-start md:items-center">
           <div>
             <CardTitle className="flex items-center text-2xl">
               <Users className="mr-3 h-7 w-7 text-primary" />
@@ -112,7 +132,7 @@ export default function StaffManagementPage() {
           </div>
           <Dialog open={isInviteDialogOpen} onOpenChange={setIsInviteDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="bg-accent hover:bg-accent/90 text-accent-foreground">
+              <Button className="bg-accent hover:bg-accent/90 text-accent-foreground mt-4 md:mt-0">
                 <PlusCircle className="mr-2 h-4 w-4" /> Invite New Staff
               </Button>
             </DialogTrigger>
@@ -166,7 +186,7 @@ export default function StaffManagementPage() {
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground italic">No active staff members found for this restaurant.</p>
+              <p className="text-sm text-muted-foreground italic">No active staff members found for this restaurant. Invite someone to get started!</p>
             )}
           </div>
 
@@ -188,7 +208,7 @@ export default function StaffManagementPage() {
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground italic">No pending staff invitations.</p>
+              <p className="text-sm text-muted-foreground italic">No pending staff invitations for this restaurant.</p>
             )}
           </div>
         </CardContent>
@@ -196,3 +216,4 @@ export default function StaffManagementPage() {
     </div>
   );
 }
+
