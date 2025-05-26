@@ -5,12 +5,12 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useOrders } from '@/contexts/waiter/OrderContext';
-import { TABLES_DATA } from '@/data/waiter/tables';
+// import { TABLES_DATA } from '@/data/waiter/tables'; // Removed static import
 import Link from 'next/link';
 import { ChevronRight, Clock, CheckCircle, ListChecks } from 'lucide-react';
 import { useEffect, useState, useMemo } from 'react';
 import { formatDistanceToNowStrict, format } from 'date-fns';
-import type { OrderItem, HistoricalOrder } from '@/lib/types';
+import type { OrderItem, HistoricalOrder, Table as FirebaseTableType } from '@/lib/types';
 
 function formatElapsedTime(startTime: number | null): string {
   if (startTime === null) return 'N/A';
@@ -23,7 +23,7 @@ function formatElapsedTime(startTime: number | null): string {
 }
 
 export default function TablesStatusPage() {
-  const { orders, getOrderForTable, getFirstItemAddedTime, orderHistory } = useOrders();
+  const { orders, getOrderForTable, getFirstItemAddedTime, orderHistory, tables } = useOrders();
   const [, setCurrentTime] = useState(Date.now()); 
 
   useEffect(() => {
@@ -33,7 +33,13 @@ export default function TablesStatusPage() {
     return () => clearInterval(timer);
   }, []);
   
-  const allTableIdsWithActiveOrders = useMemo(() => Array.from(orders.keys()), [orders]);
+  const allTableIdsWithActiveOrders = useMemo(() => {
+    if (!orders) {
+      console.error("OrderContext: 'orders' (activeOrders from context) is undefined in TablesStatusPage's useMemo for allTableIdsWithActiveOrders. This should not happen. Defaulting to empty array.");
+      return []; // Safeguard against orders being undefined
+    }
+    return Array.from(orders.keys());
+  }, [orders]);
 
   // For "Ongoing" Tab
   const getOngoingItemsCount = (tableId: string) => {
@@ -56,8 +62,8 @@ export default function TablesStatusPage() {
 
   // For "Completed" Tab
   const completedOrders = useMemo(() => {
-    const allCompleted: HistoricalOrder[] = []; // No longer need originalTableId here directly
-    orderHistory.forEach((historyItems) => { // Iterate directly over historyItems
+    const allCompleted: HistoricalOrder[] = []; 
+    orderHistory.forEach((historyItems) => { 
       historyItems.forEach(histOrder => {
         allCompleted.push(histOrder);
       });
@@ -86,7 +92,7 @@ export default function TablesStatusPage() {
             <p className="text-center text-muted-foreground py-10">No ongoing orders.</p>
           )}
           {tablesWithOngoingItems.map(tableId => {
-            const table = TABLES_DATA.find(t => t.id === tableId);
+            const table = tables.find(t => t.id === tableId);
             const ongoingItemsCount = getOngoingItemsCount(tableId);
             const firstItemTime = getFirstItemAddedTime(tableId);
             if (!table || ongoingItemsCount === 0) return null;
@@ -100,7 +106,7 @@ export default function TablesStatusPage() {
                           <Clock size={20} />
                        </div>
                        <div>
-                        <p className="font-semibold text-foreground">Table {table.name.replace('Table ', '')}</p>
+                        <p className="font-semibold text-foreground">Table {table.tableNumber || table.id}</p>
                         <p className="text-xs text-muted-foreground">{formatElapsedTime(firstItemTime)} ago</p>
                        </div>
                     </div>
@@ -123,7 +129,7 @@ export default function TablesStatusPage() {
             <p className="text-center text-muted-foreground py-10">No orders currently being prepared.</p>
           )}
           {tablesWithPreparingItems.map(tableId => {
-            const table = TABLES_DATA.find(t => t.id === tableId);
+            const table = tables.find(t => t.id === tableId);
             const preparingItemsCount = getPreparingItemsCount(tableId);
             const firstItemTime = getFirstItemAddedTime(tableId); 
             if (!table || preparingItemsCount === 0) return null;
@@ -137,7 +143,7 @@ export default function TablesStatusPage() {
                           <ListChecks size={20} />
                        </div>
                        <div>
-                        <p className="font-semibold text-foreground">Table {table.name.replace('Table ', '')}</p>
+                        <p className="font-semibold text-foreground">Table {table.tableNumber || table.id}</p>
                         <p className="text-xs text-muted-foreground">{formatElapsedTime(firstItemTime)} ago</p>
                        </div>
                     </div>
@@ -160,7 +166,7 @@ export default function TablesStatusPage() {
             <p className="text-center text-muted-foreground py-10">No orders completed yet.</p>
           )}
           {completedOrders.map(histOrder => {
-            const table = TABLES_DATA.find(t => t.id === histOrder.originalTableId);
+            const table = tables.find(t => t.id === histOrder.originalTableId);
             const itemsCount = histOrder.items.reduce((acc, item) => acc + item.quantity, 0);
             return (
               <Card key={histOrder.id} className="shadow-sm">
@@ -172,7 +178,7 @@ export default function TablesStatusPage() {
                        </div>
                        <div>
                         <p className="font-semibold text-foreground">
-                          Table {table ? table.name.replace('Table ', '') : histOrder.originalTableId?.replace('t','') || 'N/A'}
+                          Table {table ? (table.tableNumber || table.id) : (histOrder.originalTableId?.replace('t','') || 'N/A')}
                         </p>
                         <p className="text-xs text-muted-foreground">
                           {format(new Date(histOrder.completedAt), "MMM d, h:mm a")}
@@ -196,3 +202,4 @@ export default function TablesStatusPage() {
     </div>
   );
 }
+
