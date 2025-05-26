@@ -90,6 +90,7 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setTableNotes(prev => new Map(prev).set(tableId, note.trim()));
   }, []);
 
+
   // Fetch Menu Items
   useEffect(() => {
     if (restaurantId) {
@@ -436,6 +437,11 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return table ? { waiterId: table.assignedWaiterId, waiterName: table.assignedWaiterName } : undefined;
   }, [tables]);
 
+  const calculateTotal = useCallback((tableId: string, itemsToCalculate?: OrderItem[]): number => {
+    const items = itemsToCalculate || getOrderForTable(tableId);
+    return items.reduce((total, item) => total + (item.menuItem?.price || 0) * item.quantity, 0);
+  }, [getOrderForTable]);
+
   const archiveOrder = useCallback(async (tableId: string, finalBillAmount?: number, paymentMethod?: HistoricalOrder['paymentMethod'], paymentNote?: string) => {
     if (!restaurantId) return;
     const itemsToArchive = getOrderForTable(tableId);
@@ -514,10 +520,6 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setTips(prev => [...prev, { id: `tip-${Date.now()}`, amount, timestamp: Date.now(), tableId, notes }]);
   }, []);
 
-  const calculateTotal = useCallback((tableId: string, itemsToCalculate?: OrderItem[]): number => {
-    const items = itemsToCalculate || getOrderForTable(tableId);
-    return items.reduce((total, item) => total + (item.menuItem?.price || 0) * item.quantity, 0);
-  }, [getOrderForTable]);
 
   const getTotalItemsForTable = useCallback((tableId: string, itemsToCount?: OrderItem[]): number => {
     const items = itemsToCount || getOrderForTable(tableId);
@@ -549,7 +551,7 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     assignWaiterToTable, clearWaiterAssignment, getAssignedWaiterInfo,
     calculateTotal, getTotalItemsForTable, getFirstItemAddedTime,
     archiveOrder, getHistoricalOrdersForTable, getHistoricalOrderById, repeatOrder,
-    getTableNote, updateTableNote, addTip, // Ensure these are correctly referenced
+    getTableNote, updateTableNote, addTip,
     isMenuLoading, isTablesLoading, isSubmittingOrder,
   ]);
 
@@ -561,3 +563,4 @@ export const useOrders = (): OrderContextType => {
   if (context === undefined) throw new Error('useOrders must be used within an OrderProvider');
   return context;
 };
+
