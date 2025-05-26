@@ -11,22 +11,23 @@ import { VoiceOrderButton } from '@/components/waiter/VoiceOrderButton';
 import LoadingSpinner from '@/components/shared/loading-spinner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
-interface AddItemPageProps {
-  params: {
-    tableId: string;
-  };
-}
+// Interface for page props is no longer needed if not using params prop
+// interface AddItemPageProps {
+//   params: {
+//     tableId: string;
+//   };
+// }
 
-export default function AddItemPage({ params: routeProvidedParams }: AddItemPageProps) {
+export default function AddItemPage() {
   const router = useRouter();
-  const contextParams = useParams(); 
+  const params = useParams(); // Use hook to get params
   const searchParams = useSearchParams();
-  const { menuItems, isMenuLoading, calculateTotal, tables } = useOrders(); // Using dynamic menuItems and tables
+  const { menuItems, isMenuLoading, calculateTotal, tables } = useOrders();
 
-  const pageTableId = (contextParams?.tableId as string) || routeProvidedParams.tableId;
+  const pageTableId = params.tableId as string; // Get tableId from hook result
   const initialGroupId = searchParams.get('groupId') || '';
 
-  const table = tables.find(t => t.id === pageTableId); // Find table from dynamic list
+  const table = tables.find(t => t.id === pageTableId);
 
   if (isMenuLoading || !table) {
     return (
@@ -60,8 +61,8 @@ export default function AddItemPage({ params: routeProvidedParams }: AddItemPage
     <div className="space-y-6 pb-24"> 
       <VoiceOrderButton tableId={pageTableId} />
       <OrderForm 
-        menuItems={menuItems} // Pass dynamic menu items
-        onAddItem={() => {}} // This will be handled by context directly in OrderForm
+        menuItems={menuItems}
+        onAddItem={() => {}} 
         tableId={pageTableId}      
         initialGroupId={initialGroupId}
       />
@@ -80,4 +81,3 @@ export default function AddItemPage({ params: routeProvidedParams }: AddItemPage
     </div>
   );
 }
-```

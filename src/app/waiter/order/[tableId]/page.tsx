@@ -10,15 +10,18 @@ import { useOrders } from '@/contexts/waiter/OrderContext';
 import LoadingSpinner from '@/components/shared/loading-spinner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
-interface OrderPageProps {
-  params: {
-    tableId: string;
-  };
-}
+// Interface for page props is no longer needed if not using params prop
+// interface OrderPageProps {
+//   params: {
+//     tableId: string;
+//   };
+// }
 
-export default function OrderPage({ params }: OrderPageProps) {
+export default function OrderPage() {
+  const params = useParams(); // Use hook to get params
   const { tables, isTablesLoading } = useOrders();
-  const tableId = params.tableId;
+  const tableId = params.tableId as string; // Get tableId from hook result
+
   const table = tables.find(t => t.id === tableId);
 
   if (isTablesLoading) {
@@ -29,7 +32,7 @@ export default function OrderPage({ params }: OrderPageProps) {
     );
   }
 
-  if (!table) {
+  if (!table && !isTablesLoading) { // Check after loading
     return (
       <div className="text-center py-10">
          <Card>
@@ -46,6 +49,16 @@ export default function OrderPage({ params }: OrderPageProps) {
       </div>
     );
   }
+  
+  // If table is still undefined here (though unlikely if not loading and no error thrown)
+  if (!table) {
+     return (
+      <div className="flex justify-center items-center h-full py-20">
+        <p className="text-destructive">Error: Table details could not be loaded.</p>
+      </div>
+    );
+  }
+
 
   return (
     <div>
@@ -60,13 +73,3 @@ export default function OrderPage({ params }: OrderPageProps) {
     </div>
   );
 }
-
-// generateStaticParams is not needed for dynamic routes that rely on client-side fetching
-// export async function generateStaticParams() {
-//   // This would need access to dynamic data, not suitable for purely static generation here
-//   // If tables were static, it could be:
-//   // return TABLES_DATA.map(table => ({
-//   //   tableId: table.id,
-//   // }));
-//   return [];
-// }
