@@ -7,7 +7,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { useAuth } from '@/lib/auth/context';
 import { getRestaurant } from '@/lib/firebase/firestore';
-import { addTable, updateTable, deleteTable, getTableAreas, addTableArea, updateTableArea, deleteTableArea } from '@/lib/firebase/tables';
+import { addTable, updateTable, deleteTable, getTableAreas, addTableArea, updateTableArea, deleteTableArea, getTables as fetchTablesFromDb } from '@/lib/firebase/tables';
 import { updateOrder, createOrder } from '@/lib/firebase/orders';
 import { getOrdersCollectionPath, getTablesCollectionPath, convertFirebaseTimestampToString } from '@/lib/firebase/utils';
 import { getMenuItems as fetchMenuItemsFirebase, getMenuCategories, getMenuSubcategories } from '@/lib/firebase/menu';
@@ -17,7 +17,7 @@ import LoadingSpinner from '@/components/shared/loading-spinner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogClose } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger, DialogClose } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { PlusCircle, Edit3, Trash2, QrCode, Users, Circle, X, MinusCircle, Utensils, Hourglass, ShoppingCart, CheckCircle, Clock, XCircle, LayoutGrid, MapPin as MapPinIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -37,6 +37,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { getTableGroupsForTable } from '@/lib/firebase/groups';
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';
 import AreaForm from '@/components/table-management/area-form';
+import { Separator } from '@/components/ui/separator';
 
 
 const tableFormSchema = z.object({
@@ -69,12 +70,16 @@ const orderStatusConfig = {
 const toClientOrder = (docId: string, data: any): ClientOrder => {
     const orderBase: Omit<ClientOrder, 'id' | 'createdAt' | 'updatedAt'> = {
         restaurantId: data.restaurantId,
+        userId: data.userId || undefined, 
         tableId: data.tableId || null,
         tableNumber: data.tableNumber || null,
         items: data.items as OrderItem[],
         subtotal: data.subtotal,
         totalAmount: data.totalAmount,
         status: data.status as OrderStatus,
+        customerName: data.customerName || null, 
+        customerPhoneNumber: data.customerPhoneNumber || null, 
+        customerWhatsapp: data.customerWhatsapp || null,
         taxAmount: typeof data.taxAmount === 'number' ? data.taxAmount : undefined,
         serviceCharge: typeof data.serviceCharge === 'number' ? data.serviceCharge : undefined,
         discountAmount: typeof data.discountAmount === 'number' ? data.discountAmount : undefined,
@@ -82,7 +87,9 @@ const toClientOrder = (docId: string, data: any): ClientOrder => {
         kitchenNotes: typeof data.kitchenNotes === 'string' ? data.kitchenNotes : undefined,
         paymentMethod: typeof data.paymentMethod === 'string' ? data.paymentMethod : undefined,
         transactionId: typeof data.transactionId === 'string' ? data.transactionId : undefined,
+        groupId: typeof data.groupId === 'string' ? data.groupId : null,
     };
+
     return {
         id: docId,
         ...orderBase,
@@ -95,6 +102,7 @@ const toFirebaseTableType = (docId: string, data: any): FirebaseTableType => {
   return {
     id: docId,
     ...data,
+    tableDocId: docId, // Ensure tableDocId is same as id
     createdAt: convertFirebaseTimestampToString(data.createdAt),
     updatedAt: convertFirebaseTimestampToString(data.updatedAt),
   } as FirebaseTableType;
@@ -164,7 +172,7 @@ export default function TableManagementPage() {
             setMenuItemsState(fetchedMenuItems);
             setCategoriesState(fetchedCategories.sort((a,b) => a.order - b.order));
             setSubcategoriesState(fetchedSubcategories.sort((a,b) => a.order - b.order));
-            setTableAreas(fetchedAreas.sort((a,b) => a.order - b.order));
+            setTableAreas(fetchedAreas.sort((a, b) => a.order - b.order));
         } else {
             toast({ variant: "destructive", title: "Access Denied", description: "Restaurant not found or you don't have permission." });
             router.replace('/dashboard');
@@ -441,7 +449,7 @@ export default function TableManagementPage() {
         const updatedAreas = await getTableAreas(restaurantId);
         setTableAreas(updatedAreas.sort((a, b) => a.order - b.order));
         // Re-fetch tables might be needed if areaName on tables isn't updated via listener quickly enough
-        const currentTables = await getTables(restaurantId);
+        const currentTables = await fetchTablesFromDb(restaurantId);
         setTables(currentTables);
       }
       setDeleteConfirmation(null);
