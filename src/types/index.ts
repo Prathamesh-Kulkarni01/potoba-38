@@ -61,7 +61,7 @@ export const DEFAULT_PERMISSIONS_BY_ROLE: Record<StaffRole, StaffPermissions> = 
     canViewInventoryReports: true, canAccessSettings: false, canManageStaff: false,
     canViewFinancialReports: true, canViewKitchenOrders: false, canEditRestaurantSettings: false,
   },
-  Custom: { // Custom role starts with minimal permissions by default
+  Custom: { 
     canViewDashboardInsights: false, canManageAllOrders: false, canTakeTableOrders: false,
     canSettleBills: false, canManageMenu: false, canManageTables: false,
     canManageInventoryItems: false, canRecordStockIn: false, canRecordStockOut: false,
@@ -74,9 +74,10 @@ export const defaultStaffPermissions: StaffPermissions = {
   ...DEFAULT_PERMISSIONS_BY_ROLE.Custom,
 };
 
+
 export interface AuthUser extends FirebaseUser {
   role: UserRole | null;
-  staffRole?: StaffRole | null; // Specific staff duty, e.g., 'Waiter', 'Manager'. Populated if role is a StaffRole.
+  staffRole?: StaffRole | null; 
   restaurantId: string | null;
   onboardingComplete: boolean;
   staffPermissions?: StaffPermissions;
@@ -85,8 +86,8 @@ export interface AuthUser extends FirebaseUser {
 export interface UserProfile {
   uid: string;
   email: string | null;
-  role: UserRole; // Will store specific roles like 'Waiter', 'Manager' if staff
-  staffRole?: StaffRole | null; // Can be redundant if `role` stores specific staff role, but kept for clarity
+  role: UserRole; 
+  staffRole?: StaffRole | null; 
   restaurantId: string | null;
   onboardingComplete: boolean;
   createdAt: Timestamp;
@@ -212,7 +213,7 @@ export interface RecipeIngredientItem {
 
 export interface MenuItem {
   id: string;
-  itemIdString: string;
+  itemIdString: string; // Should match the document ID for collectionGroup queries
   restaurantId: string;
   categoryId: string;
   subcategoryId?: string | null;
@@ -242,17 +243,28 @@ export interface MenuItem {
 
 export type TableStatus = 'available' | 'occupied' | 'reserved' | 'needs_cleaning';
 
+export interface TableArea {
+  id: string;
+  restaurantId: string;
+  name: string;
+  order: number; // For display sequence
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
 export interface Table {
   id: string;
   restaurantId: string;
-  tableDocId: string;
+  tableDocId: string; // Document ID for this table, used in QR codes
   tableNumber: string;
   capacity: number;
   status: TableStatus;
   qrCodeValue: string;
+  areaId?: string | null;
+  areaName?: string | null; 
   currentOrderIds?: string[];
-  createdAt: string;
-  updatedAt: string;
+  createdAt: string; // ISO string for client components
+  updatedAt: string; // ISO string for client components
 }
 
 export type OrderStatus =
@@ -275,8 +287,8 @@ export interface OrderItem {
   totalPrice: number;
   variantChoices?: { variantName: string; optionName: string; optionPrice: number }[];
   notes?: string;
-  categoryId?: string;
-  taxOverrides?: TaxConfig[];
+  categoryId?: string; // For tax calculation reference
+  taxOverrides?: TaxConfig[]; // For tax calculation reference
 }
 
 export interface Order {
@@ -306,8 +318,8 @@ export interface Order {
 }
 
 export interface ClientOrder extends Omit<Order, 'createdAt' | 'updatedAt'> {
-  createdAt: string;
-  updatedAt: string;
+  createdAt: string; // ISO string
+  updatedAt: string; // ISO string
 }
 
 
@@ -317,26 +329,27 @@ export interface GroupCartItem extends OrderItem {
 }
 
 export interface TableGroupMember {
-  uid: string | null;
+  uid: string | null; // UID of the Potoba user, or null/unique ID for anonymous group members
   name: string;
-  phone?: string | null;
+  phone?: string | null; // Optional phone for the member
 }
 
 export interface TableGroup {
-  id: string;
+  id: string; // The 4-digit unique group code
   restaurantId: string;
-  tableId: string;
+  tableId: string; // Firestore document ID of the table
   tableNumber: string;
-  creatorName: string;
-  creatorPhone: string;
-  creatorUid?: string | null;
+  creatorName: string; // Name of the person who created the group
+  creatorPhone: string; // Phone of the person who created the group
+  creatorUid?: string | null; // UID of the Potoba user who created, if logged in
   members: TableGroupMember[];
-  status: 'active' | 'ordering' | 'locked' | 'ordered' | 'closed';
+  status: 'active' | 'ordering' | 'locked' | 'ordered' | 'closed'; // 'ordering' could be an alias for 'active'
   cartItems: GroupCartItem[];
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
 
+// Client-side representation with stringified dates
 export interface ClientTableGroup extends Omit<TableGroup, 'createdAt' | 'updatedAt'> {
   createdAt: string;
   updatedAt: string;
@@ -405,7 +418,7 @@ export interface StockTransaction {
   inventoryItemId: string;
   inventoryItemName: string;
   transactionType: StockTransactionType;
-  quantity: number;
+  quantity: number; // Positive for stock in, negative for stock out
   unitOfMeasure: UnitOfMeasure;
   transactionDate: Timestamp;
   costPerUnitAtTransaction?: number | null;
@@ -416,8 +429,8 @@ export interface StockTransaction {
   expiryDate?: Timestamp | null;
   paymentMode?: string | null;
   relatedOrderId?: string | null;
-  relatedPurchaseId?: string | null;
-  userId?: string | null;
+  relatedPurchaseId?: string | null; // Could link to a more detailed purchase order if that module exists
+  userId?: string | null; // User who performed the transaction
 }
 
 
@@ -425,18 +438,19 @@ export interface DailyStockSummary {
   stockInQuantity: number;
   stockOutQuantity: number;
   wastageQuantity: number;
+  // Could add value based summaries later
 }
 
 export interface StaffInvitation {
   id: string;
   restaurantId: string;
-  email: string;
-  role: StaffRole; // Will store the specific staff role like 'Waiter', 'Manager'
-  staffRole: StaffRole; // For clarity, also store it here
+  email: string; // Stored in lowercase
+  role: StaffRole; // Specific staff role like 'Waiter', 'Manager'
+  staffRole: StaffRole; // Explicitly the specific staff role
   status: 'pending' | 'accepted' | 'declined' | 'expired';
-  invitedBy: string;
+  invitedBy: string; // UID of the owner/manager who sent the invitation
   createdAt: Timestamp;
   acceptedAt?: Timestamp;
   acceptedByUid?: string;
-  permissions?: StaffPermissions;
+  permissions?: StaffPermissions; // Permissions set at the time of invitation
 }

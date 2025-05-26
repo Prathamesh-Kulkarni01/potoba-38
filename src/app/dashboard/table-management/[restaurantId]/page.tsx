@@ -1,16 +1,17 @@
+
 // src/app/dashboard/table-management/[restaurantId]/page.tsx
 'use client';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { useAuth } from '@/lib/auth/context';
 import { getRestaurant } from '@/lib/firebase/firestore';
-import { addTable, updateTable, deleteTable } from '@/lib/firebase/tables'; // Changed import
-import { updateOrder, createOrder } from '@/lib/firebase/orders'; // Changed import
-import { getOrdersCollectionPath, getTablesCollectionPath } from '@/lib/firebase/utils'; // Import from utils
+import { addTable, updateTable, deleteTable, getTableAreas, addTableArea, updateTableArea, deleteTableArea } from '@/lib/firebase/tables';
+import { updateOrder, createOrder } from '@/lib/firebase/orders';
+import { getOrdersCollectionPath, getTablesCollectionPath, convertFirebaseTimestampToString } from '@/lib/firebase/utils';
 import { getMenuItems as fetchMenuItemsFirebase, getMenuCategories, getMenuSubcategories } from '@/lib/firebase/menu';
-import type { RestaurantProfile, Table as FirebaseTableType, TableStatus, OrderStatus, OrderItem, MenuItem as MenuItemType, MenuCategory, MenuSubcategory, ClientOrder, ClientTableGroup } from '@/types';
+import type { RestaurantProfile, Table as FirebaseTableType, TableStatus, OrderStatus, OrderItem, MenuItem as MenuItemType, MenuCategory, MenuSubcategory, ClientOrder, ClientTableGroup, TableArea } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import LoadingSpinner from '@/components/shared/loading-spinner';
 import { Button } from '@/components/ui/button';
@@ -18,7 +19,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogClose } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { PlusCircle, Edit3, Trash2, QrCode, Users, Circle, X, MinusCircle, Utensils, Hourglass, ShoppingCart, CheckCircle, Clock, XCircle } from 'lucide-react';
+import { PlusCircle, Edit3, Trash2, QrCode, Users, Circle, X, MinusCircle, Utensils, Hourglass, ShoppingCart, CheckCircle, Clock, XCircle, LayoutGrid, MapPin as MapPinIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -28,19 +29,20 @@ import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import MenuSelectionForBill from '@/components/table-management/menu-selection-for-bill';
 import { cn } from '@/lib/utils';
-import { collection, query, where, orderBy, onSnapshot, Timestamp, Unsubscribe } from 'firebase/firestore'; // Added onSnapshot, Timestamp, Unsubscribe
-import { db } from '@/lib/firebase/config'; // Added db
-import { convertFirebaseTimestampToString } from '@/lib/firebase/utils'; // Utility for timestamp conversion
+import { collection, query, where, orderBy, onSnapshot, Timestamp, Unsubscribe } from 'firebase/firestore';
+import { db } from '@/lib/firebase/config';
 import { calculateOrderTaxes } from '@/lib/taxEngine';
 import BillingPanel from '@/components/shared/billing-panel';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { getTableGroupsForTable } from '@/lib/firebase/groups';
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';
+import AreaForm from '@/components/table-management/area-form';
 
 
 const tableFormSchema = z.object({
   tableNumber: z.string().min(1, "Table number is required."),
   capacity: z.coerce.number().min(1, "Capacity must be at least 1."),
+  areaId: z.string().optional().nullable(),
 });
 type TableFormValues = z.infer<typeof tableFormSchema>;
 
@@ -108,13 +110,14 @@ export default function TableManagementPage() {
 
   const [restaurant, setRestaurant] = useState<RestaurantProfile | null>(null);
   const [tables, setTables] = useState<FirebaseTableType[]>([]); 
+  const [tableAreas, setTableAreas] = useState<TableArea[]>([]);
   const [pageLoading, setPageLoading] = useState(true);
   const [formSubmitting, setFormSubmitting] = useState(false);
 
   const [isTableModalOpen, setIsTableModalOpen] = useState(false);
   const [editingTable, setEditingTable] = useState<FirebaseTableType | null>(null); 
   
-  const [deleteConfirmation, setDeleteConfirmation] = useState<{ isOpen: boolean; data: FirebaseTableType; } | null>(null);
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{ isOpen: boolean; data: FirebaseTableType | TableArea; type: 'table' | 'area' } | null>(null);
   const [qrModalTable, setQrModalTable] = useState<FirebaseTableType | null>(null);
 
   const [selectedTable, setSelectedTable] = useState<FirebaseTableType | null>(null);
@@ -129,51 +132,61 @@ export default function TableManagementPage() {
   const ordersListenerUnsubscribeRef = useRef<Unsubscribe | null>(null);
 
   const [groupOrders, setGroupOrders] = useState<ClientTableGroup[]>([]);
-  const [activeBillTab, setActiveBillTab] = useState('main');
+  const [activeBillTab, setActiveBillTab] = useState('main'); // 'main' or groupId
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
   const [activeGroupSubTab, setActiveGroupSubTab] = useState<'bill' | 'details'>('bill');
 
+  const [isAreaModalOpen, setIsAreaModalOpen] = useState(false);
+  const [editingArea, setEditingArea] = useState<TableArea | null>(null);
+
   const form = useForm<TableFormValues>({
     resolver: zodResolver(tableFormSchema),
-    defaultValues: { tableNumber: '', capacity: 1 },
+    defaultValues: { tableNumber: '', capacity: 1, areaId: null },
   });
 
-  // Fetch initial static data (restaurant, menu)
-  useEffect(() => {
+  const fetchInitialData = useCallback(async () => {
     if (!restaurantId || !user || role !== 'owner') {
-      if(!authLoading && user) router.replace('/dashboard'); // redirect if not owner and done loading auth
-      return;
+        if(!authLoading && user) router.replace('/dashboard');
+        return;
     }
     setPageLoading(true);
-    Promise.all([
-      getRestaurant(restaurantId),
-      fetchMenuItemsFirebase(restaurantId),
-      getMenuCategories(restaurantId),
-      getMenuSubcategories(restaurantId)
-    ]).then(([restaurantData, fetchedMenuItems, fetchedCategories, fetchedSubcategories]) => {
-      if (restaurantData && restaurantData.ownerId === user.uid) {
-        setRestaurant(restaurantData);
-        setMenuItemsState(fetchedMenuItems);
-        setCategoriesState(fetchedCategories.sort((a,b) => a.order - b.order));
-        setSubcategoriesState(fetchedSubcategories.sort((a,b) => a.order - b.order));
-      } else {
-        toast({ variant: "destructive", title: "Access Denied", description: "Restaurant not found or you don't have permission." });
-        router.replace('/dashboard');
-      }
-    }).catch(error => {
-      console.error("Error fetching initial restaurant/menu data:", error);
-      toast({ variant: "destructive", title: "Error", description: "Could not load initial restaurant data." });
-    }).finally(() => {
-      // Page loading will be set to false by tables listener
-    });
+    try {
+        const [restaurantData, fetchedMenuItems, fetchedCategories, fetchedSubcategories, fetchedAreas] = await Promise.all([
+            getRestaurant(restaurantId),
+            fetchMenuItemsFirebase(restaurantId),
+            getMenuCategories(restaurantId),
+            getMenuSubcategories(restaurantId),
+            getTableAreas(restaurantId),
+        ]);
+
+        if (restaurantData && restaurantData.ownerId === user.uid) {
+            setRestaurant(restaurantData);
+            setMenuItemsState(fetchedMenuItems);
+            setCategoriesState(fetchedCategories.sort((a,b) => a.order - b.order));
+            setSubcategoriesState(fetchedSubcategories.sort((a,b) => a.order - b.order));
+            setTableAreas(fetchedAreas.sort((a,b) => a.order - b.order));
+        } else {
+            toast({ variant: "destructive", title: "Access Denied", description: "Restaurant not found or you don't have permission." });
+            router.replace('/dashboard');
+        }
+    } catch (error) {
+        console.error("Error fetching initial restaurant/menu/area data:", error);
+        toast({ variant: "destructive", title: "Error", description: "Could not load initial restaurant data." });
+    } finally {
+        // Page loading will be set to false by tables listener, or here if no tables
+    }
   }, [restaurantId, user, role, authLoading, router, toast]);
 
-  // Real-time tables listener
+  useEffect(() => {
+    fetchInitialData();
+  }, [fetchInitialData]);
+
+
   useEffect(() => {
     if (!restaurantId || !db || !user || role !== 'owner') return;
-    setPageLoading(true); // For initial table load
+    setPageLoading(true); 
     const tablesColRef = collection(db, getTablesCollectionPath(restaurantId));
-    const q = query(tablesColRef, orderBy('tableNumber', 'asc'));
+    const q = query(tablesColRef, orderBy('areaName', 'asc'), orderBy('tableNumber', 'asc'));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const fetchedTables = snapshot.docs.map(docSnap => toFirebaseTableType(docSnap.id, docSnap.data()));
@@ -189,21 +202,20 @@ export default function TableManagementPage() {
   }, [restaurantId, user, role, toast]);
 
 
-  // Real-time orders for selected table
   useEffect(() => {
-    // Clean up previous listener if selectedTable changes
     if (ordersListenerUnsubscribeRef.current) {
       ordersListenerUnsubscribeRef.current();
       ordersListenerUnsubscribeRef.current = null;
     }
 
     if (!selectedTable || !restaurantId || !db) {
-      setSelectedTableOrders([]); // Clear orders if no table selected
+      setSelectedTableOrders([]);
       setCurrentBillItems([]);
+      setGroupOrders([]);
       return;
     }
 
-    setFormSubmitting(true); // Indicate loading orders for the bill
+    setFormSubmitting(true); 
     const ordersColRef = collection(db, getOrdersCollectionPath(restaurantId));
     const activeStatuses: OrderStatus[] = ['pending_kitchen', 'confirmed_by_kitchen', 'preparing', 'ready_for_pickup', 'served', 'payment_pending'];
     const q = query(ordersColRef, where('tableId', '==', selectedTable.id), where('status', 'in', activeStatuses), orderBy('createdAt', 'asc'));
@@ -231,6 +243,11 @@ export default function TableManagementPage() {
         return acc;
       }, [] as OrderItem[]);
       setCurrentBillItems(aggregatedBillItems);
+      if (orders.length === 0) setActiveBillTab('main');
+      else if (!orders.find(o => o.groupId === activeGroupId) && activeGroupId !== 'main') {
+          // If the currently active group order no longer exists (e.g. completed), switch to main tab
+          setActiveBillTab('main');
+      }
       setFormSubmitting(false);
     }, (error) => {
       console.error(`Error listening to orders for table ${selectedTable.id}:`, error);
@@ -239,30 +256,23 @@ export default function TableManagementPage() {
       setFormSubmitting(false);
     });
 
-    return () => { // Cleanup on component unmount or if selectedTable changes again
+     getTableGroupsForTable(restaurantId, selectedTable.id)
+      .then(setGroupOrders)
+      .catch(() => setGroupOrders([]));
+
+    return () => { 
       if (ordersListenerUnsubscribeRef.current) {
         ordersListenerUnsubscribeRef.current();
       }
     };
-  }, [selectedTable, restaurantId, toast]);
-
-  // Fetch group orders for selected table
-  useEffect(() => {
-    if (!selectedTable || !restaurantId) {
-      setGroupOrders([]);
-      return;
-    }
-    getTableGroupsForTable(restaurantId, selectedTable.id)
-      .then(setGroupOrders)
-      .catch(() => setGroupOrders([]));
-  }, [selectedTable, restaurantId]);
+  }, [selectedTable, restaurantId, toast, menuItems]);
 
 
   const handleSelectTable = (table: FirebaseTableType) => {
     setSelectedTable(table);
     setIsBillPanelVisible(true);
     setIsMenuSelectionPanelOpen(false); 
-    // Order fetching is now handled by the useEffect hook watching `selectedTable`
+    setActiveBillTab('main'); // Default to main bill when a table is selected
   };
 
   const handleAddItemToBill = (menuItem: MenuItemType, quantity: number = 1) => {
@@ -312,8 +322,6 @@ export default function TableManagementPage() {
     }
     setFormSubmitting(true);
     try {
-      // Find an existing "served" or "payment_pending" order to update, or create a new one.
-      // This logic might need refinement based on how you want to handle multiple "sessions" vs one continuous bill for a table.
       const activeOrder = selectedTableOrders.find(o => o.status === 'served' || o.status === 'payment_pending');
       
       const subtotal = currentBillItems.reduce((sum, item) => sum + item.totalPrice, 0);
@@ -338,13 +346,9 @@ export default function TableManagementPage() {
         await createOrder(restaurantId, newOrderData);
         toast({ title: "Bill Finalized", description: `Bill for table ${selectedTable.tableNumber} created and pending payment.` });
       }
-      
-      // Update table status if needed (e.g., to 'occupied' if it wasn't already)
       if (selectedTable.status !== 'occupied' && selectedTable.status !== 'needs_cleaning') { 
          await updateTable(restaurantId, selectedTable.id, { status: 'occupied' }); 
-         // Real-time listener for tables will update the UI
       }
-      // Real-time listener for orders will update the bill panel
     } catch (error: any) {
       toast({ variant: "destructive", title: "Finalization Failed", description: error.message || "Could not finalize bill." });
     } finally {
@@ -356,17 +360,23 @@ export default function TableManagementPage() {
   const handleTableSubmit = async (values: TableFormValues) => {
     setFormSubmitting(true);
     try {
+      const selectedArea = tableAreas.find(area => area.id === values.areaId);
+      const tablePayload = {
+        ...values,
+        areaId: selectedArea?.id || null,
+        areaName: selectedArea?.name || null,
+      };
+
       if (editingTable) {
-        await updateTable(restaurantId, editingTable.id, { ...values, status: editingTable.status }); // Pass current status
+        await updateTable(restaurantId, editingTable.id, { ...tablePayload, status: editingTable.status });
         toast({ title: "Table Updated", description: `Table ${values.tableNumber} has been updated.` });
       } else {
-        await addTable(restaurantId, values);
+        await addTable(restaurantId, tablePayload);
         toast({ title: "Table Added", description: `Table ${values.tableNumber} has been added.` });
       }
-      // No need to manually refetch, onSnapshot will handle it
       setIsTableModalOpen(false);
       setEditingTable(null);
-      form.reset({ tableNumber: '', capacity: 1 });
+      form.reset({ tableNumber: '', capacity: 1, areaId: null });
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message || "Failed to save table." });
     } finally {
@@ -374,14 +384,34 @@ export default function TableManagementPage() {
     }
   };
 
+  const handleAreaSubmit = async (values: { name: string; order: number }, areaIdToUpdate?: string) => {
+    setFormSubmitting(true);
+    try {
+      if (areaIdToUpdate) {
+        await updateTableArea(restaurantId, areaIdToUpdate, values);
+        toast({ title: "Area Updated", description: `${values.name} has been updated.` });
+      } else {
+        await addTableArea(restaurantId, values);
+        toast({ title: "Area Added", description: `${values.name} has been added.` });
+      }
+      const updatedAreas = await getTableAreas(restaurantId);
+      setTableAreas(updatedAreas.sort((a, b) => a.order - b.order));
+      setIsAreaModalOpen(false);
+      setEditingArea(null);
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Area Save Failed", description: error.message });
+    } finally {
+      setFormSubmitting(false);
+    }
+  };
+
   const handleStatusChange = async (tableId: string, newStatus: TableStatus) => {
-    setFormSubmitting(true); // Use general form submitting for this action
+    setFormSubmitting(true);
     try {
       const tableToUpdate = tables.find(t => t.id === tableId);
       if (!tableToUpdate) return;
       await updateTable(restaurantId, tableId, { status: newStatus });
       toast({ title: "Status Updated", description: `Table ${tableToUpdate.tableNumber} is now ${newStatus}.` });
-      // No need to manually refetch, onSnapshot will handle it
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message || "Failed to update status." });
     } finally {
@@ -389,25 +419,34 @@ export default function TableManagementPage() {
     }
   };
   
-  const openDeleteDialog = (table: FirebaseTableType) => {
-    setDeleteConfirmation({ isOpen: true, data: table });
+  const openDeleteDialog = (data: FirebaseTableType | TableArea, type: 'table' | 'area') => {
+    setDeleteConfirmation({ isOpen: true, data, type });
   };
 
-  const confirmDeleteTable = async () => {
+  const confirmDelete = async () => {
     if (!deleteConfirmation) return;
     setFormSubmitting(true);
+    const { data, type } = deleteConfirmation;
     try {
-      await deleteTable(restaurantId, deleteConfirmation.data.id);
-      toast({ title: "Table Deleted", description: `Table ${deleteConfirmation.data.tableNumber} has been deleted.` });
-      // No need to manually refetch, onSnapshot will handle it
-      setDeleteConfirmation(null);
-       if (selectedTable?.id === deleteConfirmation.data.id) {
-        setSelectedTable(null);
-        setIsBillPanelVisible(false);
-        setIsMenuSelectionPanelOpen(false);
+      if (type === 'table') {
+        await deleteTable(restaurantId, data.id);
+        toast({ title: "Table Deleted", description: `Table ${(data as FirebaseTableType).tableNumber} has been deleted.` });
+        if (selectedTable?.id === data.id) {
+            setSelectedTable(null);
+            setIsBillPanelVisible(false);
+        }
+      } else if (type === 'area') {
+        await deleteTableArea(restaurantId, data.id);
+        toast({ title: "Area Deleted", description: `Area ${(data as TableArea).name} and its tables have been updated.` });
+        const updatedAreas = await getTableAreas(restaurantId);
+        setTableAreas(updatedAreas.sort((a, b) => a.order - b.order));
+        // Re-fetch tables might be needed if areaName on tables isn't updated via listener quickly enough
+        const currentTables = await getTables(restaurantId);
+        setTables(currentTables);
       }
+      setDeleteConfirmation(null);
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Deletion Failed", description: error.message || "Could not delete table." });
+      toast({ variant: "destructive", title: "Deletion Failed", description: error.message || "Could not delete." });
     } finally {
       setFormSubmitting(false);
     }
@@ -415,52 +454,50 @@ export default function TableManagementPage() {
 
   const openEditModal = (table: FirebaseTableType) => {
     setEditingTable(table);
-    form.reset({ tableNumber: table.tableNumber, capacity: table.capacity });
+    form.reset({ tableNumber: table.tableNumber, capacity: table.capacity, areaId: table.areaId || null });
     setIsTableModalOpen(true);
   };
   
   const openAddModal = () => {
     setEditingTable(null);
-    form.reset({ tableNumber: '', capacity: 1 });
+    form.reset({ tableNumber: '', capacity: 1, areaId: null });
     setIsTableModalOpen(true);
   };
 
-  // Build categoryMap for tax engine
   const categoryMap = categories.reduce((acc, cat) => {
     acc[cat.id] = cat;
     return acc;
   }, {} as Record<string, MenuCategory>);
 
-  if (authLoading || pageLoading) { // pageLoading covers initial table and menu/restaurant data
+  if (authLoading || pageLoading) {
     return <div className="flex h-screen items-center justify-center"><LoadingSpinner className="h-10 w-10 text-primary" /></div>;
   }
-  if (!restaurant && !pageLoading) { // Restaurant fetch failed
+  if (!restaurant && !pageLoading) {
     return <div className="flex h-screen items-center justify-center"><Card><CardHeader><CardTitle>Error</CardTitle></CardHeader><CardContent><p>Restaurant data could not be loaded.</p></CardContent></Card></div>;
   }
   
   const getDisplayTestLink = (storedQrValue: string) => {
-    const configuredBaseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://potoba-v1.netlify.app';
+    const configuredBaseUrl = (process.env.NEXT_PUBLIC_BASE_URL || 'https://6000-firebase-studio-1746809721561.cluster-ancjwrkgr5dvux4qug5rbzyc2y.cloudworkstations.dev').replace(/\/$/, '');
     try {
-      // Assuming storedQrValue is already a full URL
       if (new URL(storedQrValue)) return storedQrValue;
     } catch (e) {
-      // Fallback if storedQrValue is not a full URL (e.g. just a path)
       if (storedQrValue.startsWith('/')) {
          return (configuredBaseUrl.endsWith('/') ? configuredBaseUrl.slice(0, -1) : configuredBaseUrl) + storedQrValue;
       }
     }
     console.warn("Could not reliably reconstruct test link from stored qrCodeValue:", storedQrValue);
-    return storedQrValue; // Return as is if no clear way to form URL
+    return storedQrValue; 
   };
   
   const tableGridPanelClasses = cn(
     "p-4 overflow-y-auto transition-all duration-300 ease-in-out flex-grow",
-     "w-full" 
+     isBillPanelVisible ? "w-full md:w-1/2 lg:w-2/5 xl:w-1/3" : "w-full" 
   );
 
   const billPanelClasses = cn(
     "absolute top-0 right-0 h-[calc(100vh-theme(spacing.16)-80px)] md:relative md:top-0 md:right-0 md:h-full p-4 border-l bg-card text-card-foreground overflow-y-auto flex flex-col transition-all duration-300 ease-in-out",
-    "w-full md:w-4/5" 
+    "w-full md:w-1/2 lg:w-3/5 xl:w-2/3", 
+    isBillPanelVisible ? "translate-x-0" : "translate-x-full md:hidden"
   );
   
   const menuSelectionPanelClasses = cn(
@@ -468,6 +505,23 @@ export default function TableManagementPage() {
     "w-full sm:w-[350px] md:w-[320px] lg:w-[380px]", 
     isMenuSelectionPanelOpen ? "transform translate-x-0" : "transform -translate-x-full"
   );
+
+  const tablesByArea = tables.reduce((acc, table) => {
+    const areaKey = table.areaId || 'unassigned';
+    if (!acc[areaKey]) {
+      acc[areaKey] = { name: table.areaName || 'Unassigned Tables', id: areaKey, tables: [] };
+    }
+    acc[areaKey].tables.push(table);
+    return acc;
+  }, {} as Record<string, { name: string; id: string; tables: FirebaseTableType[] }>);
+
+  const sortedAreaKeys = Object.keys(tablesByArea).sort((a, b) => {
+    if (a === 'unassigned') return 1; // Push unassigned to the end
+    if (b === 'unassigned') return -1;
+    const areaA = tableAreas.find(area => area.id === a);
+    const areaB = tableAreas.find(area => area.id === b);
+    return (areaA?.order || 0) - (areaB?.order || 0);
+  });
 
 
   return (
@@ -490,66 +544,87 @@ export default function TableManagementPage() {
       <ScrollArea className={tableGridPanelClasses}> 
           <Card className="shadow-xl  overflow-auto h-full flex flex-col">
             <CardHeader>
-              <div className="flex flex-col md:flex-row justify-end items-end md:items-center">
-                {/* <div className="mb-4 md:mb-0">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
+                <div className="mb-4 md:mb-0">
                     <CardTitle className="text-2xl md:text-3xl flex items-center">
-                        <Users className="mr-3 h-7 w-7 text-primary" /> Table Management
+                        <LayoutGrid className="mr-3 h-7 w-7 text-primary" /> Table Layout
                     </CardTitle>
-                    <CardDescription>Oversee tables for {restaurant?.name || 'your restaurant'}.</CardDescription>
-                </div> */}
-                <Button onClick={openAddModal} className="bg-accent hover:bg-accent/90 text-accent-foreground">
-                  <PlusCircle className="mr-2 h-4 w-4" /> Add New Table
-                </Button>
+                    <CardDescription>Manage tables for {restaurant?.name || 'your restaurant'}.</CardDescription>
+                </div>
+                <div className="flex gap-2">
+                    <Button variant="outline" onClick={() => setIsAreaModalOpen(true)}><MapPinIcon className="mr-2 h-4 w-4" />Manage Areas</Button>
+                    <Button onClick={openAddModal} className="bg-accent hover:bg-accent/90 text-accent-foreground">
+                    <PlusCircle className="mr-2 h-4 w-4" /> Add Table
+                    </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="flex-grow">
-              {tables.length > 0 ? (
-                 <div className={`grid grid-cols-1 ${
-                    (selectedTable && isBillPanelVisible) 
-                      ? 'sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-2' 
-                      : 'sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4' 
-                  } gap-4`}>
-                  {tables.map(table => (
-                    <Card 
-                      key={table.id} 
-                      className={`flex flex-col shadow-md hover:shadow-lg transition-all group cursor-pointer ${selectedTable?.id === table.id ? 'ring-2 ring-primary shadow-xl scale-105' : 'hover:scale-[1.02]'}`}
-                      onClick={() => handleSelectTable(table)}
-                    >
-                      <CardHeader className="pb-2">
-                        <div className="flex justify-between items-center">
-                            <CardTitle className="text-lg">Table {table.tableNumber}</CardTitle>
-                            <div className={`h-3 w-3 rounded-full ${statusColors[table.status]}`} title={table.status}></div>
-                        </div>
-                        <CardDescription>Capacity: {table.capacity} guests</CardDescription>
-                      </CardHeader>
-                      <CardContent className="flex-grow space-y-2 text-xs">
-                        <Select value={table.status} onValueChange={(newStatus) => handleStatusChange(table.id, newStatus as TableStatus)}>
-                          <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            {(Object.keys(statusColors) as TableStatus[]).map(s => <SelectItem key={s} value={s} className="capitalize text-xs">{s.replace('_', ' ')}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                      </CardContent>
-                      <CardFooter className="flex justify-between items-center pt-2 mt-auto opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => {e.stopPropagation(); setQrModalTable(table)}} title="Show QR Code"><QrCode className="h-4 w-4 text-muted-foreground hover:text-primary"/></Button>
-                        <div className="space-x-1">
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => {e.stopPropagation(); openEditModal(table)}} title="Edit Table"><Edit3 className="h-3.5 w-3.5 text-muted-foreground hover:text-accent"/></Button>
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => {e.stopPropagation(); openDeleteDialog(table)}} title="Delete Table"><Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive"/></Button>
-                        </div>
-                      </CardFooter>
-                    </Card>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-10 border-2 border-dashed rounded-lg bg-muted/30">
-                  <Users className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                  <h3 className="text-xl font-semibold mb-2">No Tables Yet</h3>
-                  <p className="text-muted-foreground mb-4">Add tables to start managing your restaurant floor.</p>
-                  <Button onClick={openAddModal} className="bg-accent hover:bg-accent/90 text-accent-foreground">
-                    <PlusCircle className="mr-2 h-4 w-4" /> Add First Table
-                  </Button>
-                </div>
-              )}
+                {tables.length > 0 || tableAreas.length > 0 ? (
+                    <Accordion type="multiple" defaultValue={sortedAreaKeys} className="w-full">
+                    {sortedAreaKeys.map(areaKey => {
+                        const areaInfo = tablesByArea[areaKey];
+                        return (
+                        <AccordionItem value={areaInfo.id} key={areaInfo.id} className="border-b border-border mb-3 rounded-lg overflow-hidden bg-muted/30">
+                            <AccordionTrigger className="px-4 py-3 hover:bg-muted/50 text-lg font-semibold text-foreground">
+                            {areaInfo.name} ({areaInfo.tables.length})
+                            </AccordionTrigger>
+                            <AccordionContent className="p-3">
+                                <div className={`grid grid-cols-1 ${
+                                    (selectedTable && isBillPanelVisible) 
+                                    ? 'sm:grid-cols-1 md:grid-cols-1 lg:grid-cols-2 xl:grid-cols-2' // Fewer columns when bill panel is open
+                                    : 'sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3' // More columns otherwise
+                                } gap-4`}>
+                                {areaInfo.tables.map(table => (
+                                    <Card 
+                                    key={table.id} 
+                                    className={`flex flex-col shadow-md hover:shadow-lg transition-all group cursor-pointer ${selectedTable?.id === table.id ? 'ring-2 ring-primary shadow-xl scale-105' : 'hover:scale-[1.02]'}`}
+                                    onClick={() => handleSelectTable(table)}
+                                    >
+                                    <CardHeader className="pb-2">
+                                        <div className="flex justify-between items-center">
+                                            <CardTitle className="text-lg">Table {table.tableNumber}</CardTitle>
+                                            <div className={`h-3 w-3 rounded-full ${statusColors[table.status]}`} title={table.status}></div>
+                                        </div>
+                                        <CardDescription>Capacity: {table.capacity} guests</CardDescription>
+                                    </CardHeader>
+                                    <CardContent className="flex-grow space-y-2 text-xs">
+                                        <Select value={table.status} onValueChange={(newStatus) => handleStatusChange(table.id, newStatus as TableStatus)}>
+                                        <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            {(Object.keys(statusColors) as TableStatus[]).map(s => <SelectItem key={s} value={s} className="capitalize text-xs">{s.replace('_', ' ')}</SelectItem>)}
+                                        </SelectContent>
+                                        </Select>
+                                    </CardContent>
+                                    <CardFooter className="flex justify-between items-center pt-2 mt-auto opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => {e.stopPropagation(); setQrModalTable(table)}} title="Show QR Code"><QrCode className="h-4 w-4 text-muted-foreground hover:text-primary"/></Button>
+                                        <div className="space-x-1">
+                                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => {e.stopPropagation(); openEditModal(table)}} title="Edit Table"><Edit3 className="h-3.5 w-3.5 text-muted-foreground hover:text-accent"/></Button>
+                                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => {e.stopPropagation(); openDeleteDialog(table, 'table')}} title="Delete Table"><Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive"/></Button>
+                                        </div>
+                                    </CardFooter>
+                                    </Card>
+                                ))}
+                                {areaInfo.tables.length === 0 && <p className="text-muted-foreground text-sm col-span-full text-center py-4">No tables in this area.</p>}
+                                </div>
+                            </AccordionContent>
+                        </AccordionItem>
+                        )
+                    })}
+                    </Accordion>
+                ) : (
+                    <div className="text-center py-10 border-2 border-dashed rounded-lg bg-muted/30">
+                    <Users className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                    <h3 className="text-xl font-semibold mb-2">No Tables or Areas Yet</h3>
+                    <p className="text-muted-foreground mb-4">Start by adding areas, then assign tables to them.</p>
+                    <div className="flex gap-2 justify-center">
+                         <Button onClick={() => setIsAreaModalOpen(true)} variant="outline"><MapPinIcon className="mr-2 h-4 w-4"/>Add First Area</Button>
+                         <Button onClick={openAddModal} className="bg-accent hover:bg-accent/90 text-accent-foreground">
+                            <PlusCircle className="mr-2 h-4 w-4" /> Add First Table
+                        </Button>
+                    </div>
+                    </div>
+                )}
             </CardContent>
           </Card>
        </ScrollArea>
@@ -558,6 +633,7 @@ export default function TableManagementPage() {
           <div className={billPanelClasses}>
             <Tabs value={activeBillTab} onValueChange={setActiveBillTab} className="w-full">
               <TabsList className="mb-4 overflow-x-auto flex-nowrap whitespace-nowrap">
+                <TabsTrigger value="main">Main Bill</TabsTrigger>
                 {groupOrders.map(group => (
                   <TabsTrigger
                     key={group.id}
@@ -569,6 +645,24 @@ export default function TableManagementPage() {
                   </TabsTrigger>
                 ))}
               </TabsList>
+              <TabsContent value="main">
+                <BillingPanel
+                  billItems={currentBillItems}
+                  restaurant={restaurant}
+                  categoryMap={categoryMap}
+                  isLoading={formSubmitting}
+                  onUpdateItemQuantity={handleUpdateItemQuantityInBill}
+                  onRemoveItem={handleRemoveItemFromBill}
+                  onFinalize={handleFinalizeBill}
+                  onClose={() => { setIsBillPanelVisible(false); setSelectedTable(null); }}
+                  onToggleMenuSelection={() => setIsMenuSelectionPanelOpen(prev => !prev)}
+                  isMenuSelectionOpen={isMenuSelectionPanelOpen}
+                  panelTitle={`Bill for Table ${selectedTable.tableNumber}`}
+                  showMenuButton
+                  showCloseButton
+                  activeTab="bill" 
+                />
+              </TabsContent>
               {groupOrders.map(group => (
                 <TabsContent key={group.id} value={group.id}>
                   <div className="flex flex-col gap-2">
@@ -583,17 +677,13 @@ export default function TableManagementPage() {
                           restaurant={restaurant}
                           categoryMap={categoryMap}
                           isLoading={formSubmitting}
-                          onUpdateItemQuantity={() => {}}
-                          onRemoveItem={() => {}}
-                          onFinalize={() => {}}
+                          onUpdateItemQuantity={() => { /* Group cart update logic */ }}
+                          onRemoveItem={() => { /* Group cart update logic */ }}
+                          onFinalize={() => { /* Group finalize logic */ }}
                           panelTitle={`Group: ${group.creatorName || group.id}`}
                           finalizeLabel="Finalize Group Bill"
                           customerName={group.creatorName || ''}
-                          setCustomerName={(v) => {/* update group creatorName logic here */}}
-                          customerPhoneNumber={group.creatorPhone || ''}
-                          setCustomerPhoneNumber={(v) => {/* update group creatorPhone logic here */}}
                           tableNumber={selectedTable?.tableNumber || ''}
-                          setTableNumber={() => {}}
                           orderStatusConfig={orderStatusConfig}
                           activeTab={activeGroupSubTab}
                           setActiveTab={setActiveGroupSubTab}
@@ -605,18 +695,15 @@ export default function TableManagementPage() {
                           billItems={group.cartItems}
                           restaurant={restaurant}
                           categoryMap={categoryMap}
-              isLoading={formSubmitting}
-                          onUpdateItemQuantity={() => {}}
-                          onRemoveItem={() => {}}
-                          onFinalize={() => {}}
+                          isLoading={formSubmitting}
+                          onUpdateItemQuantity={() => { /* Group cart update logic */ }}
+                          onRemoveItem={() => { /* Group cart update logic */ }}
+                          onFinalize={() => { /* Group finalize logic */ }}
                           panelTitle={`Group: ${group.creatorName || group.id}`}
                           finalizeLabel="Finalize Group Bill"
                           customerName={group.creatorName || ''}
-                          setCustomerName={(v) => {/* update group creatorName logic here */}}
                           customerPhoneNumber={group.creatorPhone || ''}
-                          setCustomerPhoneNumber={(v) => {/* update group creatorPhone logic here */}}
                           tableNumber={selectedTable?.tableNumber || ''}
-                          setTableNumber={() => {}}
                           orderStatusConfig={orderStatusConfig}
                           activeTab={activeGroupSubTab}
                           setActiveTab={setActiveGroupSubTab}
@@ -642,6 +729,20 @@ export default function TableManagementPage() {
             <form onSubmit={form.handleSubmit(handleTableSubmit)} className="space-y-4 py-4">
               <FormField control={form.control} name="tableNumber" render={({ field }) => (<FormItem><FormLabel>Table Number/Name</FormLabel><FormControl><Input placeholder="e.g., T1, Patio 5, Bar Seat 2" {...field} /></FormControl><FormMessage /></FormItem>)} />
               <FormField control={form.control} name="capacity" render={({ field }) => (<FormItem><FormLabel>Capacity</FormLabel><FormControl><Input type="number" placeholder="e.g., 4" {...field} /></FormControl><FormMessage /></FormItem>)} />
+              <FormField control={form.control} name="areaId" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Area (Optional)</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value || undefined} defaultValue={field.value || undefined}>
+                      <FormControl><SelectTrigger><SelectValue placeholder="Assign to an area..." /></SelectTrigger></FormControl>
+                      <SelectContent>
+                        <SelectItem value="">No Area / Unassigned</SelectItem>
+                        {tableAreas.map(area => <SelectItem key={area.id} value={area.id}>{area.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               <DialogFooter>
                 <DialogClose asChild><Button type="button" variant="outline" onClick={() => setIsTableModalOpen(false)} disabled={formSubmitting}>Cancel</Button></DialogClose>
                 <Button type="submit" disabled={formSubmitting} className="bg-primary hover:bg-primary/90 text-primary-foreground">
@@ -652,14 +753,48 @@ export default function TableManagementPage() {
           </Form>
         </DialogContent>
       </Dialog>
+
+      {/* Manage Areas Dialog */}
+      <Dialog open={isAreaModalOpen} onOpenChange={(isOpen) => { if (!isOpen) setEditingArea(null); setIsAreaModalOpen(isOpen);}}>
+        <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+                <DialogTitle>Manage Table Areas</DialogTitle>
+                <DialogDescription>Create, edit, or delete areas to organize your tables.</DialogDescription>
+            </DialogHeader>
+            <div className="max-h-[60vh] overflow-y-auto space-y-3 p-1">
+                {tableAreas.length > 0 ? tableAreas.map(area => (
+                    <Card key={area.id} className="flex items-center justify-between p-3">
+                        <div>
+                            <p className="font-medium">{area.name}</p>
+                            <p className="text-xs text-muted-foreground">Display Order: {area.order}</p>
+                        </div>
+                        <div className="space-x-1">
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditingArea(area); }}><Edit3 className="h-4 w-4"/></Button>
+                            <Button variant="ghost" size="icon" className="text-destructive h-7 w-7" onClick={() => openDeleteDialog(area, 'area')}><Trash2 className="h-4 w-4"/></Button>
+                        </div>
+                    </Card>
+                )) : <p className="text-sm text-muted-foreground text-center py-3">No areas created yet.</p>}
+            </div>
+            <Separator className="my-3"/>
+            <AreaForm 
+                area={editingArea} 
+                onSubmit={handleAreaSubmit} 
+                isLoading={formSubmitting}
+                onDone={() => {setEditingArea(null); /* Potentially close parent if no edit, or keep open */}}
+            />
+             <DialogFooter>
+                <DialogClose asChild><Button type="button" variant="outline" onClick={() => {setIsAreaModalOpen(false); setEditingArea(null);}}>Close</Button></DialogClose>
+            </DialogFooter>
+        </DialogContent>
+      </Dialog>
       
       {deleteConfirmation?.isOpen && (
         <ConfirmationDialog
           isOpen={deleteConfirmation.isOpen}
           onClose={() => setDeleteConfirmation(null)}
-          onConfirm={confirmDeleteTable}
-          title={`Delete Table ${deleteConfirmation.data.tableNumber}?`}
-          description="This action cannot be undone. Associated active orders might need manual resolution."
+          onConfirm={confirmDelete}
+          title={`Delete ${deleteConfirmation.type === 'table' ? 'Table' : 'Area'}: ${deleteConfirmation.type === 'table' ? (deleteConfirmation.data as FirebaseTableType).tableNumber : (deleteConfirmation.data as TableArea).name}?`}
+          description={deleteConfirmation.type === 'area' ? "Deleting an area will disassociate tables from it, but will not delete the tables themselves. This action cannot be undone." : "This action cannot be undone. Associated active orders might need manual resolution."}
           isLoading={formSubmitting}
         />
       )}
@@ -694,4 +829,3 @@ export default function TableManagementPage() {
     </div>
   );
 }
-
