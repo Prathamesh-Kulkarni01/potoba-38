@@ -3,11 +3,15 @@
 
 import { type ReactNode, useEffect } from 'react';
 import { useAuth } from '@/lib/auth/context';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import AppLoadingScreen from '@/components/shared/app-loading-screen';
 import Link from 'next/link';
 import Image from 'next/image';
 import UserNav from '@/components/dashboard/user-nav';
+import { OrderProvider } from '@/contexts/waiter/OrderContext';
+import { BottomNavigation } from '@/components/waiter/BottomNavigation';
+import { AppHeader } from '@/components/waiter/AppHeader';
+import { Toaster } from '@/components/ui/toaster';
 
 export default function WaiterLayout({ children }: { children: ReactNode }) {
   const { user, role, staffRole, initialLoading, loading: authContextLoading } = useAuth();
@@ -28,17 +32,28 @@ console.log(user, role, staffRole)
   if (initialLoading || authContextLoading || !user || (role === 'Waiter' && staffRole !== 'Waiter')) {
     return <AppLoadingScreen message="Loading Waiter Interface..." />;
   }
-
+const pathname = usePathname();
+  const showAppHeader = pathname.startsWith('/waiter'); 
+  const showBottomNav = pathname.startsWith('/waiter');
   return (
     <div className="flex min-h-screen flex-col bg-muted/30 theme-transition">
-      <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b bg-background px-4 shadow-sm sm:px-6">
+      {/* <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b bg-background px-4 shadow-sm sm:px-6">
         <Link href="/waiter" className="flex items-center gap-2">
           <Image src="/images/logo.png" alt="Potoba Logo" width={32} height={32} className="rounded-md" />
           <h1 className="text-xl font-semibold text-primary">Potoba Waiter</h1>
         </Link>
         {user && <UserNav />}
-      </header>
-      <main className="flex-1 p-4 sm:p-6">{children}</main>
+      </header> */}
+      <main className="flex-1 ">
+          <OrderProvider>
+          {showAppHeader && <AppHeader />}
+          <main className={`flex-grow container mx-auto px-4 ${showAppHeader ? 'py-6 sm:py-8' : ''} ${showBottomNav ? 'pb-20 md:pb-0' : ''}`}>
+            {children}
+          </main>
+          {showBottomNav && <BottomNavigation />} {/* Render BottomNavigation */}
+          <Toaster />
+        </OrderProvider>
+      </main>
       <footer className="border-t bg-background p-3 text-center text-xs text-muted-foreground">
         Potoba Waiter Interface - &copy; {new Date().getFullYear()}
       </footer>
