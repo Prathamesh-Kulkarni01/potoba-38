@@ -50,7 +50,7 @@ const sanitizeOrderItem = (item: Partial<OrderItem>): OrderItem => {
     quantity: quantity,
     unitPrice: unitPrice,
     totalPrice: unitPrice * quantity,
-    variantChoices: item.variantChoices || undefined, // Firestore handles undefined in arrays better
+    variantChoices: item.variantChoices || null, // Firestore handles undefined in arrays better
     notes: item.notes || null,
     status: item.status || 'pending',
     createdAt: item.createdAt || Date.now(),
@@ -59,7 +59,7 @@ const sanitizeOrderItem = (item: Partial<OrderItem>): OrderItem => {
     groupId: item.groupId || null,
     imageUrl: item.imageUrl || null,
     categoryId: item.categoryId || null,
-    taxOverrides: item.taxOverrides || undefined,
+    taxOverrides: item.taxOverrides || null,
   };
 };
 
@@ -121,7 +121,7 @@ export async function createOrder(restaurantId: string, orderData: Omit<Order, '
       order: 0, 
       createdAt: Timestamp.now(), 
       updatedAt: Timestamp.now(),
-      taxOverrides: item.taxOverrides || undefined,
+      taxOverrides: item.taxOverrides || null,
     },
     quantity: item.quantity,
   }));
