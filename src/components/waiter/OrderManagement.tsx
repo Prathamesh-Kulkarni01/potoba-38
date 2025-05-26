@@ -71,7 +71,7 @@ export function OrderManagement({ table }: OrderManagementProps) {
     getFirstItemAddedTime,
     assignWaiterToTable,
     clearWaiterAssignment,
-    getAssignedWaiterId,
+    getAssignedWaiterInfo, // Changed from getAssignedWaiterId
     archiveOrder,
     sendOrderToKitchen,
     getTableNote,
@@ -81,7 +81,9 @@ export function OrderManagement({ table }: OrderManagementProps) {
 
   const currentOrderItems = getOrderForTable(table.id);
   const tableStatus = getTableStatus(table.id);
-  const assignedWaiterId = getAssignedWaiterId(table.id);
+  
+  const assignedWaiterDetails = getAssignedWaiterInfo(table.id); // Use the correct function
+  const assignedWaiterId = assignedWaiterDetails?.waiterId;
   const assignedWaiter = WAITERS_DATA.find(w => w.id === assignedWaiterId);
 
   const isPaying = tableStatus === 'paying';
@@ -309,13 +311,13 @@ export function OrderManagement({ table }: OrderManagementProps) {
     }
   };
 
-  const handleWaiterAssignmentChange = (waiterId: string) => {
-    if (waiterId === "unassigned") {
+  const handleWaiterAssignmentChange = (newWaiterId: string) => {
+    if (newWaiterId === "unassigned") {
       clearWaiterAssignment(table.id);
       toast({ title: `Waiter unassigned from Table ${table.name.replace('Table ', '')}` });
     } else {
-      assignWaiterToTable(table.id, waiterId);
-      const selectedWaiter = WAITERS_DATA.find(w => w.id === waiterId);
+      const selectedWaiter = WAITERS_DATA.find(w => w.id === newWaiterId);
+      assignWaiterToTable(table.id, newWaiterId, selectedWaiter?.name || 'Unknown Waiter'); // Pass name
       toast({ title: `${selectedWaiter?.name || 'Waiter'} assigned to Table ${table.name.replace('Table ', '')}` });
     }
   };
