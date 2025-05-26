@@ -24,7 +24,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Form, FormControl, FormField, FormItem, FormMessage } from '@/components/ui/form';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import MenuSelectionForBill from '@/components/table-management/menu-selection-for-bill';
@@ -515,7 +515,7 @@ export default function TableManagementPage() {
   );
 
   const tablesByArea = tables.reduce((acc, table) => {
-    const areaKey = table.areaId || 'unassigned';
+    const areaKey = table.areaId || '_UNASSIGNED_AREA_'; // Use a special key for unassigned
     if (!acc[areaKey]) {
       acc[areaKey] = { name: table.areaName || 'Unassigned Tables', id: areaKey, tables: [] };
     }
@@ -524,8 +524,8 @@ export default function TableManagementPage() {
   }, {} as Record<string, { name: string; id: string; tables: FirebaseTableType[] }>);
 
   const sortedAreaKeys = Object.keys(tablesByArea).sort((a, b) => {
-    if (a === 'unassigned') return 1; // Push unassigned to the end
-    if (b === 'unassigned') return -1;
+    if (a === '_UNASSIGNED_AREA_') return 1; // Push unassigned to the end
+    if (b === '_UNASSIGNED_AREA_') return -1;
     const areaA = tableAreas.find(area => area.id === a);
     const areaB = tableAreas.find(area => area.id === b);
     return (areaA?.order || 0) - (areaB?.order || 0);
@@ -737,13 +737,19 @@ export default function TableManagementPage() {
             <form onSubmit={form.handleSubmit(handleTableSubmit)} className="space-y-4 py-4">
               <FormField control={form.control} name="tableNumber" render={({ field }) => (<FormItem><FormLabel>Table Number/Name</FormLabel><FormControl><Input placeholder="e.g., T1, Patio 5, Bar Seat 2" {...field} /></FormControl><FormMessage /></FormItem>)} />
               <FormField control={form.control} name="capacity" render={({ field }) => (<FormItem><FormLabel>Capacity</FormLabel><FormControl><Input type="number" placeholder="e.g., 4" {...field} /></FormControl><FormMessage /></FormItem>)} />
-              <FormField control={form.control} name="areaId" render={({ field }) => (
+              <FormField
+                control={form.control}
+                name="areaId"
+                render={({ field }) => (
                   <FormItem>
                     <FormLabel>Area (Optional)</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value || undefined} defaultValue={field.value || undefined}>
+                    <Select
+                      onValueChange={(value) => field.onChange(value === "_UNASSIGNED_" ? null : value)}
+                      value={field.value ?? undefined} // Use undefined to show placeholder if field.value is null
+                    >
                       <FormControl><SelectTrigger><SelectValue placeholder="Assign to an area..." /></SelectTrigger></FormControl>
                       <SelectContent>
-                        <SelectItem value="">No Area / Unassigned</SelectItem>
+                        <SelectItem value="_UNASSIGNED_">No Area / Unassigned</SelectItem> {/* Ensure this has a non-empty value */}
                         {tableAreas.map(area => <SelectItem key={area.id} value={area.id}>{area.name}</SelectItem>)}
                       </SelectContent>
                     </Select>
@@ -812,7 +818,7 @@ export default function TableManagementPage() {
             <DialogContent className="sm:max-w-screen-sm">
                 <DialogHeader>
                     <DialogTitle>QR Code for Table {qrModalTable.tableNumber}</DialogTitle>
-                    <CardDescription>Customers can scan this to view the menu and order.</CardDescription>
+                    <DialogDescription>Customers can scan this to view the menu and order.</DialogDescription>
                 </DialogHeader>
                 <div className="flex flex-col items-center justify-center p-4 space-y-4">
                     <Image 
@@ -837,3 +843,4 @@ export default function TableManagementPage() {
     </div>
   );
 }
+
