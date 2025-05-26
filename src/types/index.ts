@@ -42,7 +42,7 @@ export const DEFAULT_PERMISSIONS_BY_ROLE: Record<StaffRole, StaffPermissions> = 
   },
   Waiter: {
     canViewDashboardInsights: false, canManageAllOrders: true, canTakeTableOrders: true,
-    canSettleBills: false, canManageMenu: false, canManageTables: true,
+    canSettleBills: true, canManageMenu: false, canManageTables: true,
     canManageInventoryItems: false, canRecordStockIn: false, canRecordStockOut: false,
     canViewInventoryReports: false, canAccessSettings: false, canManageStaff: false,
     canViewFinancialReports: false, canViewKitchenOrders: true, canEditRestaurantSettings: false,
@@ -70,8 +70,9 @@ export const DEFAULT_PERMISSIONS_BY_ROLE: Record<StaffRole, StaffPermissions> = 
   },
 };
 
+// Base default permissions, typically minimal
 export const defaultStaffPermissions: StaffPermissions = {
-  ...DEFAULT_PERMISSIONS_BY_ROLE.Custom,
+  ...DEFAULT_PERMISSIONS_BY_ROLE.Custom, // Start with the most restrictive
 };
 
 
@@ -218,7 +219,7 @@ export interface MenuItem {
   categoryId: string;
   subcategoryId?: string | null;
   name:string;
-  description: string;
+  description?: string | null; // Made optional as per schema
   price: number;
   imageUrl?: string | null;
   videoUrl?: string | null;
@@ -238,10 +239,15 @@ export interface MenuItem {
   createdAt: Timestamp;
   updatedAt: Timestamp;
   taxOverrides?: TaxConfig[];
+  // Waiter app specific fields
+  isSpicy?: boolean;
+  isGlutenFree?: boolean;
+  tags?: string[];
+  isAvailable?: boolean; // Duplicates 'availability', consider consolidating
 }
 
 
-export type TableStatus = 'available' | 'occupied' | 'reserved' | 'needs_cleaning';
+export type TableStatus = 'available' | 'occupied' | 'reserved' | 'needs_cleaning' | 'paying';
 
 export interface TableArea {
   id: string;
@@ -255,16 +261,24 @@ export interface TableArea {
 export interface Table {
   id: string;
   restaurantId: string;
-  tableDocId: string; // Document ID for this table, used in QR codes
+  tableDocId: string; 
   tableNumber: string;
   capacity: number;
   status: TableStatus;
   qrCodeValue: string;
   areaId?: string | null;
   areaName?: string | null; 
+  assignedWaiterId?: string | null;
+  assignedWaiterName?: string | null;
+  lastOrderId?: string | null;
+  lastOrderTotal?: number | null;
+  lastOrderAt?: Timestamp | string | null; // Allow string for ISO
   currentOrderIds?: string[];
-  createdAt: string; // ISO string for client components
-  updatedAt: string; // ISO string for client components
+  createdAt: string; 
+  updatedAt: string; 
+  // Waiter app static data properties (if needed temporarily, otherwise remove)
+  name?: string; 
+  shape?: 'square' | 'circle' | 'rectangle';
 }
 
 export type OrderStatus =
@@ -287,8 +301,17 @@ export interface OrderItem {
   totalPrice: number;
   variantChoices?: { variantName: string; optionName: string; optionPrice: number }[];
   notes?: string;
-  categoryId?: string; // For tax calculation reference
-  taxOverrides?: TaxConfig[]; // For tax calculation reference
+  categoryId?: string; 
+  taxOverrides?: TaxConfig[]; 
+  // Fields for waiter app internal state
+  menuItem?: MenuItem; // Full menu item details, might be redundant if fetching by ID always
+  status?: 'pending' | 'sent_to_kitchen' | 'ready_for_pickup' | 'served';
+  createdAt?: number; // Timestamp for when item was added to order
+  uniqueId?: string; // To differentiate same items added multiple times before sending to KOT
+  instructions?: string;
+  groupId?: string; 
+  // Cart Item specific (from Site/Public App)
+  imageUrl?: string; 
 }
 
 export interface Order {
@@ -329,21 +352,21 @@ export interface GroupCartItem extends OrderItem {
 }
 
 export interface TableGroupMember {
-  uid: string | null; // UID of the Potoba user, or null/unique ID for anonymous group members
+  uid: string | null; 
   name: string;
-  phone?: string | null; // Optional phone for the member
+  phone?: string | null; 
 }
 
 export interface TableGroup {
-  id: string; // The 4-digit unique group code
+  id: string; 
   restaurantId: string;
-  tableId: string; // Firestore document ID of the table
+  tableId: string; 
   tableNumber: string;
-  creatorName: string; // Name of the person who created the group
-  creatorPhone: string; // Phone of the person who created the group
-  creatorUid?: string | null; // UID of the Potoba user who created, if logged in
+  creatorName: string; 
+  creatorPhone: string; 
+  creatorUid?: string | null; 
   members: TableGroupMember[];
-  status: 'active' | 'ordering' | 'locked' | 'ordered' | 'closed'; // 'ordering' could be an alias for 'active'
+  status: 'active' | 'ordering' | 'locked' | 'ordered' | 'closed'; 
   cartItems: GroupCartItem[];
   createdAt: Timestamp;
   updatedAt: Timestamp;
@@ -438,7 +461,6 @@ export interface DailyStockSummary {
   stockInQuantity: number;
   stockOutQuantity: number;
   wastageQuantity: number;
-  // Could add value based summaries later
 }
 
 export interface StaffInvitation {
@@ -453,4 +475,54 @@ export interface StaffInvitation {
   acceptedAt?: Timestamp;
   acceptedByUid?: string;
   permissions?: StaffPermissions; // Permissions set at the time of invitation
+}
+
+// ---- Waiter App Specific Types (From Static Data, to be reviewed for dynamic integration) ---
+// Kept Waiter type simple, might need to be merged with UserProfile if waiters are also Potoba users.
+export interface Waiter {
+  id: string;
+  name: string;
+  avatar?: string;
+}
+
+// Tip Entry
+export interface TipEntry {
+  id: string;
+  amount: number;
+  timestamp: number; // Unix timestamp
+  tableId?: string; // Optional, if tip is associated with a specific table
+  notes?: string; // Optional notes for the tip
+}
+
+// Historical Order for Waiter App (simplified, might need to align with ClientOrder)
+export interface HistoricalOrder {
+  id: string;
+  originalTableId?: string; // The ID of the table this order was originally for
+  items: OrderItem[]; // Re-uses OrderItem, assuming structure is compatible
+  completedAt: number; // Timestamp of completion
+  totalAmount: number;
+  paymentMethod?: 'cash' | 'card' | 'upi' | 'wallet' | 'other';
+  paymentNote?: string;
+  // any other details to show in history
+}
+
+export interface ChatMessage {
+  id: string;
+  user: string;
+  text: string;
+  timestamp: number;
+  avatar?: string; // URL to user's avatar
+  isCurrentUser?: boolean; // Optional flag to identify messages from the logged-in user
+}
+
+export interface SpecialOffer {
+  id: string;
+  title: string;
+  description: string;
+  specialPrice?: number;
+  discountPercentage?: number;
+  applicableItems?: string[]; // Array of MenuItem IDs or names
+  imageUrl?: string;
+  tags?: string[];
+  dataAiHint?: string; // For image generation hint
 }

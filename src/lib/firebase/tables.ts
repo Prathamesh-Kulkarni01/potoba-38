@@ -28,7 +28,7 @@ const getTableAreasCollectionPath = (restaurantId: string) => `restaurants/${res
 
 export async function addTable(
   restaurantId: string, 
-  tableData: Omit<Table, 'id' | 'restaurantId' | 'tableDocId' | 'qrCodeValue' | 'createdAt' | 'updatedAt' | 'status'> & { areaId?: string | null; areaName?: string | null;}
+  tableData: Omit<Table, 'id' | 'restaurantId' | 'tableDocId' | 'qrCodeValue' | 'createdAt' | 'updatedAt' | 'status' | 'assignedWaiterId' | 'assignedWaiterName' | 'lastOrderId' | 'lastOrderTotal' | 'lastOrderAt'> & { areaId?: string | null; areaName?: string | null;}
 ): Promise<Table> {
   if (!db) throw new Error("Firestore is not initialized.");
   const tablesCol = collection(db, getTablesCollectionPath(restaurantId));
@@ -49,6 +49,11 @@ export async function addTable(
     qrCodeValue: finalQrCodeValue,
     areaId: tableData.areaId || null,
     areaName: tableData.areaName || null,
+    assignedWaiterId: null,
+    assignedWaiterName: null,
+    lastOrderId: null,
+    lastOrderTotal: null,
+    lastOrderAt: null,
     createdAt: nowTimestamp, 
     updatedAt: nowTimestamp, 
   };
@@ -64,6 +69,11 @@ export async function addTable(
     status: 'available' as TableStatus,
     areaId: tableData.areaId || null,
     areaName: tableData.areaName || null,
+    assignedWaiterId: null,
+    assignedWaiterName: null,
+    lastOrderId: null,
+    lastOrderTotal: null,
+    lastOrderAt: null,
     createdAt: convertFirebaseTimestampToString(nowTimestamp),
     updatedAt: convertFirebaseTimestampToString(nowTimestamp),
   };
@@ -81,7 +91,8 @@ export async function getTables(restaurantId: string): Promise<Table[]> {
       ...data,
       tableDocId: docSnap.id, 
       createdAt: convertFirebaseTimestampToString(data.createdAt as Timestamp),
-      updatedAt: convertFirebaseTimestampToString(data.updatedAt as Timestamp)
+      updatedAt: convertFirebaseTimestampToString(data.updatedAt as Timestamp),
+      lastOrderAt: data.lastOrderAt ? convertFirebaseTimestampToString(data.lastOrderAt as Timestamp) : null,
     } as Table;
   });
 }
@@ -96,7 +107,8 @@ export async function getTable(restaurantId: string, tableId: string): Promise<T
       id: docSnap.id, 
       ...data,
       createdAt: convertFirebaseTimestampToString(data.createdAt as Timestamp),
-      updatedAt: convertFirebaseTimestampToString(data.updatedAt as Timestamp)
+      updatedAt: convertFirebaseTimestampToString(data.updatedAt as Timestamp),
+      lastOrderAt: data.lastOrderAt ? convertFirebaseTimestampToString(data.lastOrderAt as Timestamp) : null,
     } as Table;
   }
   return null;
@@ -104,8 +116,11 @@ export async function getTable(restaurantId: string, tableId: string): Promise<T
 
 export async function getTableByDocIdFromGroup(tableDocIdToFind: string): Promise<{ table: Table; restaurantId: string } | null> {
   if (!db) throw new Error("Firestore is not initialized.");
+  if (!tableDocIdToFind || typeof tableDocIdToFind !== 'string' || tableDocIdToFind.trim() === '') {
+    console.error("[getTableByDocIdFromGroup] Invalid tableDocIdToFind received:", tableDocIdToFind);
+    return null;
+  }
   const tablesGroupRef = collectionGroup(db, 'tables');
-  // Ensure an index is created for 'tableDocId' in the 'tables' collection group
   const q = query(tablesGroupRef, where('tableDocId', '==', tableDocIdToFind), limit(1));
   
   const snapshot = await getDocs(q);
@@ -122,6 +137,7 @@ export async function getTableByDocIdFromGroup(tableDocIdToFind: string): Promis
         ...tableData,
         createdAt: convertFirebaseTimestampToString(tableData.createdAt as Timestamp),
         updatedAt: convertFirebaseTimestampToString(tableData.updatedAt as Timestamp),
+        lastOrderAt: tableData.lastOrderAt ? convertFirebaseTimestampToString(tableData.lastOrderAt as Timestamp) : null,
       } as Table,
       restaurantId: tableData.restaurantId as string,
     };
@@ -141,16 +157,29 @@ export async function updateTable(
   
   const updateData: any = { ...data, updatedAt: serverTimestamp() };
   
-  // Ensure these critical fields are not accidentally overwritten if not explicitly passed
   if (updateData.hasOwnProperty('qrCodeValue')) delete updateData.qrCodeValue;
   if (updateData.hasOwnProperty('tableDocId')) delete updateData.tableDocId;
 
-  // Handle areaId and areaName explicitly
   if (data.hasOwnProperty('areaId')) {
     updateData.areaId = data.areaId === undefined ? null : data.areaId;
   }
   if (data.hasOwnProperty('areaName')) {
     updateData.areaName = data.areaName === undefined ? null : data.areaName;
+  }
+  if (data.hasOwnProperty('assignedWaiterId')) {
+    updateData.assignedWaiterId = data.assignedWaiterId === undefined ? null : data.assignedWaiterId;
+  }
+  if (data.hasOwnProperty('assignedWaiterName')) {
+    updateData.assignedWaiterName = data.assignedWaiterName === undefined ? null : data.assignedWaiterName;
+  }
+  if (data.hasOwnProperty('lastOrderId')) {
+    updateData.lastOrderId = data.lastOrderId === undefined ? null : data.lastOrderId;
+  }
+  if (data.hasOwnProperty('lastOrderTotal')) {
+    updateData.lastOrderTotal = data.lastOrderTotal === undefined ? null : data.lastOrderTotal;
+  }
+  if (data.hasOwnProperty('lastOrderAt')) {
+    updateData.lastOrderAt = data.lastOrderAt === undefined ? null : data.lastOrderAt;
   }
   
   await updateDoc(tableRef, updateData);
@@ -191,7 +220,6 @@ export async function deleteTableArea(restaurantId: string, areaId: string): Pro
   const batch = writeBatch(db);
   const areaRef = doc(db, getTableAreasCollectionPath(restaurantId), areaId);
   
-  // Find tables associated with this area and update them
   const tablesCol = collection(db, getTablesCollectionPath(restaurantId));
   const q = query(tablesCol, where('areaId', '==', areaId));
   const tablesSnapshot = await getDocs(q);
@@ -237,7 +265,7 @@ export async function getRestaurantTableOccupancy(restaurantId: string): Promise
 export function listenToRestaurantTables(
   restaurantId: string,
   callback: (tables: Table[]) => void
-): () => void { // Returns an unsubscribe function
+): () => void { 
   if (!db) throw new Error("Firestore is not initialized for real-time listener.");
   
   const tablesCol = collection(db, getTablesCollectionPath(restaurantId));
@@ -246,9 +274,11 @@ export function listenToRestaurantTables(
   const unsubscribe = onSnapshot(q, (snapshot) => {
     const tables = snapshot.docs.map(docSnap => ({
         id: docSnap.id,
+        tableDocId: docSnap.id, // ensure tableDocId is always populated correctly
         ...docSnap.data(),
         createdAt: convertFirebaseTimestampToString(docSnap.data().createdAt as Timestamp),
         updatedAt: convertFirebaseTimestampToString(docSnap.data().updatedAt as Timestamp),
+        lastOrderAt: docSnap.data().lastOrderAt ? convertFirebaseTimestampToString(docSnap.data().lastOrderAt as Timestamp) : null,
       } as Table));
     callback(tables);
   }, (error) => {
