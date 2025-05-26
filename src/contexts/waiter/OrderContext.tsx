@@ -2,13 +2,13 @@
 // src/contexts/waiter/OrderContext.tsx
 "use client";
 
-import type { OrderItem, TableStatus, MenuItem, Waiter, HistoricalOrder, TipEntry, Table as FirebaseTableType, MenuCategory, MenuSubcategory } from '@/lib/types';
+import type { OrderItem, TableStatus, MenuItem, Waiter, HistoricalOrder, TipEntry, Table as FirebaseTableType, MenuCategory, MenuSubcategory, ClientOrder, OrderStatus } from '@/types';
 import type React from 'react';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/lib/auth/context';
 import { getMenuItems, getMenuCategories, getMenuSubcategories } from '@/lib/firebase/menu';
 import { getTables as fetchTablesFromDb, updateTable as updateFirebaseTable } from '@/lib/firebase/tables';
-import { createOrder as createFirebaseOrder, updateOrder as updateFirebaseOrder, getOrdersByTable } from '@/lib/firebase/orders';
+import { createOrder as createFirebaseOrder, updateOrder as updateFirebaseOrder, getOrdersByTable, getOrder } from '@/lib/firebase/orders'; // Added getOrder
 import { Timestamp } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 
@@ -18,7 +18,7 @@ interface OrderContextType {
   menuCategories: MenuCategory[];
   menuSubcategories: MenuSubcategory[];
   tables: FirebaseTableType[];
-  activeOrders: Map<string, OrderItem[]>;
+  activeOrders: Map<string, OrderItem[]>; // Local draft orders for tables
 
   // Local Waiter App State
   tableNotes: Map<string, string>;
@@ -88,11 +88,6 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [isTablesLoading, setIsTablesLoading] = useState(true);
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
 
-  const getTableNote = useCallback((tableId: string): string | undefined => tableNotes.get(tableId), [tableNotes]);
-
-  const updateTableNote = useCallback((tableId: string, note: string) => {
-    setTableNotes(prev => new Map(prev).set(tableId, note.trim()));
-  }, []);
 
   useEffect(() => {
     if (restaurantId) {
@@ -126,6 +121,7 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, [restaurantId, toast]);
 
+  // Load from localStorage on mount
   useEffect(() => {
     if (restaurantId) {
       const storedActiveOrders = localStorage.getItem(`waiterActiveOrders_${restaurantId}`);
@@ -138,8 +134,8 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               uniqueId: item.uniqueId || `${item.menuItem.id}-${item.createdAt || Date.now()}-${Math.random().toString(36).substring(7)}`,
               status: item.status || 'pending',
               createdAt: item.createdAt || Date.now(),
-              instructions: item.instructions || null, 
-              groupId: item.groupId || null,          
+              instructions: item.instructions || null,
+              groupId: item.groupId || null,
             })));
           });
           setActiveOrders(newOrdersMap);
@@ -157,6 +153,7 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, [restaurantId]);
 
+  // Persist to localStorage on change
   useEffect(() => {
     if (restaurantId) localStorage.setItem(`waiterActiveOrders_${restaurantId}`, JSON.stringify(Array.from(activeOrders.entries())));
   }, [activeOrders, restaurantId]);
@@ -170,13 +167,31 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (restaurantId) localStorage.setItem(`waiterTips_${restaurantId}`, JSON.stringify(tips));
   }, [tips, restaurantId]);
 
+  const getTableNote = useCallback((tableId: string): string | undefined => tableNotes.get(tableId), [tableNotes]);
+  const updateTableNote = useCallback((tableId: string, note: string) => {
+    setTableNotes(prev => new Map(prev).set(tableId, note.trim()));
+  }, []);
   const getOrderForTable = useCallback((tableId: string): OrderItem[] => {
     return activeOrders.get(tableId) || [];
   }, [activeOrders]);
-
   const getTableStatus = useCallback((tableId: string): TableStatus => {
     return tables.find(t => t.id === tableId)?.status || 'available';
   }, [tables]);
+
+  const calculateTotal = useCallback((tableId: string, itemsToCalculate?: OrderItem[]): number => {
+    const items = itemsToCalculate || getOrderForTable(tableId);
+    return items.reduce((total, item) => total + (item.menuItem?.price || 0) * item.quantity, 0);
+  }, [getOrderForTable]);
+  const getTotalItemsForTable = useCallback((tableId: string, itemsToCount?: OrderItem[]): number => {
+    const items = itemsToCount || getOrderForTable(tableId);
+    return items.reduce((sum, item) => sum + item.quantity, 0);
+  }, [getOrderForTable]);
+  const getFirstItemAddedTime = useCallback((tableId: string): number | null => {
+    const currentOrder = getOrderForTable(tableId);
+    if (currentOrder.length === 0) return null;
+    const validTimestamps = currentOrder.map(item => item.createdAt).filter(ts => typeof ts === 'number' && !isNaN(ts));
+    return validTimestamps.length > 0 ? Math.min(...validTimestamps) : null;
+  }, [getOrderForTable]);
 
   const updateTableStatus = useCallback(async (tableId: string, status: TableStatus) => {
     if (!restaurantId) return;
@@ -193,20 +208,20 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setActiveOrders(prevOrders => {
       const newOrders = new Map(prevOrders);
       let currentOrder = newOrders.get(tableId) || [];
-      const normalizedGroupId = groupId?.trim() || null; 
+      const normalizedGroupId = groupId?.trim() || null;
 
       const existingItemIndex = currentOrder.findIndex(item =>
         item.menuItem.id === menuItem.id &&
-        (item.instructions || null) === (instructions || null) && 
+        (item.instructions || null) === (instructions || null) &&
         item.status === 'pending' &&
-        (item.groupId || null) === normalizedGroupId 
+        (item.groupId || null) === normalizedGroupId
       );
 
       if (existingItemIndex > -1) {
         const updatedItem = {
           ...currentOrder[existingItemIndex],
           quantity: currentOrder[existingItemIndex].quantity + quantity,
-          totalPrice: (currentOrder[existingItemIndex].quantity + quantity) * currentOrder[existingItemIndex].unitPrice, // Recalculate total price
+          totalPrice: (currentOrder[existingItemIndex].quantity + quantity) * currentOrder[existingItemIndex].unitPrice,
         };
         currentOrder[existingItemIndex] = updatedItem;
       } else {
@@ -216,11 +231,15 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           quantity,
           status: 'pending',
           createdAt: Date.now(),
-          instructions: instructions || null, 
+          instructions: instructions || null,
           uniqueId: newItemUniqueId,
-          groupId: normalizedGroupId,      
+          groupId: normalizedGroupId,
           unitPrice: menuItem.price,
           totalPrice: menuItem.price * quantity,
+          // Ensure optional fields from MenuItem are carried over if needed for display or logic
+          categoryId: menuItem.categoryId,
+          imageUrl: menuItem.imageUrl,
+          taxOverrides: menuItem.taxOverrides,
         };
         currentOrder = [...currentOrder, newItemData];
       }
@@ -243,10 +262,10 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (quantity <= 0) {
           currentOrder.splice(itemIndex, 1);
         } else {
-          const updatedItem = { 
-            ...currentOrder[itemIndex], 
-            quantity, 
-            totalPrice: currentOrder[itemIndex].unitPrice * quantity 
+          const updatedItem = {
+            ...currentOrder[itemIndex],
+            quantity,
+            totalPrice: currentOrder[itemIndex].unitPrice * quantity
           };
           currentOrder[itemIndex] = updatedItem;
         }
@@ -265,7 +284,7 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const currentOrder = newOrders.get(tableId) || [];
       const itemIndex = currentOrder.findIndex(item => item.uniqueId === itemUniqueId);
       if (itemIndex > -1) {
-        currentOrder[itemIndex] = { ...currentOrder[itemIndex], instructions: instructions.trim() || null }; 
+        currentOrder[itemIndex] = { ...currentOrder[itemIndex], instructions: instructions.trim() || null };
         newOrders.set(tableId, [...currentOrder]);
       }
       return newOrders;
@@ -289,8 +308,8 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setActiveOrders(prevOrders => {
       const newOrders = new Map(prevOrders);
       let currentOrder = newOrders.get(tableId) || [];
-      const normalizedGroupId = groupId?.trim() || null; 
-      const updatedOrder = currentOrder.filter(item => (item.groupId || null) !== normalizedGroupId); 
+      const normalizedGroupId = groupId?.trim() || null;
+      const updatedOrder = currentOrder.filter(item => (item.groupId || null) !== normalizedGroupId);
       newOrders.set(tableId, updatedOrder);
       if (updatedOrder.length === 0 && getTableStatus(tableId) !== 'paying' && getTableStatus(tableId) !== 'reserved') {
         updateTableStatus(tableId, 'available');
@@ -301,6 +320,29 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     });
   }, [getTableStatus, updateTableStatus]);
 
+  const checkAndUpdateOverallOrderStatus = useCallback(async (orderRestaurantId: string, orderId: string) => {
+    if (!orderRestaurantId || !orderId) return;
+    try {
+      const firestoreOrder = await getOrder(orderRestaurantId, orderId);
+      if (firestoreOrder && firestoreOrder.items && firestoreOrder.items.length > 0) {
+        const allItemsServed = firestoreOrder.items.every(item => item.status === 'served');
+        if (allItemsServed && firestoreOrder.status !== 'completed' && firestoreOrder.status !== 'payment_pending') {
+          await updateFirebaseOrder(orderRestaurantId, orderId, { status: 'payment_pending' });
+          toast({ title: "Order Ready for Payment", description: `All items for order #${orderId.substring(0,6)} served. Order status updated.` });
+          // If table exists in local state, update its status
+          const tableForOrder = tables.find(t => t.id === firestoreOrder.tableId);
+          if (tableForOrder) {
+             updateTableStatus(tableForOrder.id, 'paying');
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error checking/updating overall order status:", error);
+      toast({ variant: "destructive", title: "Order Sync Issue", description: "Could not update overall order status." });
+    }
+  }, [tables, updateTableStatus, toast]);
+
+
   const updateItemStatus = useCallback(async (tableId: string, menuItemId: string, status: OrderItem['status'], itemUniqueId?: string) => {
     if (!restaurantId) {
       toast({ variant: "destructive", title: "Error", description: "Restaurant context is missing." });
@@ -308,51 +350,44 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
 
     let localItemBeforeUpdate: OrderItem | undefined;
+    let orderToUpdateId: string | undefined;
 
     setActiveOrders(prevOrders => {
       const newOrders = new Map(prevOrders);
       const currentOrder = newOrders.get(tableId) || [];
       const itemIndex = currentOrder.findIndex(item => item.uniqueId === itemUniqueId);
       if (itemIndex > -1) {
-        localItemBeforeUpdate = { ...currentOrder[itemIndex] }; // Store a copy
+        localItemBeforeUpdate = { ...currentOrder[itemIndex] };
         currentOrder[itemIndex] = { ...currentOrder[itemIndex], status };
         newOrders.set(tableId, [...currentOrder]);
       }
       return newOrders;
     });
 
-    // If the item was not 'pending' (meaning it was likely part of a synced Firestore order),
-    // or if the new status is 'served' (which is often a final status for an item), try to update Firestore.
-    if (localItemBeforeUpdate && (localItemBeforeUpdate.status !== 'pending' || status === 'served')) {
+    if (localItemBeforeUpdate && localItemBeforeUpdate.status !== 'pending') {
       try {
         const activeFirebaseOrders = await getOrdersByTable(restaurantId, tableId, ['pending_kitchen', 'confirmed_by_kitchen', 'preparing', 'ready_for_pickup', 'served', 'payment_pending']);
-        
-        let orderToUpdate = activeFirebaseOrders.find(o => o.items.some(i => i.uniqueId === itemUniqueId));
-        
-        if (!orderToUpdate && activeFirebaseOrders.length > 0) {
-           // Fallback to the most recent active order if direct item match failed (less ideal but a recovery)
-           orderToUpdate = activeFirebaseOrders.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
-        }
+        const orderContainingItem = activeFirebaseOrders.find(o => o.items.some(i => i.uniqueId === itemUniqueId));
+        orderToUpdateId = orderContainingItem?.id;
 
-        if (orderToUpdate) {
-          const updatedFirebaseItems = orderToUpdate.items.map(firebaseItem => {
-            if (firebaseItem.uniqueId === itemUniqueId) {
-              return { ...firebaseItem, status };
-            }
-            return firebaseItem;
-          });
-          await updateFirebaseOrder(restaurantId, orderToUpdate.id, { items: updatedFirebaseItems });
-          console.log(`Firestore: Item ${itemUniqueId} in order ${orderToUpdate.id} status updated to ${status}`);
+        if (orderToUpdateId) {
+          const updatedFirebaseItems = orderContainingItem.items.map(firebaseItem =>
+            firebaseItem.uniqueId === itemUniqueId ? { ...firebaseItem, status } : firebaseItem
+          );
+          await updateFirebaseOrder(restaurantId, orderToUpdateId, { items: updatedFirebaseItems });
+          console.log(`Firestore: Item ${itemUniqueId} in order ${orderToUpdateId} status updated to ${status}`);
+          // After successful individual item update in Firestore, check overall order status
+          await checkAndUpdateOverallOrderStatus(restaurantId, orderToUpdateId);
         } else {
-          console.warn(`OrderContext: No active Firebase order found for table ${tableId} to update item status for ${itemUniqueId}. This might be okay if the order hasn't been sent to kitchen yet.`);
+          console.warn(`OrderContext: No active Firebase order found for table ${tableId} containing item ${itemUniqueId} to update its status.`);
         }
       } catch (error: any) {
         toast({ variant: "destructive", title: "Firestore Sync Error", description: `Could not sync item status: ${error.message}` });
         // Optionally revert local state if Firestore update fails critically
-        // setActiveOrders(prevOrders => /* logic to revert item status */);
+        // This requires storing the original localOrders map or specific item state to revert to.
       }
     }
-  }, [restaurantId, toast]);
+  }, [restaurantId, toast, checkAndUpdateOverallOrderStatus]);
 
 
   const sendOrderToKitchen = useCallback(async (tableId: string) => {
@@ -365,20 +400,12 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       toast({ title: "Empty Order", description: "No items to send to the kitchen." });
       return;
     }
-  
+
     setIsSubmittingOrder(true);
     try {
       const activeFirebaseOrders = await getOrdersByTable(restaurantId, tableId, ['pending_kitchen', 'confirmed_by_kitchen', 'preparing', 'ready_for_pickup', 'served', 'payment_pending']);
       let targetOrderId: string | undefined;
-      let existingFirebaseItems: OrderItem[] = [];
-  
-      if (activeFirebaseOrders.length > 0) {
-        // Prefer updating an order that's not yet served or completed
-        const orderToUpdate = activeFirebaseOrders.find(o => o.status !== 'served' && o.status !== 'completed' && o.status !== 'payment_pending') || activeFirebaseOrders[0];
-        targetOrderId = orderToUpdate.id;
-        existingFirebaseItems = orderToUpdate.items.map(item => ({...item, instructions: item.instructions || null, groupId: item.groupId || null}));
-      }
-  
+
       const itemsToSyncToFirebase = allLocalItemsForTable.map(localItem => ({
         menuItemId: localItem.menuItem.id,
         menuItemName: localItem.menuItem.name,
@@ -387,43 +414,54 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         totalPrice: localItem.totalPrice,
         instructions: localItem.instructions || null,
         groupId: localItem.groupId || null,
-        status: localItem.status === 'pending' ? 'sent_to_kitchen' : localItem.status, // Update status if pending
+        status: localItem.status === 'pending' ? 'sent_to_kitchen' : localItem.status,
         createdAt: localItem.createdAt || Date.now(),
-        uniqueId: localItem.uniqueId || `${localItem.menuItem.id}-${Date.now()}`, // Ensure uniqueId
+        uniqueId: localItem.uniqueId || `${localItem.menuItem.id}-${Date.now()}`,
         variantChoices: localItem.variantChoices || null,
         imageUrl: (localItem.menuItem as any).imageUrl || null,
         categoryId: (localItem.menuItem as any).categoryId || null,
         taxOverrides: (localItem.menuItem as any).taxOverrides || null,
       }));
-  
+
       const subtotal = itemsToSyncToFirebase.reduce((sum, item) => sum + item.totalPrice, 0);
-      // Actual tax calculation will happen in createFirebaseOrder/updateFirebaseOrder
-      const totalAmount = subtotal; 
-  
-      if (targetOrderId) {
+      const totalAmount = subtotal; // Tax will be calculated in create/update order functions
+
+      const tableInfo = tables.find(t => t.id === tableId);
+
+      if (activeFirebaseOrders.length > 0) {
+        const orderToUpdate = activeFirebaseOrders.find(o => o.status !== 'completed' && o.status !== 'cancelled_by_customer' && o.status !== 'cancelled_by_restaurant') || activeFirebaseOrders[0];
+        targetOrderId = orderToUpdate.id;
+
+        const updatedItems = [...orderToUpdate.items];
+        itemsToSyncToFirebase.forEach(syncItem => {
+            const existingIndex = updatedItems.findIndex(i => i.uniqueId === syncItem.uniqueId);
+            if(existingIndex > -1) {
+                updatedItems[existingIndex] = { ...updatedItems[existingIndex], ...syncItem}; // Merge, syncItem takes precedence
+            } else {
+                updatedItems.push(syncItem);
+            }
+        });
+
         await updateFirebaseOrder(restaurantId, targetOrderId, {
-          items: itemsToSyncToFirebase,
-          subtotal,
-          totalAmount, // This will be re-calculated with tax
-          status: 'pending_kitchen', // Or maintain current if it's further along and items were just added
+          items: updatedItems,
+          // subtotal, totalAmount are re-calculated by updateOrder based on items
+          status: 'pending_kitchen', // Force back to pending_kitchen if resending, or derive based on current item statuses
           kitchenNotes: getTableNote(tableId) || null,
         });
       } else {
-        const tableInfo = tables.find(t => t.id === tableId);
         await createFirebaseOrder(restaurantId, {
           userId: user.uid,
           restaurantId,
           tableId,
           tableNumber: tableInfo?.tableNumber || null,
           items: itemsToSyncToFirebase,
-          subtotal,
-          totalAmount, // This will be re-calculated with tax
+          subtotal, // Will be recalculated
+          totalAmount, // Will be recalculated
           status: 'pending_kitchen',
           kitchenNotes: getTableNote(tableId) || null,
         });
       }
-  
-      // Update local state: items that were 'pending' are now 'sent_to_kitchen'
+
       setActiveOrders(prevOrders => {
         const newOrders = new Map(prevOrders);
         const currentOrder = newOrders.get(tableId) || [];
@@ -433,7 +471,7 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         newOrders.set(tableId, updatedDraftOrder);
         return newOrders;
       });
-  
+
       toast({ title: "Order Sent to Kitchen", description: `${allLocalItemsForTable.length} item(s) processed.` });
     } catch (error: any) {
       toast({ variant: "destructive", title: "Failed to Send Order", description: error.message });
@@ -441,8 +479,8 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     } finally {
       setIsSubmittingOrder(false);
     }
-  }, [restaurantId, user?.uid, getOrderForTable, getTableNote, tables, toast]);
-  
+  }, [restaurantId, user?.uid, getOrderForTable, getTableNote, tables, toast, updateTableStatus]);
+
 
   const clearOrder = useCallback((tableId: string) => {
     setActiveOrders(prevOrders => {
@@ -483,10 +521,6 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return table ? { waiterId: table.assignedWaiterId, waiterName: table.assignedWaiterName } : undefined;
   }, [tables]);
 
-  const calculateTotal = useCallback((tableId: string, itemsToCalculate?: OrderItem[]): number => {
-    const items = itemsToCalculate || getOrderForTable(tableId);
-    return items.reduce((total, item) => total + (item.menuItem?.price || 0) * item.quantity, 0);
-  }, [getOrderForTable]);
 
   const archiveOrder = useCallback(async (tableId: string, finalBillAmount?: number, paymentMethod?: HistoricalOrder['paymentMethod'], paymentNote?: string) => {
     if (!restaurantId) return;
@@ -497,18 +531,21 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     try {
       const actualTotalAmount = finalBillAmount ?? calculateTotal(tableId, itemsToArchive);
 
+      // Find active Firebase order for this table and update its status to 'completed'
       const activeFirebaseOrders = await getOrdersByTable(restaurantId, tableId, ['pending_kitchen', 'confirmed_by_kitchen', 'preparing', 'ready_for_pickup', 'served', 'payment_pending']);
-
       if (activeFirebaseOrders.length > 0) {
-        const orderToUpdate = activeFirebaseOrders[0]; // Assuming the first one is the relevant one for this table session
-        await updateFirebaseOrder(restaurantId, orderToUpdate.id, {
+        // Assuming one primary active order per table for this flow
+        const orderToFinalize = activeFirebaseOrders[0];
+        await updateFirebaseOrder(restaurantId, orderToFinalize.id, {
           status: 'completed',
-          totalAmount: actualTotalAmount,
-          paymentMethod: paymentMethod || null, 
-          customerNotes: paymentNote ? `${orderToUpdate.customerNotes || ''} Payment Note: ${paymentNote}`.trim() : (orderToUpdate.customerNotes || null),
+          totalAmount: actualTotalAmount, // Update with final calculated amount
+          paymentMethod: paymentMethod || null,
+          customerNotes: paymentNote ? `${orderToFinalize.customerNotes || ''} Payment Note: ${paymentNote}`.trim() : (orderToFinalize.customerNotes || null),
+          items: orderToFinalize.items.map(item => ({ ...item, status: 'served' })), // Mark all items as served in the final record
         });
       } else {
-        console.warn(`No active Firebase order found for table ${tableId} to mark as completed when archiving locally.`);
+        // If no active order in Firestore, something is off, or it was purely local. Log warning.
+        console.warn(`WaiterContext: No active Firebase order found for table ${tableId} to mark as completed when archiving.`);
       }
 
       const historicalOrder: HistoricalOrder = {
@@ -529,7 +566,7 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       });
 
       clearOrder(tableId);
-      await updateTableStatus(tableId, 'available'); // Or 'needs_cleaning' if that's the workflow
+      await updateTableStatus(tableId, 'available');
       toast({ title: "Order Archived & Table Cleared" });
     } catch (error) {
       toast({ variant: "destructive", title: "Archival Failed", description: "Could not archive order." });
@@ -567,18 +604,6 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, []);
 
 
-  const getTotalItemsForTable = useCallback((tableId: string, itemsToCount?: OrderItem[]): number => {
-    const items = itemsToCount || getOrderForTable(tableId);
-    return items.reduce((sum, item) => sum + item.quantity, 0);
-  }, [getOrderForTable]);
-
-  const getFirstItemAddedTime = useCallback((tableId: string): number | null => {
-    const currentOrder = getOrderForTable(tableId);
-    if (currentOrder.length === 0) return null;
-    const validTimestamps = currentOrder.map(item => item.createdAt).filter(ts => typeof ts === 'number' && !isNaN(ts));
-    return validTimestamps.length > 0 ? Math.min(...validTimestamps) : null;
-  }, [getOrderForTable]);
-
   const contextValue = useMemo(() => ({
     menuItems, menuCategories, menuSubcategories, tables, activeOrders, orderHistory, tableNotes, tips,
     getOrderForTable, addItemToOrder, updateItemQuantity, updateItemInstructions, removeItemFromOrder, removeItemsByGroupId,
@@ -609,3 +634,6 @@ export const useOrders = (): OrderContextType => {
   if (context === undefined) throw new Error('useOrders must be used within an OrderProvider');
   return context;
 };
+
+
+    
