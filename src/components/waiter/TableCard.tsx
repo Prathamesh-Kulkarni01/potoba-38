@@ -98,4 +98,3 @@ export function TableCard({ table }: TableCardProps) {
     </Card>
   );
 }
-```
