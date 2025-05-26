@@ -27,7 +27,7 @@ import type { Order, OrderStatus, OrderItem, ClientOrder, MenuItem, TaxConfig, M
 import { convertFirebaseTimestampToString, getOrdersCollectionPath } from './utils'; 
 import { startOfDay, endOfDay, subDays } from 'date-fns';
 import { getRestaurant } from './firestore';
-import { getMenuCategories, getMenuItemByIdFromGroup } from './menu'; // Ensure getMenuItemByIdFromGroup is imported
+import { getMenuCategories, getMenuItemByIdFromGroup } from './menu'; 
 import { calculateOrderTaxes } from '../taxEngine';
 import { deductStockForSoldItems } from './inventory';
 
@@ -36,9 +36,6 @@ const safeNumber = (value: any): number | null => typeof value === 'number' && !
 
 // Helper to sanitize an OrderItem
 const sanitizeOrderItem = (item: Partial<OrderItem>): OrderItem => {
-  // Find the menu item to get default name and price if not provided
-  // This part is tricky if menuItem detail is not passed directly.
-  // For now, assume menuItemName and unitPrice are reliable from input.
   const menuItemId = item.menuItemId || 'unknown-item';
   const menuItemName = item.menuItemName || 'Unknown Item';
   const unitPrice = typeof item.unitPrice === 'number' ? item.unitPrice : 0;
@@ -50,11 +47,11 @@ const sanitizeOrderItem = (item: Partial<OrderItem>): OrderItem => {
     quantity: quantity,
     unitPrice: unitPrice,
     totalPrice: unitPrice * quantity,
-    variantChoices: item.variantChoices || null, // Firestore handles undefined in arrays better
+    variantChoices: item.variantChoices || null, 
     notes: item.notes || null,
     status: item.status || 'pending',
     createdAt: item.createdAt || Date.now(),
-    uniqueId: item.uniqueId || `${menuItemId}-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+    uniqueId: item.uniqueId || `${menuItemId}-${item.createdAt || Date.now()}-${Math.random().toString(36).substring(7)}`,
     instructions: item.instructions || null,
     groupId: item.groupId || null,
     imageUrl: item.imageUrl || null,
@@ -132,7 +129,7 @@ export async function createOrder(restaurantId: string, orderData: Omit<Order, '
     userId: orderData.userId || null,
     tableId: orderData.tableId || null,
     tableNumber: orderData.tableNumber || null,
-    items: (orderData.items || []).map(sanitizeOrderItem),
+    items: (orderData.items || []).map(sanitizeOrderItem), // Ensure items are sanitized
     subtotal: taxResult.subtotal,
     taxAmount: taxResult.totalTax === undefined ? null : taxResult.totalTax,
     taxBreakup: taxResult.taxBreakup && taxResult.taxBreakup.length > 0 ? taxResult.taxBreakup : null,
@@ -164,6 +161,7 @@ export async function createOrder(restaurantId: string, orderData: Omit<Order, '
   return {
     id: docRef.id,
     ...orderData, 
+    items: dataToSave.items, // Use sanitized items
     subtotal: dataToSave.subtotal,
     taxAmount: dataToSave.taxAmount!,
     taxBreakup: dataToSave.taxBreakup!,
@@ -222,7 +220,6 @@ export async function getOrdersByTable(restaurantId: string, tableId: string, ac
   const ordersCol = collection(db, getOrdersCollectionPath(restaurantId));
   const statusesToQuery = activeStatusesParam || ['pending_kitchen', 'confirmed_by_kitchen', 'preparing', 'ready_for_pickup', 'served', 'payment_pending'];
   
-  // Ensure tableId is not undefined before using in query
   if (!tableId) {
     console.warn("getOrdersByTable called with undefined tableId. Returning empty array.");
     return [];
@@ -241,8 +238,8 @@ export async function updateOrderStatus(restaurantId: string, orderId: string, s
     status,
     updatedAt: serverTimestamp(),
   };
-  if (kitchenNotes !== undefined) { // Check for undefined specifically
-    updateData.kitchenNotes = kitchenNotes || null; // Convert empty string to null if that's preferred, or just pass kitchenNotes
+  if (kitchenNotes !== undefined) { 
+    updateData.kitchenNotes = kitchenNotes || null;
   }
   await updateDoc(orderRef, updateData);
 }
@@ -253,7 +250,6 @@ export async function updateOrder(restaurantId: string, orderId: string, data: P
 
     const updatePayload: { [key: string]: any } = { ...data };
     
-    // Sanitize top-level optional fields: convert undefined to null
     const optionalFields: (keyof Omit<Order, 'id' | 'restaurantId' | 'createdAt' | 'updatedAt' | 'items' | 'subtotal' | 'totalAmount' | 'status'>)[] = [
         'userId', 'tableId', 'tableNumber', 'customerName', 'customerPhoneNumber', 'customerWhatsapp', 
         'taxAmount', 'serviceCharge', 'discountAmount', 'customerNotes', 'kitchenNotes', 
@@ -267,8 +263,40 @@ export async function updateOrder(restaurantId: string, orderId: string, data: P
     });
     
     if (updatePayload.items && Array.isArray(updatePayload.items)) {
-      updatePayload.items = updatePayload.items.map(sanitizeOrderItem);
+      updatePayload.items = updatePayload.items.map(sanitizeOrderItem); // Ensure items are sanitized
     }
+
+    // Recalculate totals if items are part of the update
+    if (updatePayload.items) {
+      const restaurant = await getRestaurant(restaurantId);
+      if (!restaurant) throw new Error('Restaurant not found for order update.');
+      const categoriesData = await getMenuCategories(restaurantId);
+      const categoryMap = Object.fromEntries(categoriesData.map(cat => [cat.id, cat]));
+
+      const itemsForTax = (updatePayload.items || []).map((item: OrderItem) => ({ // Cast item to OrderItem
+        item: {
+          id: item.menuItemId,
+          itemIdString: item.menuItemId,
+          restaurantId,
+          categoryId: item.categoryId || '',
+          name: item.menuItemName,
+          description: '',
+          price: item.unitPrice,
+          availability: true,
+          order: 0,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+          taxOverrides: item.taxOverrides || null,
+        },
+        quantity: item.quantity,
+      }));
+      const taxResult = calculateOrderTaxes({ items: itemsForTax, restaurant, categoryMap });
+      updatePayload.subtotal = taxResult.subtotal;
+      updatePayload.taxAmount = taxResult.totalTax === undefined ? null : taxResult.totalTax;
+      updatePayload.taxBreakup = taxResult.taxBreakup && taxResult.taxBreakup.length > 0 ? taxResult.taxBreakup : null;
+      updatePayload.totalAmount = taxResult.total;
+    }
+
 
     const finalUpdateData = { ...updatePayload, updatedAt: serverTimestamp() };
     
@@ -284,7 +312,7 @@ export async function cancelOrder(restaurantId: string, orderId: string, cancell
     status, 
     updatedAt: serverTimestamp() 
   };
-  if (reason !== undefined) { // Check for undefined
+  if (reason !== undefined) { 
     const currentOrderSnapshot = await getDoc(orderRef); 
     if (currentOrderSnapshot.exists()){
         const currentOrderData = currentOrderSnapshot.data();
@@ -406,7 +434,7 @@ export async function getPopularMenuItems(
 
   snapshot.forEach(docSnap => {
     const order = docSnap.data() as Order;
-    (order.items || []).forEach(item => { // Ensure items array exists
+    (order.items || []).forEach(item => { 
       if (!itemStats[item.menuItemId]) {
         itemStats[item.menuItemId] = { name: item.menuItemName, count: 0, revenue: 0 };
       }
@@ -426,7 +454,7 @@ export async function getPopularMenuItems(
     .slice(0, limitCount);
 }
 
-// Real-time listener setup for a restaurant's orders
+
 export function listenToRestaurantOrders(
   restaurantId: string,
   callback: (orders: ClientOrder[]) => void,
