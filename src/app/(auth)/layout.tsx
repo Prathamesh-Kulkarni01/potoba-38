@@ -12,7 +12,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!initialLoading && !authContextLoading && user) {
-      if (role === 'staff' && staffRole === 'Waiter') {
+      if (role === 'Waiter' && staffRole === 'Waiter') {
         router.replace('/waiter');
       } else if (role === 'owner' && user.onboardingComplete === false) {
         router.replace('/onboarding/restaurant-setup');

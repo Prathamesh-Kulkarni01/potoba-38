@@ -6,12 +6,12 @@ import {
 } from 'firebase/firestore';
 import { db } from './config';
 import type { UserRole, UserProfile as UserProfileType, RestaurantProfile, OutletType, StaffInvitation, StaffPermissions, StaffRole } from '@/types';
-import { DEFAULT_PERMISSIONS_BY_ROLE, defaultStaffPermissions, STAFF_ROLES_ARRAY } from '@/types'; // Import defaultStaffPermissions and STAFF_ROLES_ARRAY
+import { DEFAULT_PERMISSIONS_BY_ROLE, defaultStaffPermissions, STAFF_ROLES_ARRAY } from '@/types';
 
 export async function createUserProfile(
   uid: string,
   email: string | null,
-  selectedRoleOnSignup: UserRole, // This is the role selected on the signup form ('owner', 'staff', 'user')
+  selectedRoleOnSignup: UserRole,
   restaurantData?: { name: string; outletType: OutletType },
   phoneNumber?: string | null,
   isAnonymous?: boolean
@@ -20,14 +20,13 @@ export async function createUserProfile(
 
   let finalRestaurantId: string | null = null;
   let onboardingComplete = true;
-  let finalUserRole: UserRole; // This will be 'owner', 'user', or a specific StaffRole like 'Waiter'
-  let finalStaffRole: StaffRole | undefined = undefined; // Explicitly for staff's specific duty
+  let finalUserRole: UserRole;
+  let finalStaffRole: StaffRole | undefined = undefined;
   let finalStaffPermissions: StaffPermissions | undefined = undefined;
   const batch = writeBatch(db);
 
   const normalizedSignupEmail = email ? email.toLowerCase() : null;
 
-  // Check for pending staff invitations first
   if (!isAnonymous && normalizedSignupEmail) {
     const invitationsQuery = query(
       collectionGroup(db, 'staffInvitations'),
@@ -41,12 +40,12 @@ export async function createUserProfile(
       const invitationDoc = invitationsSnapshot.docs[0];
       const invitationData = invitationDoc.data() as StaffInvitation;
 
-      console.log(`Staff invitation found for ${email} (normalized: ${normalizedSignupEmail}) for restaurant ${invitationData.restaurantId}. Assigning role '${invitationData.role}'.`);
+      console.log(`Staff invitation found for ${email} (normalized: ${normalizedSignupEmail}) for restaurant ${invitationData.restaurantId}. Assigning role '${invitationData.role}' and staffRole '${invitationData.staffRole}'.`);
       
-      finalUserRole = invitationData.role; // Assign the specific role from invitation (e.g., 'Waiter', 'Manager')
-      finalStaffRole = invitationData.staffRole; // Also store the specific staff role here
+      finalUserRole = invitationData.role; // This is the specific StaffRole like 'Waiter', 'Manager'
+      finalStaffRole = invitationData.staffRole; // This is also the specific StaffRole
       finalRestaurantId = invitationData.restaurantId;
-      onboardingComplete = true; // Staff are considered onboarded for their role
+      onboardingComplete = true; 
       finalStaffPermissions = invitationData.permissions || DEFAULT_PERMISSIONS_BY_ROLE[invitationData.role as StaffRole] || { ...defaultStaffPermissions };
 
       batch.update(invitationDoc.ref, {
@@ -54,28 +53,23 @@ export async function createUserProfile(
         acceptedAt: serverTimestamp(),
         acceptedByUid: uid,
       });
-    } else if (selectedRoleOnSignup === 'staff') {
-      // User selected 'staff' but no invitation found
-      console.warn(`User ${normalizedSignupEmail} selected 'staff' role on signup form but no pending invitation found. Creating as 'user' role without restaurant assignment.`);
+    } else if (selectedRoleOnSignup === 'staff' || STAFF_ROLES_ARRAY.includes(selectedRoleOnSignup as StaffRole)) {
+      console.warn(`User ${normalizedSignupEmail} selected a staff-like role ('${selectedRoleOnSignup}') on signup form but no pending invitation found. Creating as 'user' role without restaurant assignment.`);
       finalUserRole = 'user'; 
       finalStaffRole = undefined;
       finalRestaurantId = null;
       onboardingComplete = true; 
       finalStaffPermissions = undefined;
     } else {
-      // No invitation, and role is not 'staff' (e.g. 'owner' or 'user' from signup form)
       finalUserRole = selectedRoleOnSignup;
     }
   } else if (isAnonymous) {
-    finalUserRole = 'user'; // Anonymous users are 'user'
+    finalUserRole = 'user'; 
     onboardingComplete = true;
   } else {
-    // Not anonymous and no email (should not happen with email/password signup)
-    finalUserRole = selectedRoleOnSignup; // Fallback
+    finalUserRole = selectedRoleOnSignup; 
   }
 
-
-  // Handle 'owner' signup if not overridden by staff invitation and role is indeed 'owner'
   if (finalUserRole === 'owner') {
     if (!restaurantData?.name) {
       throw new Error("Restaurant name is required for owner sign-up.");
@@ -83,7 +77,7 @@ export async function createUserProfile(
     if (!restaurantData?.outletType) {
       throw new Error("Outlet type is required for owner sign-up.");
     }
-    onboardingComplete = false; // Owners need to go through onboarding
+    onboardingComplete = false; 
     const newRestaurantRef = doc(collection(db, 'restaurants'));
     finalRestaurantId = newRestaurantRef.id;
     batch.set(newRestaurantRef, {
@@ -106,22 +100,22 @@ export async function createUserProfile(
   const userRef = doc(db, 'users', uid);
   const profileData: UserProfileType = {
     uid,
-    email: normalizedSignupEmail,
-    role: finalUserRole,
-    staffRole: finalStaffRole, 
+    email: normalizedSignupEmail, // Store normalized email
+    role: finalUserRole, // This will be the specific StaffRole if applicable
+    staffRole: finalStaffRole, // Explicitly store the specific StaffRole here as well
     restaurantId: finalRestaurantId,
     onboardingComplete,
     phoneNumber: phoneNumber || null,
     isAnonymous: isAnonymous || false,
     createdAt: serverTimestamp() as Timestamp,
-    displayName: email?.split('@')[0] || 'User',
+    displayName: email?.split('@')[0] || (isAnonymous ? 'Guest' : 'User'),
     photoURL: null,
     lastLoginAt: serverTimestamp() as Timestamp,
     lastActiveAt: serverTimestamp() as Timestamp,
     status: 'active',
     preferences: {},
     metadata: {},
-    staffPermissions: finalStaffPermissions,
+    staffPermissions: finalStaffPermissions, // This will hold specific permissions
   };
 
   batch.set(userRef, profileData);
@@ -186,11 +180,9 @@ export async function updateUserProfile(uid: string, data: Partial<UserProfileTy
   if (data.hasOwnProperty('staffPermissions')) {
     dataToUpdate.staffPermissions = data.staffPermissions === undefined ? null : data.staffPermissions;
   }
-   // If 'role' is provided and it's a StaffRole, also update 'staffRole'
   if (data.role && STAFF_ROLES_ARRAY.includes(data.role as StaffRole)) {
     dataToUpdate.staffRole = data.role;
   } else if (data.hasOwnProperty('staffRole') && data.staffRole === undefined) {
-    // If staffRole is explicitly being set to undefined (e.g., user is no longer staff)
     dataToUpdate.staffRole = null;
   }
 
@@ -281,7 +273,7 @@ export async function inviteStaffMember(
   restaurantId: string,
   staffEmail: string,
   invitingOwnerId: string,
-  staffRoleToInvite: StaffRole, // Specific role like 'Waiter', 'Manager'
+  staffRoleToInvite: StaffRole,
   customPermissions?: StaffPermissions
 ): Promise<StaffInvitation> {
   if (!db) throw new Error("Firestore is not initialized.");
@@ -308,8 +300,8 @@ export async function inviteStaffMember(
     id: newInvitationRef.id,
     restaurantId,
     email: normalizedStaffEmail,
-    role: staffRoleToInvite, // Store the specific staff role in the 'role' field of invitation
-    staffRole: staffRoleToInvite, // Also store it in staffRole for consistency
+    role: staffRoleToInvite, 
+    staffRole: staffRoleToInvite, 
     status: 'pending',
     invitedBy: invitingOwnerId,
     createdAt: createdAt as Timestamp,
@@ -324,7 +316,6 @@ export async function inviteStaffMember(
 export async function getStaffForRestaurant(restaurantId: string): Promise<UserProfileType[]> {
   if (!db) throw new Error("Firestore is not initialized.");
   const usersCol = collection(db, 'users');
-  // Query for users whose role is one of the StaffRole types and match restaurantId
   const q = query(usersCol, 
     where('role', 'in', STAFF_ROLES_ARRAY), 
     where('restaurantId', '==', restaurantId)
@@ -351,8 +342,8 @@ export async function getPendingStaffInvitations(restaurantId: string): Promise<
       acceptedAt: data.acceptedAt as Timestamp | undefined,
       acceptedByUid: data.acceptedByUid as string | undefined,
       permissions: data.permissions as StaffPermissions | undefined,
-      role: data.role as StaffRole, // Ensure this is typed as StaffRole
-      staffRole: data.staffRole as StaffRole, // Ensure this is typed as StaffRole
+      role: data.role as StaffRole, 
+      staffRole: data.staffRole as StaffRole,
     } as StaffInvitation;
   });
 }
@@ -360,7 +351,7 @@ export async function getPendingStaffInvitations(restaurantId: string): Promise<
 export async function updateStaffRoleAndPermissions(
   userId: string,
   restaurantId: string,
-  newRole: StaffRole, // This is the specific new role like 'Waiter', 'Manager'
+  newRole: StaffRole, 
   newPermissions?: StaffPermissions
 ): Promise<void> {
   if (!db) throw new Error("Firestore is not initialized.");
@@ -370,7 +361,6 @@ export async function updateStaffRoleAndPermissions(
     throw new Error("Staff member user profile not found.");
   }
   const userData = userSnap.data() as UserProfileType;
-  // Check if the current role is a staff role and if the restaurant ID matches
   if (!STAFF_ROLES_ARRAY.includes(userData?.role as StaffRole) || userData?.restaurantId !== restaurantId) {
     throw new Error("User is not a staff member of this restaurant or restaurantId mismatch.");
   }
@@ -378,9 +368,11 @@ export async function updateStaffRoleAndPermissions(
   const permissionsToSet = newPermissions || DEFAULT_PERMISSIONS_BY_ROLE[newRole] || { ...defaultStaffPermissions };
 
   await updateDoc(userRef, {
-    role: newRole, // Update the main role to the specific staff role
-    staffRole: newRole, // Also update staffRole field for consistency
+    role: newRole, 
+    staffRole: newRole, 
     staffPermissions: permissionsToSet,
     updatedAt: serverTimestamp()
   });
 }
+
+    

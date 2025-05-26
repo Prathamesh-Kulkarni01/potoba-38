@@ -12,12 +12,12 @@ import UserNav from '@/components/dashboard/user-nav';
 export default function WaiterLayout({ children }: { children: ReactNode }) {
   const { user, role, staffRole, initialLoading, loading: authContextLoading } = useAuth();
   const router = useRouter();
-
+console.log(user, role, staffRole)
   useEffect(() => {
     if (!initialLoading && !authContextLoading) {
       if (!user) {
         router.replace('/login');
-      } else if (role !== 'staff' || staffRole !== 'Waiter') {
+      } else if (role !== 'Waiter' || staffRole !== 'Waiter') {
         // If user is not a staff waiter, redirect them to the main dashboard or login
         console.warn(`WaiterLayout: User with role '${role}' and staffRole '${staffRole}' accessed waiter layout. Redirecting.`);
         router.replace('/dashboard'); // Or appropriate default page
@@ -25,7 +25,7 @@ export default function WaiterLayout({ children }: { children: ReactNode }) {
     }
   }, [user, role, staffRole, initialLoading, authContextLoading, router]);
 
-  if (initialLoading || authContextLoading || !user || (role === 'staff' && staffRole !== 'Waiter')) {
+  if (initialLoading || authContextLoading || !user || (role === 'Waiter' && staffRole !== 'Waiter')) {
     return <AppLoadingScreen message="Loading Waiter Interface..." />;
   }
 
