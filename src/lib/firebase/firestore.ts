@@ -6,12 +6,12 @@ import {
 } from 'firebase/firestore';
 import { db } from './config';
 import type { UserRole, UserProfile as UserProfileType, RestaurantProfile, OutletType, StaffInvitation, StaffPermissions, StaffRole } from '@/types';
-import { DEFAULT_PERMISSIONS_BY_ROLE, defaultStaffPermissions } from '@/types'; // Import defaultStaffPermissions
+import { DEFAULT_PERMISSIONS_BY_ROLE, defaultStaffPermissions, STAFF_ROLES_ARRAY } from '@/types'; // Import defaultStaffPermissions and STAFF_ROLES_ARRAY
 
 export async function createUserProfile(
   uid: string,
   email: string | null,
-  selectedRoleOnSignup: UserRole,
+  selectedRoleOnSignup: UserRole, // This is the role selected on the signup form ('owner', 'staff', 'user')
   restaurantData?: { name: string; outletType: OutletType },
   phoneNumber?: string | null,
   isAnonymous?: boolean
@@ -20,8 +20,8 @@ export async function createUserProfile(
 
   let finalRestaurantId: string | null = null;
   let onboardingComplete = true;
-  let finalUserRole: UserRole = selectedRoleOnSignup;
-  let finalStaffRole: StaffRole | undefined = undefined;
+  let finalUserRole: UserRole; // This will be 'owner', 'user', or a specific StaffRole like 'Waiter'
+  let finalStaffRole: StaffRole | undefined = undefined; // Explicitly for staff's specific duty
   let finalStaffPermissions: StaffPermissions | undefined = undefined;
   const batch = writeBatch(db);
 
@@ -41,13 +41,13 @@ export async function createUserProfile(
       const invitationDoc = invitationsSnapshot.docs[0];
       const invitationData = invitationDoc.data() as StaffInvitation;
 
-      console.log(`Staff invitation found for ${email} (normalized: ${normalizedSignupEmail}) for restaurant ${invitationData.restaurantId}. Assigning role 'staff'.`);
+      console.log(`Staff invitation found for ${email} (normalized: ${normalizedSignupEmail}) for restaurant ${invitationData.restaurantId}. Assigning role '${invitationData.role}'.`);
       
-      finalUserRole = 'staff'; // Override whatever they selected if invitation exists
-      finalStaffRole = invitationData.staffRole || 'Custom'; // Use role from invite, or default to Custom
+      finalUserRole = invitationData.role; // Assign the specific role from invitation (e.g., 'Waiter', 'Manager')
+      finalStaffRole = invitationData.staffRole; // Also store the specific staff role here
       finalRestaurantId = invitationData.restaurantId;
       onboardingComplete = true; // Staff are considered onboarded for their role
-      finalStaffPermissions = invitationData.permissions || DEFAULT_PERMISSIONS_BY_ROLE[finalStaffRole] || { ...defaultStaffPermissions };
+      finalStaffPermissions = invitationData.permissions || DEFAULT_PERMISSIONS_BY_ROLE[invitationData.role as StaffRole] || { ...defaultStaffPermissions };
 
       batch.update(invitationDoc.ref, {
         status: 'accepted',
@@ -56,16 +56,26 @@ export async function createUserProfile(
       });
     } else if (selectedRoleOnSignup === 'staff') {
       // User selected 'staff' but no invitation found
-      console.warn(`User ${normalizedSignupEmail} selected 'staff' role but no pending invitation found. Creating as 'user' role without restaurant assignment.`);
-      finalUserRole = 'user'; // Default to 'user' if trying to sign up as staff without invite
+      console.warn(`User ${normalizedSignupEmail} selected 'staff' role on signup form but no pending invitation found. Creating as 'user' role without restaurant assignment.`);
+      finalUserRole = 'user'; 
       finalStaffRole = undefined;
       finalRestaurantId = null;
       onboardingComplete = true; 
       finalStaffPermissions = undefined;
+    } else {
+      // No invitation, and role is not 'staff' (e.g. 'owner' or 'user' from signup form)
+      finalUserRole = selectedRoleOnSignup;
     }
+  } else if (isAnonymous) {
+    finalUserRole = 'user'; // Anonymous users are 'user'
+    onboardingComplete = true;
+  } else {
+    // Not anonymous and no email (should not happen with email/password signup)
+    finalUserRole = selectedRoleOnSignup; // Fallback
   }
 
-  // Handle 'owner' signup if not overridden by staff invitation
+
+  // Handle 'owner' signup if not overridden by staff invitation and role is indeed 'owner'
   if (finalUserRole === 'owner') {
     if (!restaurantData?.name) {
       throw new Error("Restaurant name is required for owner sign-up.");
@@ -98,7 +108,7 @@ export async function createUserProfile(
     uid,
     email: normalizedSignupEmail,
     role: finalUserRole,
-    staffRole: finalStaffRole,
+    staffRole: finalStaffRole, 
     restaurantId: finalRestaurantId,
     onboardingComplete,
     phoneNumber: phoneNumber || null,
@@ -121,7 +131,7 @@ export async function createUserProfile(
   return {
     userProfile: {
       ...profileData,
-      email: email, // Use original email for display if needed, Firestore stores lowercase
+      email: email, 
       createdAt: profileData.createdAt instanceof Timestamp ? profileData.createdAt : now,
       lastLoginAt: profileData.lastLoginAt instanceof Timestamp ? profileData.lastLoginAt : now,
       lastActiveAt: profileData.lastActiveAt instanceof Timestamp ? profileData.lastActiveAt : now,
@@ -142,10 +152,10 @@ export async function getUserProfile(uid: string): Promise<UserProfileType | nul
     const data = docSnap.data();
     return {
       uid: data.uid,
-      email: data.email, // This will be the lowercase email from Firestore
+      email: data.email, 
       displayName: data.displayName || data.email?.split('@')[0] || null,
       photoURL: data.photoURL || null,
-      role: data.role,
+      role: data.role as UserRole,
       staffRole: data.staffRole || null,
       restaurantId: data.restaurantId || null,
       onboardingComplete: typeof data.onboardingComplete === 'boolean' ? data.onboardingComplete : false,
@@ -176,12 +186,12 @@ export async function updateUserProfile(uid: string, data: Partial<UserProfileTy
   if (data.hasOwnProperty('staffPermissions')) {
     dataToUpdate.staffPermissions = data.staffPermissions === undefined ? null : data.staffPermissions;
   }
-  if (data.hasOwnProperty('staffRole')) {
-    dataToUpdate.staffRole = data.staffRole === undefined ? null : data.staffRole;
-  }
-  if (data.hasOwnProperty('outletType') && data.outletType === undefined) {
-     // This is on RestaurantProfile, not UserProfile directly.
-     // This function updates UserProfile. If outletType needs update, use updateRestaurantProfile.
+   // If 'role' is provided and it's a StaffRole, also update 'staffRole'
+  if (data.role && STAFF_ROLES_ARRAY.includes(data.role as StaffRole)) {
+    dataToUpdate.staffRole = data.role;
+  } else if (data.hasOwnProperty('staffRole') && data.staffRole === undefined) {
+    // If staffRole is explicitly being set to undefined (e.g., user is no longer staff)
+    dataToUpdate.staffRole = null;
   }
 
 
@@ -199,7 +209,7 @@ export async function createRestaurant(ownerId: string, name: string, outletType
     id: restaurantId,
     ownerId,
     name,
-    outletType: outletType, // Use provided outletType
+    outletType: outletType, 
     createdAt: now,
     updatedAt: now,
     settings: {
@@ -268,18 +278,18 @@ export async function updateRestaurantProfile(restaurantId: string, data: Partia
 }
 
 export async function inviteStaffMember(
-  restaurantId: string, 
-  staffEmail: string, 
+  restaurantId: string,
+  staffEmail: string,
   invitingOwnerId: string,
-  staffRole: StaffRole, // Role for the invitation
-  customPermissions?: StaffPermissions // Optional custom permissions
+  staffRoleToInvite: StaffRole, // Specific role like 'Waiter', 'Manager'
+  customPermissions?: StaffPermissions
 ): Promise<StaffInvitation> {
   if (!db) throw new Error("Firestore is not initialized.");
   if (!restaurantId) throw new Error("Restaurant ID is required to invite staff.");
   if (!staffEmail) throw new Error("Staff email is required.");
-  if (!staffRole) throw new Error("Staff role is required for invitation.");
+  if (!staffRoleToInvite) throw new Error("Staff role is required for invitation.");
 
-  const normalizedStaffEmail = staffEmail.toLowerCase(); 
+  const normalizedStaffEmail = staffEmail.toLowerCase();
 
   const invitationsCol = collection(db, `restaurants/${restaurantId}/staffInvitations`);
 
@@ -290,34 +300,38 @@ export async function inviteStaffMember(
   }
 
   const createdAt = serverTimestamp();
-  const newInvitationRef = doc(invitationsCol); 
+  const newInvitationRef = doc(invitationsCol);
 
-  const permissionsToSet = customPermissions || DEFAULT_PERMISSIONS_BY_ROLE[staffRole] || { ...defaultStaffPermissions };
+  const permissionsToSet = customPermissions || DEFAULT_PERMISSIONS_BY_ROLE[staffRoleToInvite] || { ...defaultStaffPermissions };
 
   const invitationData: StaffInvitation = {
-    id: newInvitationRef.id, 
+    id: newInvitationRef.id,
     restaurantId,
-    email: normalizedStaffEmail, 
-    role: 'staff', // Invitation is always for 'staff' user role
-    staffRole: staffRole, // Specific staff role (Manager, Waiter, etc.)
+    email: normalizedStaffEmail,
+    role: staffRoleToInvite, // Store the specific staff role in the 'role' field of invitation
+    staffRole: staffRoleToInvite, // Also store it in staffRole for consistency
     status: 'pending',
     invitedBy: invitingOwnerId,
-    createdAt: createdAt as Timestamp, 
+    createdAt: createdAt as Timestamp,
     permissions: permissionsToSet,
   };
 
   await setDoc(newInvitationRef, invitationData);
-  console.log(`Staff invitation created for ${staffEmail} (normalized: ${normalizedStaffEmail}) for restaurant ${restaurantId} with role ${staffRole} and permissions:`, invitationData.permissions);
-  return { ...invitationData, createdAt: Timestamp.now() }; 
+  console.log(`Staff invitation created for ${staffEmail} (normalized: ${normalizedStaffEmail}) for restaurant ${restaurantId} with role ${staffRoleToInvite} and permissions:`, invitationData.permissions);
+  return { ...invitationData, createdAt: Timestamp.now() };
 }
 
 export async function getStaffForRestaurant(restaurantId: string): Promise<UserProfileType[]> {
   if (!db) throw new Error("Firestore is not initialized.");
   const usersCol = collection(db, 'users');
-  const q = query(usersCol, where('role', '==', 'staff'), where('restaurantId', '==', restaurantId));
+  // Query for users whose role is one of the StaffRole types and match restaurantId
+  const q = query(usersCol, 
+    where('role', 'in', STAFF_ROLES_ARRAY), 
+    where('restaurantId', '==', restaurantId)
+  );
   const querySnapshot = await getDocs(q);
   const staffList: UserProfileType[] = [];
-  querySnapshot.forEach((docSnap) => { 
+  querySnapshot.forEach((docSnap) => {
     staffList.push({ uid: docSnap.id, ...docSnap.data() } as UserProfileType);
   });
   return staffList;
@@ -337,15 +351,16 @@ export async function getPendingStaffInvitations(restaurantId: string): Promise<
       acceptedAt: data.acceptedAt as Timestamp | undefined,
       acceptedByUid: data.acceptedByUid as string | undefined,
       permissions: data.permissions as StaffPermissions | undefined,
-      staffRole: data.staffRole as StaffRole | undefined,
+      role: data.role as StaffRole, // Ensure this is typed as StaffRole
+      staffRole: data.staffRole as StaffRole, // Ensure this is typed as StaffRole
     } as StaffInvitation;
   });
 }
 
 export async function updateStaffRoleAndPermissions(
-  userId: string, 
-  restaurantId: string, 
-  newRole: StaffRole, 
+  userId: string,
+  restaurantId: string,
+  newRole: StaffRole, // This is the specific new role like 'Waiter', 'Manager'
   newPermissions?: StaffPermissions
 ): Promise<void> {
   if (!db) throw new Error("Firestore is not initialized.");
@@ -354,16 +369,18 @@ export async function updateStaffRoleAndPermissions(
   if (!userSnap.exists()) {
     throw new Error("Staff member user profile not found.");
   }
-  const userData = userSnap.data();
-  if (userData?.role !== 'staff' || userData?.restaurantId !== restaurantId) {
+  const userData = userSnap.data() as UserProfileType;
+  // Check if the current role is a staff role and if the restaurant ID matches
+  if (!STAFF_ROLES_ARRAY.includes(userData?.role as StaffRole) || userData?.restaurantId !== restaurantId) {
     throw new Error("User is not a staff member of this restaurant or restaurantId mismatch.");
   }
-  
+
   const permissionsToSet = newPermissions || DEFAULT_PERMISSIONS_BY_ROLE[newRole] || { ...defaultStaffPermissions };
 
-  await updateDoc(userRef, { 
-    staffRole: newRole,
-    staffPermissions: permissionsToSet, 
-    updatedAt: serverTimestamp() 
+  await updateDoc(userRef, {
+    role: newRole, // Update the main role to the specific staff role
+    staffRole: newRole, // Also update staffRole field for consistency
+    staffPermissions: permissionsToSet,
+    updatedAt: serverTimestamp()
   });
 }

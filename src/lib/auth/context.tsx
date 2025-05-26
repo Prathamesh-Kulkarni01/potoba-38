@@ -1,3 +1,4 @@
+
 // auth-context.tsx
 'use client';
 
@@ -5,13 +6,15 @@ import React, { createContext, useContext, useEffect, useState, ReactNode, useRe
 import { onAuthStateChanged, User as FirebaseUser, signInAnonymously, PhoneAuthProvider, linkWithCredential, RecaptchaVerifier } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase/config'; 
 import { doc, onSnapshot, setDoc } from 'firebase/firestore'; 
-import type { AuthUser, UserRole, UserProfile as UserProfileType } from '@/types';
-import AppLoadingScreen from '@/components/shared/app-loading-screen'; // Changed import
+import type { AuthUser, UserRole, UserProfile as UserProfileType, StaffRole } from '@/types';
+import { isStaffRole, STAFF_ROLES_ARRAY, defaultStaffPermissions } from '@/types';
+import AppLoadingScreen from '@/components/shared/app-loading-screen'; 
 import { updateUserProfile } from '../firebase/firestore'; 
 
 interface AuthContextType {
   user: AuthUser | null;
-  role: UserRole | null;
+  role: UserRole | null; // This will now hold 'Waiter', 'Manager', etc. for staff
+  staffRole: StaffRole | null; // Specific staff duty, redundant if role holds it but kept for clarity
   loading: boolean; 
   initialLoading: boolean; 
   signInAnonymouslyHandler: () => Promise<AuthUser | null>;
@@ -23,10 +26,11 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [role, setRole] = useState<UserRole | null>(null);
-  const [loading, setLoading] = useState(true); // Represents ongoing profile/role loading after initial auth state
-  const [initialLoadingState, setInitialLoadingState] = useState(true); // Represents the very first auth check
-  const initialLoadingStateRef = useRef(true); // To ensure initialLoadingState is set to false only once
+  const [role, setRole] = useState<UserRole | null>(null); // Will be 'Waiter', 'Manager' etc.
+  const [staffRoleState, setStaffRoleState] = useState<StaffRole | null>(null); // Store specific staff role
+  const [loading, setLoading] = useState(true); 
+  const [initialLoadingState, setInitialLoadingState] = useState(true); 
+  const initialLoadingStateRef = useRef(true); 
 
   const signInAnonymouslyHandler = useCallback(async (): Promise<AuthUser | null> => {
     setLoading(true);
@@ -36,18 +40,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const anonUser: AuthUser = {
         ...firebaseUser,
         role: 'user', 
+        staffRole: null, // Anonymous users don't have a specific staff role
         restaurantId: null,
         onboardingComplete: true, 
         isAnonymous: true,
         phoneNumber: null,
+        staffPermissions: { ...defaultStaffPermissions }, // Give minimal permissions
       };
       setUser(anonUser);
       setRole('user'); 
+      setStaffRoleState(null);
       return anonUser;
     } catch (error) {
       console.error("Anonymous sign-in error:", error);
       setUser(null);
       setRole(null);
+      setStaffRoleState(null);
       return null;
     } finally {
       setLoading(false);
@@ -87,8 +95,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (auth.currentUser) { 
         await updateUserProfile(auth.currentUser.uid, { 
           phoneNumber: phoneNumber, 
-          email: auth.currentUser.email, 
-          role: 'user', 
+          email: auth.currentUser.email, // Email would be null for anon linked to phone
+          role: 'user', // Linked anonymous users become regular users
           onboardingComplete: true, 
           isAnonymous: false, 
         });
@@ -104,7 +112,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
 
   useEffect(() => {
-    // setLoading(true); // This was causing loading to be true even after initialLoadingState was false
     let unsubscribeProfile: (() => void) | null = null;
 
     const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser: FirebaseUser | null) => {
@@ -123,45 +130,52 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           if (docSnap.exists()) {
             const userProfileData = docSnap.data() as UserProfileType;
             authUser = {
-              uid: firebaseUser.uid, // ensure uid from firebaseUser is used
-              displayName: firebaseUser.displayName || userProfileData.displayName || null, // Prefer firebaseUser's displayName if available
-              email: firebaseUser.email || userProfileData.email || null, // Prefer firebaseUser's email
-              photoURL: firebaseUser.photoURL || userProfileData.photoURL || null, // Prefer firebaseUser's photoURL
-              providerId: firebaseUser.providerId, // from firebaseUser
-              emailVerified: firebaseUser.emailVerified, // from firebaseUser
-              isAnonymous: firebaseUser.isAnonymous, // from firebaseUser
-              metadata: firebaseUser.metadata, // from firebaseUser
-              providerData: firebaseUser.providerData, // from firebaseUser
-              refreshToken: firebaseUser.refreshToken, // from firebaseUser
-              tenantId: firebaseUser.tenantId, // from firebaseUser
+              uid: firebaseUser.uid,
+              displayName: firebaseUser.displayName || userProfileData.displayName || null,
+              email: firebaseUser.email || userProfileData.email || null,
+              photoURL: firebaseUser.photoURL || userProfileData.photoURL || null,
+              providerId: firebaseUser.providerId,
+              emailVerified: firebaseUser.emailVerified,
+              isAnonymous: firebaseUser.isAnonymous,
+              metadata: firebaseUser.metadata,
+              providerData: firebaseUser.providerData,
+              refreshToken: firebaseUser.refreshToken,
+              tenantId: firebaseUser.tenantId,
 
-              role: userProfileData.role,
+              role: userProfileData.role, // This will now be 'Waiter', 'Manager', etc. for staff
+              staffRole: userProfileData.staffRole || null, // This will be the specific staff role
               restaurantId: userProfileData.restaurantId || null, 
               onboardingComplete: typeof userProfileData.onboardingComplete === 'boolean' ? userProfileData.onboardingComplete : false,
               phoneNumber: firebaseUser.phoneNumber || userProfileData.phoneNumber || null,
+              staffPermissions: userProfileData.staffPermissions || (isStaffRole(userProfileData.role) ? DEFAULT_PERMISSIONS_BY_ROLE[userProfileData.role as StaffRole] : defaultStaffPermissions)
             };
             setRole(userProfileData.role);
+            setStaffRoleState(userProfileData.staffRole || null);
           } else {
             console.warn(`User profile not found for UID: ${firebaseUser.uid}. This is expected for newly signed up users or anonymous users before profile creation.`);
+            const defaultRole = firebaseUser.isAnonymous ? 'user' : null;
             authUser = {
-              uid: firebaseUser.uid, // from firebaseUser
-              displayName: firebaseUser.displayName || null, // from firebaseUser
-              email: firebaseUser.email || null, // from firebaseUser
-              photoURL: firebaseUser.photoURL || null, // from firebaseUser
-              providerId: firebaseUser.providerId, // from firebaseUser
-              emailVerified: firebaseUser.emailVerified, // from firebaseUser
-              isAnonymous: firebaseUser.isAnonymous, // from firebaseUser
-              metadata: firebaseUser.metadata, // from firebaseUser
-              providerData: firebaseUser.providerData, // from firebaseUser
-              refreshToken: firebaseUser.refreshToken, // from firebaseUser
-              tenantId: firebaseUser.tenantId, // from firebaseUser
+              uid: firebaseUser.uid, 
+              displayName: firebaseUser.displayName || null, 
+              email: firebaseUser.email || null, 
+              photoURL: firebaseUser.photoURL || null, 
+              providerId: firebaseUser.providerId, 
+              emailVerified: firebaseUser.emailVerified, 
+              isAnonymous: firebaseUser.isAnonymous, 
+              metadata: firebaseUser.metadata, 
+              providerData: firebaseUser.providerData, 
+              refreshToken: firebaseUser.refreshToken, 
+              tenantId: firebaseUser.tenantId, 
               
-              role: firebaseUser.isAnonymous ? 'user' : null, // Anonymous users get 'user' role conceptually, others null until profile syncs
+              role: defaultRole,
+              staffRole: null,
               restaurantId: null,
-              onboardingComplete: firebaseUser.isAnonymous ? true : false, // Onboarding not applicable for pure anon
+              onboardingComplete: firebaseUser.isAnonymous ? true : false, 
               phoneNumber: firebaseUser.phoneNumber || null,
+              staffPermissions: firebaseUser.isAnonymous ? { ...defaultStaffPermissions } : undefined,
             };
             setRole(authUser.role);
+            setStaffRoleState(null);
           }
           setUser(authUser);
           setLoading(false);
@@ -171,28 +185,33 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           }
         }, (error) => {
           console.error("Error listening to user profile:", error);
+          const defaultRole = firebaseUser.isAnonymous ? 'user' : null;
           const fbUserWithDefaults: AuthUser = {
-            ...firebaseUser, // Spread all properties of firebaseUser
-            role: null, // Default/fallback role
+            ...firebaseUser, 
+            role: defaultRole, 
+            staffRole: null,
             restaurantId: null,
-            onboardingComplete: false,
+            onboardingComplete: firebaseUser.isAnonymous ? true : false,
             isAnonymous: firebaseUser.isAnonymous, 
             phoneNumber: firebaseUser.phoneNumber || null,
+            staffPermissions: firebaseUser.isAnonymous ? { ...defaultStaffPermissions } : undefined,
           };
           setUser(fbUserWithDefaults);
-          setRole(null);
+          setRole(defaultRole);
+          setStaffRoleState(null);
           setLoading(false);
           if (initialLoadingStateRef.current) {
             setInitialLoadingState(false);
             initialLoadingStateRef.current = false;
           }
         });
-      } else { // No firebaseUser
+      } else { 
         setUser(null);
         setRole(null);
-        setLoading(false); // No user, so main loading sequence is done
+        setStaffRoleState(null);
+        setLoading(false); 
         if (initialLoadingStateRef.current) {
-          setInitialLoadingState(false); // Mark initial auth check as complete
+          setInitialLoadingState(false); 
           initialLoadingStateRef.current = false;
         }
       }
@@ -207,7 +226,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, role, loading, initialLoading: initialLoadingState, signInAnonymouslyHandler, linkAnonymousWithPhoneNumber, confirmPhoneNumberVerification }}>
+    <AuthContext.Provider value={{ user, role, staffRole: staffRoleState, loading, initialLoading: initialLoadingState, signInAnonymouslyHandler, linkAnonymousWithPhoneNumber, confirmPhoneNumberVerification }}>
       {initialLoadingState ? <AppLoadingScreen message="Initializing Potoba..." /> : children}
     </AuthContext.Provider>
   );
