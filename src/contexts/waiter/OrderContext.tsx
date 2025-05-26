@@ -2,11 +2,11 @@
 // src/contexts/waiter/OrderContext.tsx
 "use client";
 
-import type { OrderItem, TableStatus, MenuItem, Waiter, HistoricalOrder, TipEntry, Table as FirebaseTableType } from '@/lib/types';
+import type { OrderItem, TableStatus, MenuItem, Waiter, HistoricalOrder, TipEntry, Table as FirebaseTableType, MenuCategory, MenuSubcategory } from '@/lib/types';
 import type React from 'react';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/lib/auth/context';
-import { getMenuItems } from '@/lib/firebase/menu';
+import { getMenuItems, getMenuCategories, getMenuSubcategories } from '@/lib/firebase/menu';
 import { getTables as fetchTablesFromDb, updateTable as updateFirebaseTable } from '@/lib/firebase/tables';
 import { createOrder as createFirebaseOrder, updateOrder as updateFirebaseOrder, getOrdersByTable } from '@/lib/firebase/orders';
 import { Timestamp } from 'firebase/firestore';
@@ -15,26 +15,28 @@ import { useToast } from '@/hooks/use-toast';
 interface OrderContextType {
   // Dynamic Data
   menuItems: MenuItem[];
+  menuCategories: MenuCategory[];
+  menuSubcategories: MenuSubcategory[];
   tables: FirebaseTableType[];
-  activeOrders: Map<string, OrderItem[]>; // tableId -> current draft/active items for that table for waiter
-  
-  // Local Waiter App State (persisted to localStorage for now)
-  tableNotes: Map<string, string>; // tableId -> note string
-  tips: TipEntry[];
-  orderHistory: Map<string, HistoricalOrder[]>; // tableId -> array of historical orders for that table
+  activeOrders: Map<string, OrderItem[]>; 
 
-  // Core Order Functions (will interact with Firebase)
-  getOrderForTable: (tableId: string) => OrderItem[]; // Gets items from `activeOrders` map
+  // Local Waiter App State
+  tableNotes: Map<string, string>; 
+  tips: TipEntry[];
+  orderHistory: Map<string, HistoricalOrder[]>; 
+
+  // Core Order Functions
+  getOrderForTable: (tableId: string) => OrderItem[]; 
   addItemToOrder: (tableId: string, menuItem: MenuItem, quantity?: number, instructions?: string, groupId?: string) => void;
   updateItemQuantity: (tableId: string, menuItemId: string, quantity: number, itemInstructions?: string, itemUniqueId?: string) => void;
   updateItemInstructions: (tableId: string, menuItemId: string, instructions: string, itemUniqueId?: string) => void;
   removeItemFromOrder: (tableId: string, menuItemId: string, itemUniqueId?: string) => void;
-  removeItemsByGroupId: (tableId: string, groupId: string) => void; // For group payments
+  removeItemsByGroupId: (tableId: string, groupId: string) => void; 
   updateItemStatus: (tableId: string, menuItemId: string, status: OrderItem['status'], itemUniqueId?: string) => void;
-  clearOrder: (tableId: string) => void; // Clears items from `activeOrders` for a table
-  sendOrderToKitchen: (tableId: string) => Promise<void>; // Creates/updates order in Firestore
+  clearOrder: (tableId: string) => void; 
+  sendOrderToKitchen: (tableId: string) => Promise<void>; 
 
-  // Table Status & Assignment (reads from `tables` state, updates Firebase)
+  // Table Status & Assignment
   getTableStatus: (tableId: string) => TableStatus;
   updateTableStatus: (tableId: string, status: TableStatus) => Promise<void>;
   assignWaiterToTable: (tableId: string, waiterId: string, waiterName: string) => Promise<void>;
@@ -46,23 +48,23 @@ interface OrderContextType {
   getTotalItemsForTable: (tableId: string, itemsToCount?: OrderItem[]) => number;
   getFirstItemAddedTime: (tableId: string) => number | null;
 
-  // Order Archival & History (interacts with Firebase for creating historical, reads from local for display)
+  // Order Archival & History
   archiveOrder: (tableId: string, finalBillAmount?: number, paymentMethod?: HistoricalOrder['paymentMethod'], paymentNote?: string) => Promise<void>;
   getHistoricalOrdersForTable: (tableId: string) => HistoricalOrder[];
   getHistoricalOrderById: (orderId: string) => HistoricalOrder | undefined;
   repeatOrder: (tableId: string, historicalOrderItems: OrderItem[]) => void;
 
-  // Table Notes (local state for now)
+  // Table Notes
   getTableNote: (tableId: string) => string | undefined;
   updateTableNote: (tableId: string, note: string) => void;
 
-  // Tips (local state for now)
+  // Tips
   addTip: (amount: number, tableId?: string, notes?: string) => void;
 
   // Loading states
-  isMenuLoading: boolean;
+  isMenuLoading: boolean; // For menu items, categories, subcategories
   isTablesLoading: boolean;
-  isSubmittingOrder: boolean; // For sendOrderToKitchen, archiveOrder
+  isSubmittingOrder: boolean; 
 }
 
 const OrderContext = createContext<OrderContextType | undefined>(undefined);
@@ -73,6 +75,8 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const { toast } = useToast();
 
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [menuCategories, setMenuCategories] = useState<MenuCategory[]>([]);
+  const [menuSubcategories, setMenuSubcategories] = useState<MenuSubcategory[]>([]);
   const [tables, setTables] = useState<FirebaseTableType[]>([]);
   const [activeOrders, setActiveOrders] = useState<Map<string, OrderItem[]>>(() => new Map());
   
@@ -84,21 +88,29 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [isTablesLoading, setIsTablesLoading] = useState(true);
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
 
-  // Define tableNotes related functions early
   const getTableNote = useCallback((tableId: string): string | undefined => tableNotes.get(tableId), [tableNotes]);
   const updateTableNote = useCallback((tableId: string, note: string) => {
     setTableNotes(prev => new Map(prev).set(tableId, note.trim()));
   }, []);
 
-
-  // Fetch Menu Items
+  // Fetch Menu Data (Items, Categories, Subcategories)
   useEffect(() => {
     if (restaurantId) {
       setIsMenuLoading(true);
-      getMenuItems(restaurantId)
-        .then(setMenuItems)
-        .catch(err => toast({ variant: "destructive", title: "Error", description: "Could not load menu items." }))
-        .finally(() => setIsMenuLoading(false));
+      Promise.all([
+        getMenuItems(restaurantId),
+        getMenuCategories(restaurantId),
+        getMenuSubcategories(restaurantId),
+      ]).then(([items, categories, subcategories]) => {
+        setMenuItems(items);
+        setMenuCategories(categories);
+        setMenuSubcategories(subcategories);
+      }).catch(err => {
+        toast({ variant: "destructive", title: "Error", description: "Could not load menu data." });
+        console.error("Error fetching menu data:", err);
+      }).finally(() => setIsMenuLoading(false));
+    } else {
+      setIsMenuLoading(false);
     }
   }, [restaurantId, toast]);
 
@@ -110,46 +122,39 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         .then(setTables)
         .catch(err => toast({ variant: "destructive", title: "Error", description: "Could not load tables." }))
         .finally(() => setIsTablesLoading(false));
+    } else {
+      setIsTablesLoading(false);
     }
   }, [restaurantId, toast]);
 
   // Load local state from localStorage
   useEffect(() => {
-    const storedActiveOrders = localStorage.getItem(`waiterActiveOrders_${restaurantId}`);
-    if (storedActiveOrders) {
-      try {
-        const parsedOrdersArray: [string, any[]][] = JSON.parse(storedActiveOrders);
-        const newOrdersMap = new Map<string, OrderItem[]>();
-        parsedOrdersArray.forEach(([tableId, items]) => {
-          newOrdersMap.set(tableId, items.map((item) => ({
-            ...item,
-            uniqueId: item.uniqueId || `${item.menuItem.id}-${item.createdAt || Date.now()}-${Math.random().toString(36).substring(7)}`,
-            status: item.status || 'pending',
-            createdAt: item.createdAt || Date.now(),
-            instructions: item.instructions || undefined,
-            groupId: item.groupId || undefined,
-          })));
-        });
-        setActiveOrders(newOrdersMap);
-      } catch (e) { console.error("Failed to parse active orders from localStorage", e); }
-    }
-    const storedOrderHistory = localStorage.getItem(`waiterOrderHistory_${restaurantId}`);
-    if (storedOrderHistory) {
-      try {
-        setOrderHistory(new Map(JSON.parse(storedOrderHistory)));
-      } catch (e) { console.error("Failed to parse order history from localStorage", e); }
-    }
-    const storedTableNotes = localStorage.getItem(`waiterTableNotes_${restaurantId}`);
-    if (storedTableNotes) {
-      try {
-        setTableNotes(new Map(JSON.parse(storedTableNotes)));
-      } catch (e) { console.error("Failed to parse table notes from localStorage", e); }
-    }
-    const storedTips = localStorage.getItem(`waiterTips_${restaurantId}`);
-    if (storedTips) {
-      try {
-        setTips(JSON.parse(storedTips));
-      } catch (e) { console.error("Failed to parse tips from localStorage", e); }
+    if (restaurantId) {
+        const storedActiveOrders = localStorage.getItem(`waiterActiveOrders_${restaurantId}`);
+        if (storedActiveOrders) { try {
+            const parsedOrdersArray: [string, any[]][] = JSON.parse(storedActiveOrders);
+            const newOrdersMap = new Map<string, OrderItem[]>();
+            parsedOrdersArray.forEach(([tableId, items]) => {
+            newOrdersMap.set(tableId, items.map((item) => ({
+                ...item,
+                uniqueId: item.uniqueId || `${item.menuItem.id}-${item.createdAt || Date.now()}-${Math.random().toString(36).substring(7)}`,
+                status: item.status || 'pending',
+                createdAt: item.createdAt || Date.now(),
+                instructions: item.instructions || undefined,
+                groupId: item.groupId || undefined,
+            })));
+            });
+            setActiveOrders(newOrdersMap);
+        } catch (e) { console.error("Failed to parse active orders from localStorage", e); }}
+        
+        const storedOrderHistory = localStorage.getItem(`waiterOrderHistory_${restaurantId}`);
+        if (storedOrderHistory) { try { setOrderHistory(new Map(JSON.parse(storedOrderHistory))); } catch (e) { console.error("Failed to parse order history from localStorage", e); }}
+        
+        const storedTableNotes = localStorage.getItem(`waiterTableNotes_${restaurantId}`);
+        if (storedTableNotes) { try { setTableNotes(new Map(JSON.parse(storedTableNotes))); } catch (e) { console.error("Failed to parse table notes from localStorage", e); }}
+        
+        const storedTips = localStorage.getItem(`waiterTips_${restaurantId}`);
+        if (storedTips) { try { setTips(JSON.parse(storedTips)); } catch (e) { console.error("Failed to parse tips from localStorage", e); }}
     }
   }, [restaurantId]);
 
@@ -534,7 +539,7 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [getOrderForTable]);
 
   const contextValue = useMemo(() => ({
-    menuItems, tables, activeOrders, orderHistory, tableNotes, tips,
+    menuItems, menuCategories, menuSubcategories, tables, activeOrders, orderHistory, tableNotes, tips,
     getOrderForTable, addItemToOrder, updateItemQuantity, updateItemInstructions, removeItemFromOrder, removeItemsByGroupId,
     updateItemStatus, clearOrder, sendOrderToKitchen,
     getTableStatus, updateTableStatus,
@@ -544,7 +549,7 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     getTableNote, updateTableNote, addTip,
     isMenuLoading, isTablesLoading, isSubmittingOrder,
   }), [
-    menuItems, tables, activeOrders, orderHistory, tableNotes, tips,
+    menuItems, menuCategories, menuSubcategories, tables, activeOrders, orderHistory, tableNotes, tips,
     getOrderForTable, addItemToOrder, updateItemQuantity, updateItemInstructions, removeItemFromOrder, removeItemsByGroupId,
     updateItemStatus, clearOrder, sendOrderToKitchen,
     getTableStatus, updateTableStatus,
@@ -563,4 +568,3 @@ export const useOrders = (): OrderContextType => {
   if (context === undefined) throw new Error('useOrders must be used within an OrderProvider');
   return context;
 };
-

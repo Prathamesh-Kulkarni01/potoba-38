@@ -11,20 +11,14 @@ import { VoiceOrderButton } from '@/components/waiter/VoiceOrderButton';
 import LoadingSpinner from '@/components/shared/loading-spinner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
-// Interface for page props is no longer needed if not using params prop
-// interface AddItemPageProps {
-//   params: {
-//     tableId: string;
-//   };
-// }
 
 export default function AddItemPage() {
   const router = useRouter();
-  const params = useParams(); // Use hook to get params
+  const params = useParams(); 
   const searchParams = useSearchParams();
-  const { menuItems, isMenuLoading, calculateTotal, tables } = useOrders();
+  const { menuItems, menuCategories, menuSubcategories, isMenuLoading, calculateTotal, tables } = useOrders();
 
-  const pageTableId = params.tableId as string; // Get tableId from hook result
+  const pageTableId = params.tableId as string; 
   const initialGroupId = searchParams.get('groupId') || '';
 
   const table = tables.find(t => t.id === pageTableId);
@@ -37,7 +31,7 @@ export default function AddItemPage() {
     );
   }
   
-  if (!table && !isMenuLoading) { // Check after loading
+  if (!table && !isMenuLoading) { 
     return (
       <div className="text-center py-10">
         <Card>
@@ -62,6 +56,8 @@ export default function AddItemPage() {
       <VoiceOrderButton tableId={pageTableId} />
       <OrderForm 
         menuItems={menuItems}
+        categories={menuCategories}
+        subcategories={menuSubcategories}
         onAddItem={() => {}} 
         tableId={pageTableId}      
         initialGroupId={initialGroupId}
