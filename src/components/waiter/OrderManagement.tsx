@@ -1,4 +1,3 @@
-
 "use client";
 
 import type { Table, OrderItem, HistoricalOrder } from '@/lib/types';
@@ -53,6 +52,20 @@ function formatElapsedTime(startTime: number | null): string {
   }
 }
 
+function getTableDisplayName(table: Table | undefined | null): string {
+  if (!table) return 'Unknown Table';
+  if (table.name && typeof table.name === 'string' && table.name.trim() !== '') {
+    return table.name.replace(/^Table\s*/i, '').trim();
+  }
+  if (table.tableNumber && typeof table.tableNumber === 'string' && table.tableNumber.trim() !== '') {
+    return table.tableNumber;
+  }
+  if (table.id && typeof table.id === 'string') {
+    return `ID: ${table.id.substring(0, 6)}`;
+  }
+  return 'Unnamed Table';
+}
+
 
 export function OrderManagement({ table }: OrderManagementProps) {
   const {
@@ -71,7 +84,7 @@ export function OrderManagement({ table }: OrderManagementProps) {
     getFirstItemAddedTime,
     assignWaiterToTable,
     clearWaiterAssignment,
-    getAssignedWaiterInfo, // Changed from getAssignedWaiterId
+    getAssignedWaiterInfo,
     archiveOrder,
     sendOrderToKitchen,
     getTableNote,
@@ -82,7 +95,7 @@ export function OrderManagement({ table }: OrderManagementProps) {
   const currentOrderItems = getOrderForTable(table.id);
   const tableStatus = getTableStatus(table.id);
   
-  const assignedWaiterDetails = getAssignedWaiterInfo(table.id); // Use the correct function
+  const assignedWaiterDetails = getAssignedWaiterInfo(table.id);
   const assignedWaiterId = assignedWaiterDetails?.waiterId;
   const assignedWaiter = WAITERS_DATA.find(w => w.id === assignedWaiterId);
 
@@ -92,7 +105,7 @@ export function OrderManagement({ table }: OrderManagementProps) {
   const [showPaymentOptions, setShowPaymentOptions] = useState(false);
   const [showPreBillInfoStep, setShowPreBillInfoStep] = useState(false);
   const [showGroupSelectionForBill, setShowGroupSelectionForBill] = useState(false);
-  const [billingScope, setBillingScope] = useState<'all' | string>('all'); // 'all' or a groupId
+  const [billingScope, setBillingScope] = useState<'all' | string>('all'); 
 
   const [customerName, setCustomerName] = useState('');
   const [customerWhatsapp, setCustomerWhatsapp] = useState('');
@@ -120,8 +133,7 @@ export function OrderManagement({ table }: OrderManagementProps) {
   }, [currentOrderItems, billingScope]);
 
   const subtotal = useMemo(() => calculateTotal(table.id, itemsForBilling), [table.id, itemsForBilling, calculateTotal]);
-  // const itemCount = useMemo(() => getTotalItemsForTable(table.id, itemsForBilling), [table.id, itemsForBilling, getTotalItemsForTable]); // Not currently used in this component directly
-  const firstItemTime = useMemo(() => getFirstItemAddedTime(table.id), [table.id, getFirstItemAddedTime]); // Overall table time
+  const firstItemTime = useMemo(() => getFirstItemAddedTime(table.id), [table.id, getFirstItemAddedTime]); 
 
   const hasPendingItems = currentOrderItems.some(item => item.status === 'pending');
   const hasItemsSentOrFurther = currentOrderItems.some(item => item.status !== 'pending' && item.status !== 'served');
@@ -174,7 +186,7 @@ export function OrderManagement({ table }: OrderManagementProps) {
         ? items
         : items.filter(item => item.groupId === scope);
 
-    if (itemsInScope.length === 0) { // Cannot bill an empty scope (group or table)
+    if (itemsInScope.length === 0) { 
         return false;
     }
     return itemsInScope.every(item => item.status === 'served');
@@ -186,7 +198,7 @@ export function OrderManagement({ table }: OrderManagementProps) {
     archiveOrder(table.id, grandTotal, selectedPaymentMethod, paymentNoteContent);
     toast({
       title: "Payment Confirmed",
-      description: `Table ${table.name.replace('Table ', '')} - ${paymentNoteContent}: ₹${grandTotal.toFixed(2)} via ${selectedPaymentMethod}.`,
+      description: `Table ${getTableDisplayName(table)} - ${paymentNoteContent}: ₹${grandTotal.toFixed(2)} via ${selectedPaymentMethod}.`,
     });
 
     if (billingScope === 'all') {
@@ -200,7 +212,6 @@ export function OrderManagement({ table }: OrderManagementProps) {
     setShowGroupSelectionForBill(false);
     setBillingScope('all');
 
-    // Reset billing details for next transaction
     setTaxRate(10);
     setServiceChargeRate(0);
     setDiscountType('amount');
@@ -211,8 +222,6 @@ export function OrderManagement({ table }: OrderManagementProps) {
     setCustomerName('');
     setCustomerWhatsapp('');
     setCustomerRating(null);
-
-    // Table status would have been updated by clearOrder or removeItemsByGroupId
   };
 
   const handleInitiatePayment = () => {
@@ -227,7 +236,7 @@ export function OrderManagement({ table }: OrderManagementProps) {
     const hasMixedGroups = (uniqueGroupIds.length >= 1 && hasGeneralItems) || hasMultipleExplicitGroups;
 
 
-    if (hasMixedGroups && billingScope === 'all') { // Only show group selection if billing for 'all' and there are distinct groups
+    if (hasMixedGroups && billingScope === 'all') { 
         setShowGroupSelectionForBill(true);
         setShowPreBillInfoStep(false);
         setShowPaymentOptions(false);
@@ -289,7 +298,7 @@ export function OrderManagement({ table }: OrderManagementProps) {
     clearOrder(table.id);
     toast({
         title: "Order Cleared",
-        description: `All items for Table ${table.name.replace('Table ', '')} have been cleared.`,
+        description: `All items for Table ${getTableDisplayName(table)} have been cleared.`,
     });
   };
 
@@ -297,28 +306,28 @@ export function OrderManagement({ table }: OrderManagementProps) {
     sendOrderToKitchen(table.id);
     toast({
       title: "Order Sent",
-      description: `Pending items for Table ${table.name.replace('Table ', '')} sent to kitchen.`,
+      description: `Pending items for Table ${getTableDisplayName(table)} sent to kitchen.`,
     });
   };
 
   const handleReserveToggle = () => {
     if (tableStatus === 'available' && currentOrderItems.length === 0) {
       updateTableStatus(table.id, 'reserved');
-      toast({ title: `Table ${table.name.replace('Table ', '')} Reserved` });
+      toast({ title: `Table ${getTableDisplayName(table)} Reserved` });
     } else if (tableStatus === 'reserved' && currentOrderItems.length === 0) {
       updateTableStatus(table.id, 'available');
-      toast({ title: `Table ${table.name.replace('Table ', '')} Unreserved` });
+      toast({ title: `Table ${getTableDisplayName(table)} Unreserved` });
     }
   };
 
   const handleWaiterAssignmentChange = (newWaiterId: string) => {
     if (newWaiterId === "unassigned") {
       clearWaiterAssignment(table.id);
-      toast({ title: `Waiter unassigned from Table ${table.name.replace('Table ', '')}` });
+      toast({ title: `Waiter unassigned from Table ${getTableDisplayName(table)}` });
     } else {
       const selectedWaiter = WAITERS_DATA.find(w => w.id === newWaiterId);
-      assignWaiterToTable(table.id, newWaiterId, selectedWaiter?.name || 'Unknown Waiter'); // Pass name
-      toast({ title: `${selectedWaiter?.name || 'Waiter'} assigned to Table ${table.name.replace('Table ', '')}` });
+      assignWaiterToTable(table.id, newWaiterId, selectedWaiter?.name || 'Unknown Waiter'); 
+      toast({ title: `${selectedWaiter?.name || 'Waiter'} assigned to Table ${getTableDisplayName(table)}` });
     }
   };
 
@@ -326,7 +335,7 @@ export function OrderManagement({ table }: OrderManagementProps) {
     updateTableNote(table.id, currentTableNote);
     toast({
       title: "Note Saved",
-      description: `Note for Table ${table.name.replace('Table ', '')} has been saved.`,
+      description: `Note for Table ${getTableDisplayName(table)} has been saved.`,
     });
   };
 
@@ -494,7 +503,7 @@ export function OrderManagement({ table }: OrderManagementProps) {
         <Card className="shadow-lg">
           <CardHeader>
             <CardTitle className="text-center text-xl flex items-center justify-center gap-2">
-              <FileText size={24} /> Bill Summary - Table {table.name.replace('Table ','')} {billingScope !== 'all' ? `(Group: ${billingScope})` : ''}
+              <FileText size={24} /> Bill Summary - Table {getTableDisplayName(table)} {billingScope !== 'all' ? `(Group: ${billingScope})` : ''}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -657,7 +666,7 @@ export function OrderManagement({ table }: OrderManagementProps) {
                     <AlertDialogHeader>
                       <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                       <AlertDialogDescription>
-                        This action will remove all items from the current order for Table {table.name.replace('Table ', '')}. This cannot be undone.
+                        This action will remove all items from the current order for Table {getTableDisplayName(table)}. This cannot be undone.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -680,3 +689,4 @@ export function OrderManagement({ table }: OrderManagementProps) {
     </div>
   );
 }
+
