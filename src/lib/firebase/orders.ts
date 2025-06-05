@@ -56,7 +56,7 @@ const sanitizeOrderItem = (item: Partial<OrderItem>): OrderItem => {
     groupId: safeString(item.groupId),
     imageUrl: safeString(item.imageUrl),
     categoryId: safeString(item.categoryId),
-    taxOverrides: item.taxOverrides || null, // Assuming taxOverrides is an array or null
+    taxOverrides: item.taxOverrides || null,
   };
 };
 
@@ -97,18 +97,16 @@ const toClientOrder = (docId: string, data: any): ClientOrder => {
 export async function createOrder(restaurantId: string, orderData: Omit<Order, 'id' | 'createdAt' | 'updatedAt'>): Promise<Order> {
   if (!db) throw new Error("Firestore is not initialized.");
   const ordersCol = collection(db, getOrdersCollectionPath(restaurantId));
-  const createdAt = serverTimestamp();
-  const updatedAt = serverTimestamp();
-
+  
   const restaurant = await getRestaurant(restaurantId);
   if (!restaurant) throw new Error('Restaurant not found for order creation.');
   const categoriesData = await getMenuCategories(restaurantId);
   const categoryMap = Object.fromEntries(categoriesData.map(cat => [cat.id, cat]));
 
   const itemsForTax = (orderData.items || []).map(item => ({
-    item: {
+    item: { // Construct a MenuItem-like object for tax calculation
       id: item.menuItemId,
-      itemIdString: item.menuItemId, // Assuming itemIdString is same as menuItemId for simplicity
+      itemIdString: item.menuItemId, 
       restaurantId,
       categoryId: item.categoryId || '',
       name: item.menuItemName,
@@ -124,49 +122,64 @@ export async function createOrder(restaurantId: string, orderData: Omit<Order, '
   }));
   const taxResult = calculateOrderTaxes({ items: itemsForTax, restaurant, categoryMap });
 
-  const dataToSave: Omit<Order, 'id'> & { createdAt: any, updatedAt: any } = {
-    restaurantId,
-    userId: orderData.userId || null,
-    tableId: orderData.tableId || null,
-    tableNumber: orderData.tableNumber || null,
+  const dataToSave = {
+    restaurantId: restaurantId,
+    userId: orderData.userId ?? null,
+    tableId: orderData.tableId ?? null,
+    tableNumber: orderData.tableNumber ?? null,
     items: (orderData.items || []).map(sanitizeOrderItem),
     subtotal: taxResult.subtotal,
-    taxAmount: taxResult.totalTax === undefined ? null : taxResult.totalTax,
-    taxBreakup: taxResult.taxBreakup && taxResult.taxBreakup.length > 0 ? taxResult.taxBreakup : null,
+    taxAmount: taxResult.totalTax ?? null,
+    serviceCharge: orderData.serviceCharge ?? null,
+    discountAmount: orderData.discountAmount ?? null,
     totalAmount: taxResult.total,
     status: orderData.status || 'pending_kitchen',
-    customerName: safeString(orderData.customerName),
-    customerPhoneNumber: safeString(orderData.customerPhoneNumber),
-    customerWhatsapp: safeString(orderData.customerWhatsapp),
-    customerNotes: safeString(orderData.customerNotes),
-    kitchenNotes: safeString(orderData.kitchenNotes),
-    paymentMethod: safeString(orderData.paymentMethod),
-    transactionId: safeString(orderData.transactionId),
-    groupId: safeString(orderData.groupId),
-    serviceCharge: safeNumber(orderData.serviceCharge),
-    discountAmount: safeNumber(orderData.discountAmount),
-    createdAt,
-    updatedAt,
+    customerName: orderData.customerName ?? null,
+    customerPhoneNumber: orderData.customerPhoneNumber ?? null,
+    customerWhatsapp: orderData.customerWhatsapp ?? null,
+    customerNotes: orderData.customerNotes ?? null,
+    kitchenNotes: orderData.kitchenNotes ?? null,
+    paymentMethod: orderData.paymentMethod ?? null,
+    transactionId: orderData.transactionId ?? null,
+    groupId: orderData.groupId ?? null,
+    taxBreakup: (taxResult.taxBreakup && taxResult.taxBreakup.length > 0) ? taxResult.taxBreakup : null,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
   };
 
   const docRef = await addDoc(ordersCol, dataToSave);
 
   try {
+    // Ensure items passed to deductStockForSoldItems are fully formed ClientOrderItems if necessary
+    // or that deductStockForSoldItems can handle the structure from dataToSave.items
     await deductStockForSoldItems(restaurantId, docRef.id, dataToSave.items as ClientOrderItem[]);
   } catch (error) {
     console.error(`Failed to deduct stock for order ${docRef.id}:`, error);
+    // Decide if order creation should fail or just log this error
   }
 
-  const nowForClient = Timestamp.now();
+  const nowForClient = Timestamp.now(); // Use a client-side timestamp for the return object
   return {
     id: docRef.id,
-    ...orderData,
-    items: dataToSave.items, // Use sanitized items
+    ...orderData, // Spread the original input data
+    // Override with sanitized/calculated values that were actually saved
+    items: dataToSave.items, 
     subtotal: dataToSave.subtotal,
-    taxAmount: dataToSave.taxAmount!,
-    taxBreakup: dataToSave.taxBreakup!,
+    taxAmount: dataToSave.taxAmount ?? undefined, // Convert null back to undefined if type expects optional
+    serviceCharge: dataToSave.serviceCharge ?? undefined,
+    discountAmount: dataToSave.discountAmount ?? undefined,
     totalAmount: dataToSave.totalAmount,
-    createdAt: nowForClient,
+    status: dataToSave.status,
+    customerName: dataToSave.customerName ?? undefined,
+    customerPhoneNumber: dataToSave.customerPhoneNumber ?? undefined,
+    customerWhatsapp: dataToSave.customerWhatsapp ?? undefined,
+    customerNotes: dataToSave.customerNotes ?? undefined,
+    kitchenNotes: dataToSave.kitchenNotes ?? undefined,
+    paymentMethod: dataToSave.paymentMethod ?? undefined,
+    transactionId: dataToSave.transactionId ?? undefined,
+    groupId: dataToSave.groupId ?? undefined,
+    taxBreakup: dataToSave.taxBreakup ?? undefined,
+    createdAt: nowForClient, // Use client-side Timestamp for immediate feedback
     updatedAt: nowForClient,
   } as Order;
 }
@@ -258,15 +271,14 @@ export async function updateOrder(restaurantId: string, orderId: string, data: P
 
     optionalFields.forEach(field => {
       if (updatePayload.hasOwnProperty(field)) {
-        // Explicitly handle potential undefined for number fields as well before safeNumber
         if (field === 'taxAmount' || field === 'serviceCharge' || field === 'discountAmount') {
             updatePayload[field] = safeNumber(updatePayload[field]);
         } else if (typeof updatePayload[field] === 'string') {
             updatePayload[field] = safeString(updatePayload[field]);
-        } else if (updatePayload[field] === undefined) {
+        } else if (updatePayload[field] === undefined) { 
             updatePayload[field] = null;
         }
-        // For other types like taxBreakup (array), if it's undefined, set to null or ensure it's omitted if already handled by spread
+        
         if (field === 'taxBreakup' && updatePayload[field] === undefined) {
             updatePayload[field] = null;
         }
@@ -274,10 +286,9 @@ export async function updateOrder(restaurantId: string, orderId: string, data: P
     });
 
     if (updatePayload.items && Array.isArray(updatePayload.items)) {
-      updatePayload.items = updatePayload.items.map(sanitizeOrderItem); // Ensure items are sanitized
+      updatePayload.items = updatePayload.items.map(sanitizeOrderItem);
     }
 
-    // Recalculate totals if items are part of the update
     if (updatePayload.items) {
       const restaurant = await getRestaurant(restaurantId);
       if (!restaurant) throw new Error('Restaurant not found for order update.');
@@ -303,7 +314,7 @@ export async function updateOrder(restaurantId: string, orderId: string, data: P
       }));
       const taxResult = calculateOrderTaxes({ items: itemsForTax, restaurant, categoryMap });
       updatePayload.subtotal = taxResult.subtotal;
-      updatePayload.taxAmount = taxResult.totalTax === undefined ? null : taxResult.totalTax;
+      updatePayload.taxAmount = taxResult.totalTax ?? null;
       updatePayload.taxBreakup = taxResult.taxBreakup && taxResult.taxBreakup.length > 0 ? taxResult.taxBreakup : null;
       updatePayload.totalAmount = taxResult.total;
     }
@@ -495,4 +506,3 @@ export function listenToRestaurantOrders(
   return unsubscribe;
 }
 
-    
