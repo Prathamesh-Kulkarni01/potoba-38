@@ -32,30 +32,27 @@ import { getMenuCategories, getMenuItemByIdFromGroup } from './menu';
 import { calculateOrderTaxes } from '../taxEngine';
 import { deductStockForSoldItems } from './inventory';
 
-const safeString = (value: any): string | null => typeof value === 'string' && value.trim() !== '' ? value : null;
+const safeString = (value: any): string | null => typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
 const safeNumber = (value: any): number | null => typeof value === 'number' && !isNaN(value) ? value : null;
 
 // Helper to sanitize an OrderItem
 const sanitizeOrderItem = (item: Partial<OrderItem>): OrderItem => {
-  const menuItemId = item.menuItemId || 'unknown-item';
-  const menuItemName = item.menuItemName || 'Unknown Item';
-  const unitPrice = typeof item.unitPrice === 'number' ? item.unitPrice : 0;
-  const quantity = typeof item.quantity === 'number' && item.quantity > 0 ? item.quantity : 1; // Default quantity to 1 if 0 or less
   const now = Date.now();
+  const menuItemId = item.menuItemId || 'unknown-item'; // Default if menuItemId is missing
 
   return {
+    uniqueId: item.uniqueId || `${menuItemId}-${typeof item.createdAt === 'number' ? item.createdAt : now}-${Math.random().toString(36).substring(2, 9)}`,
     menuItemId: menuItemId,
-    menuItemName: menuItemName,
-    quantity: quantity,
-    unitPrice: unitPrice,
-    totalPrice: unitPrice * quantity,
+    menuItemName: item.menuItemName || 'Unknown Item',
+    quantity: typeof item.quantity === 'number' && item.quantity > 0 ? item.quantity : 1,
+    unitPrice: typeof item.unitPrice === 'number' ? item.unitPrice : 0,
+    totalPrice: (typeof item.unitPrice === 'number' ? item.unitPrice : 0) * (typeof item.quantity === 'number' && item.quantity > 0 ? item.quantity : 1),
+    status: item.status || 'pending',
     variantChoices: item.variantChoices || null,
-    notes: safeString(item.notes),
-    status: item.status || 'pending', // Default status to 'pending'
-    createdAt: typeof item.createdAt === 'number' ? item.createdAt : now,
-    updatedAt: typeof item.updatedAt === 'number' ? item.updatedAt : now, // Ensure updatedAt is set
-    uniqueId: item.uniqueId || `${menuItemId}-${typeof item.createdAt === 'number' ? item.createdAt : now}-${Math.random().toString(36).substring(2, 9)}`, // Ensure uniqueId
     instructions: safeString(item.instructions),
+    notes: safeString(item.notes),
+    createdAt: typeof item.createdAt === 'number' ? item.createdAt : now,
+    updatedAt: typeof item.updatedAt === 'number' ? item.updatedAt : now,
     groupId: safeString(item.groupId),
     imageUrl: safeString(item.imageUrl),
     categoryId: safeString(item.categoryId),
@@ -70,7 +67,7 @@ const toClientOrder = (docId: string, data: any): ClientOrder => {
         userId: data.userId || null,
         tableId: data.tableId || null,
         tableNumber: data.tableNumber || null,
-        items: (data.items || []).map(sanitizeOrderItem), 
+        items: (data.items || []).map(sanitizeOrderItem),
         subtotal: typeof data.subtotal === 'number' ? data.subtotal : 0,
         totalAmount: typeof data.totalAmount === 'number' ? data.totalAmount : 0,
         status: data.status as OrderStatus,
@@ -97,10 +94,10 @@ const toClientOrder = (docId: string, data: any): ClientOrder => {
 };
 
 
-export async function createOrder(restaurantId: string, orderData: Omit<Order, 'id' | 'createdAt' | 'updatedAt'>): Promise<Order> {
+export async function createOrder(restaurantId: string, orderData: Partial<Omit<Order, 'id' | 'createdAt' | 'updatedAt'>>): Promise<Order> {
   if (!db) throw new Error("Firestore is not initialized.");
   const ordersCol = collection(db, getOrdersCollectionPath(restaurantId));
-  
+
   const restaurant = await getRestaurant(restaurantId);
   if (!restaurant) throw new Error('Restaurant not found for order creation.');
   const categoriesData = await getMenuCategories(restaurantId);
@@ -108,13 +105,13 @@ export async function createOrder(restaurantId: string, orderData: Omit<Order, '
 
   const sanitizedItems = (orderData.items || []).map(item => sanitizeOrderItem({
       ...item,
-      status: item.status || 'pending_kitchen', // Set a default status for items in a new order
+      status: item.status || 'pending_kitchen', 
   }));
 
   const itemsForTax = sanitizedItems.map(item => ({
-    item: { 
+    item: {
       id: item.menuItemId,
-      itemIdString: item.menuItemId, 
+      itemIdString: item.menuItemId,
       restaurantId,
       categoryId: item.categoryId || '',
       name: item.menuItemName,
@@ -135,21 +132,21 @@ export async function createOrder(restaurantId: string, orderData: Omit<Order, '
     userId: orderData.userId ?? null,
     tableId: orderData.tableId ?? null,
     tableNumber: orderData.tableNumber ?? null,
-    items: sanitizedItems, // Use fully sanitized items
+    items: sanitizedItems,
     subtotal: taxResult.subtotal,
     taxAmount: taxResult.totalTax ?? null,
-    serviceCharge: orderData.serviceCharge ?? null,
-    discountAmount: orderData.discountAmount ?? null,
+    serviceCharge: safeNumber(orderData.serviceCharge),
+    discountAmount: safeNumber(orderData.discountAmount),
     totalAmount: taxResult.total,
     status: orderData.status || 'pending_kitchen',
-    customerName: orderData.customerName ?? null,
-    customerPhoneNumber: orderData.customerPhoneNumber ?? null,
-    customerWhatsapp: orderData.customerWhatsapp ?? null,
-    customerNotes: orderData.customerNotes ?? null,
-    kitchenNotes: orderData.kitchenNotes ?? null,
-    paymentMethod: orderData.paymentMethod ?? null,
-    transactionId: orderData.transactionId ?? null,
-    groupId: orderData.groupId ?? null,
+    customerName: safeString(orderData.customerName),
+    customerPhoneNumber: safeString(orderData.customerPhoneNumber),
+    customerWhatsapp: safeString(orderData.customerWhatsapp),
+    customerNotes: safeString(orderData.customerNotes),
+    kitchenNotes: safeString(orderData.kitchenNotes),
+    paymentMethod: safeString(orderData.paymentMethod),
+    transactionId: safeString(orderData.transactionId),
+    groupId: safeString(orderData.groupId),
     taxBreakup: (taxResult.taxBreakup && taxResult.taxBreakup.length > 0) ? taxResult.taxBreakup : null,
     createdAt: serverTimestamp() as Timestamp,
     updatedAt: serverTimestamp() as Timestamp,
@@ -164,12 +161,16 @@ export async function createOrder(restaurantId: string, orderData: Omit<Order, '
   }
 
   const nowForClient = Timestamp.now();
+  // Construct the returned Order object fully, ensuring all optional fields from input orderData are handled
   return {
     id: docRef.id,
-    ...orderData, 
-    items: dataToSave.items, 
+    restaurantId: dataToSave.restaurantId,
+    userId: dataToSave.userId,
+    tableId: dataToSave.tableId,
+    tableNumber: dataToSave.tableNumber,
+    items: dataToSave.items,
     subtotal: dataToSave.subtotal,
-    taxAmount: dataToSave.taxAmount ?? undefined, 
+    taxAmount: dataToSave.taxAmount ?? undefined,
     serviceCharge: dataToSave.serviceCharge ?? undefined,
     discountAmount: dataToSave.discountAmount ?? undefined,
     totalAmount: dataToSave.totalAmount,
@@ -183,9 +184,9 @@ export async function createOrder(restaurantId: string, orderData: Omit<Order, '
     transactionId: dataToSave.transactionId ?? undefined,
     groupId: dataToSave.groupId ?? undefined,
     taxBreakup: dataToSave.taxBreakup ?? undefined,
-    createdAt: nowForClient, 
+    createdAt: nowForClient,
     updatedAt: nowForClient,
-  } as Order;
+  };
 }
 
 export async function getOrder(restaurantId: string, orderId: string): Promise<ClientOrder | null> {
@@ -263,16 +264,24 @@ export async function updateOrderItemStatusInFirestore(
       throw new Error(`Order ${orderId} not found.`);
     }
 
-    const orderData = orderDoc.data() as Order;
-    const items = (orderData.items || []).map(sanitizeOrderItem); // Sanitize all items on read
+    const orderData = orderDoc.data() as Order; // Assume Order type here, will be cast to ClientOrder if needed
+    const items = (orderData.items || []).map(item => sanitizeOrderItem(item as Partial<OrderItem>)); // Ensure items are sanitized
 
     const itemIndex = items.findIndex(item => item.uniqueId === itemUniqueId);
     if (itemIndex === -1) {
-      throw new Error(`Item ${itemUniqueId} not found in order ${orderId}.`);
+      // Attempt to find item by menuItemId and no uniqueId (for older items before uniqueId was robustly set)
+      const fallbackIndex = items.findIndex(item => item.menuItemId === itemUniqueId.split('-')[0] && !item.uniqueId.includes('-')); // very basic fallback
+      if (fallbackIndex !== -1) {
+         console.warn(`Item with uniqueId ${itemUniqueId} not found, but found a match by menuItemId. Updating this item. Consider data migration for uniqueIds.`);
+         items[fallbackIndex].status = newItemStatus;
+         items[fallbackIndex].updatedAt = Date.now();
+      } else {
+        throw new Error(`Item with unique ID ${itemUniqueId} not found in order ${orderId}.`);
+      }
+    } else {
+      items[itemIndex].status = newItemStatus;
+      items[itemIndex].updatedAt = Date.now();
     }
-
-    items[itemIndex].status = newItemStatus;
-    items[itemIndex].updatedAt = Date.now(); // Update individual item timestamp
 
     transaction.update(orderRef, { items: items, updatedAt: serverTimestamp() });
   });
@@ -297,10 +306,10 @@ export async function updateOrder(restaurantId: string, orderId: string, data: P
             updatePayload[field] = safeNumber(updatePayload[field]);
         } else if (typeof updatePayload[field] === 'string') {
             updatePayload[field] = safeString(updatePayload[field]);
-        } else if (updatePayload[field] === undefined) { 
+        } else if (updatePayload[field] === undefined) {
             updatePayload[field] = null;
         }
-        
+
         if (field === 'taxBreakup' && (updatePayload[field] === undefined || (Array.isArray(updatePayload[field]) && updatePayload[field].length === 0))) {
             updatePayload[field] = null;
         }
@@ -308,13 +317,14 @@ export async function updateOrder(restaurantId: string, orderId: string, data: P
     });
 
     if (updatePayload.items && Array.isArray(updatePayload.items)) {
-      updatePayload.items = updatePayload.items.map(sanitizeOrderItem);
+      updatePayload.items = updatePayload.items.map(item => sanitizeOrderItem(item as Partial<OrderItem>));
     }
 
     // Recalculate totals if items are changing
-    if (updatePayload.items) {
+    if (updatePayload.items && (updatePayload.hasOwnProperty('subtotal') || updatePayload.hasOwnProperty('totalAmount') || updatePayload.hasOwnProperty('taxAmount'))) {
+      console.warn("Updating items and totals simultaneously. Ensuring recalculation.");
       const restaurant = await getRestaurant(restaurantId);
-      if (!restaurant) throw new Error('Restaurant not found for order update.');
+      if (!restaurant) throw new Error('Restaurant not found for order update totals recalculation.');
       const categoriesData = await getMenuCategories(restaurantId);
       const categoryMap = Object.fromEntries(categoriesData.map(cat => [cat.id, cat]));
 
@@ -391,7 +401,7 @@ export async function getRestaurantOrderSummary(
     ordersCol,
     where('createdAt', '>=', Timestamp.fromDate(startOfDay(startDate))),
     where('createdAt', '<=', Timestamp.fromDate(endOfDay(endDate))),
-    where('status', 'in', ['completed', 'served', 'payment_pending']) 
+    where('status', 'in', ['completed', 'served', 'payment_pending'])
   );
 
   const snapshot = await getDocs(q);
@@ -418,7 +428,7 @@ export async function getRestaurantOrderSummary(
 export interface OrderStatusDistribution {
   status: OrderStatus;
   count: number;
-  fill?: string; 
+  fill?: string;
 }
 export async function getRestaurantOrderStatusDistribution(
   restaurantId: string,
@@ -526,3 +536,4 @@ export function listenToRestaurantOrders(
 
   return unsubscribe;
 }
+
