@@ -1,14 +1,15 @@
+
 'use client';
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useParams } from 'next/navigation';
-import { updateOrderItemStatusInFirestore, deriveOverallOrderStatus } from '@/lib/firebase/orders'; // Added deriveOverallOrderStatus
+import { updateOrderItemStatusInFirestore, deriveOverallOrderStatus } from '@/lib/firebase/orders';
 import { getOrdersCollectionPath, convertFirebaseTimestampToString } from '@/lib/firebase/utils';
-import type { OrderStatus as OverallOrderStatus, ClientOrder, OrderItemStatus, OrderItem } from '@/types'; // Added OrderItem
+import type { OrderStatus as OverallOrderStatus, ClientOrder, OrderItemStatus, OrderItem } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import LoadingSpinner from '@/components/shared/loading-spinner';
 import { Button } from '@/components/ui/button';
 import { db } from '@/lib/firebase/config';
-import { collection, query, where, orderBy, onSnapshot, Timestamp, doc, runTransaction } from 'firebase/firestore'; // Added doc, runTransaction
+import { collection, query, where, orderBy, onSnapshot, Timestamp, doc, runTransaction } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { formatDistanceToNowStrict, parseISO, differenceInMinutes } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -54,7 +55,7 @@ export default function KitchenDisplaySystemPage() {
   const [updatingItems, setUpdatingItems] = useState<Record<string, boolean>>({});
 
   const newOrderSoundRef = typeof Audio !== "undefined" ? new Audio('/sounds/kds-new-order.mp3') : null;
-  const itemReadySoundRef = typeof Audio !== "undefined" ? new Audio('/sounds/kds-item-ready.mp3') : null; // Add a sound for ready items
+  const itemReadySoundRef = typeof Audio !== "undefined" ? new Audio('/sounds/kds-item-ready.mp3') : null; 
 
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
@@ -65,7 +66,6 @@ export default function KitchenDisplaySystemPage() {
     setLoading(true);
     const ordersColRef = collection(db, getOrdersCollectionPath(restaurantId));
     
-    // Listen to orders that are not yet fully completed or cancelled by customer
     const relevantOverallStatuses: OverallOrderStatus[] = [
       'pending_kitchen', 'confirmed_by_kitchen', 'preparing', 'ready_for_pickup'
     ];
@@ -73,7 +73,7 @@ export default function KitchenDisplaySystemPage() {
     const q = query(
       ordersColRef,
       where('status', 'in', relevantOverallStatuses),
-      orderBy('createdAt', 'asc') // Oldest orders first
+      orderBy('createdAt', 'asc') 
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -83,7 +83,11 @@ export default function KitchenDisplaySystemPage() {
       const newOrdersJustArrived = fetchedOrders.filter(fo => !previousOrderIds.has(fo.id) && (fo.status === 'pending_kitchen' || fo.status === 'confirmed_by_kitchen'));
 
       if (newOrdersJustArrived.length > 0 && audioEnabled && newOrderSoundRef) {
-         newOrderSoundRef.play().catch(e => console.warn("KDS new order sound play failed:", e));
+         try {
+           newOrderSoundRef.play().catch(e => console.warn("KDS new order sound play failed (non-critical):", e));
+         } catch (e) {
+           console.warn("Error attempting to play new order sound:", e);
+         }
       }
       setAllKitchenOrders(fetchedOrders);
       setLoading(false);
@@ -100,10 +104,14 @@ export default function KitchenDisplaySystemPage() {
   const handleItemStatusChange = useCallback(async (orderId: string, itemUniqueId: string, newStatus: OrderItemStatus) => {
     setUpdatingItems(prev => ({ ...prev, [itemUniqueId]: true }));
     try {
-      await updateOrderItemStatusInFirestore(restaurantId, orderId, itemUniqueId, newStatus); // This will also derive and update overall order status
+      await updateOrderItemStatusInFirestore(restaurantId, orderId, itemUniqueId, newStatus); 
       toast({ title: "Item Status Updated", description: `Item marked as ${KDS_ITEM_STATUS_CONFIG[newStatus]?.label || newStatus}.` });
        if (newStatus === 'ready_for_pickup' && audioEnabled && itemReadySoundRef) {
-        itemReadySoundRef.play().catch(e => console.warn("KDS item ready sound play failed:", e));
+        try {
+            itemReadySoundRef.play().catch(e => console.warn("KDS item ready sound play failed (non-critical):", e));
+        } catch (e) {
+             console.warn("Error attempting to play item ready sound:", e);
+        }
       }
     } catch (error: any) {
       toast({ variant: "destructive", title: "Update Failed", description: error.message || "Could not update item status." });
@@ -116,19 +124,15 @@ export default function KitchenDisplaySystemPage() {
   const filteredOrders = useMemo(() => {
     const tabConfig = KDS_OVERALL_STATUS_TABS_CONFIG[activeKdsTabKey];
     return allKitchenOrders.filter(order => {
-        // Filter by overall order status first
         if (!tabConfig.statuses.includes(order.status)) {
             return false;
         }
-        // For 'new' and 'preparing' tabs, ensure there are actually items matching item-level criteria
         if (activeKdsTabKey === 'new') {
             return order.items.some(item => item.status === 'sent_to_kitchen' || item.status === 'confirmed_by_kitchen');
         }
         if (activeKdsTabKey === 'preparing') {
             return order.items.some(item => item.status === 'preparing');
         }
-        // For 'ready' tab, ensure AT LEAST ONE item is ready_for_pickup and not all are served/cancelled.
-        // The overall order status 'ready_for_pickup' should ideally mean this.
         if (activeKdsTabKey === 'ready') {
             return order.items.some(item => item.status === 'ready_for_pickup') && 
                    !order.items.every(item => item.status === 'served' || item.status === 'cancelled_by_customer' || item.status === 'cancelled_by_kitchen');
@@ -213,3 +217,5 @@ export default function KitchenDisplaySystemPage() {
     </div>
   );
 }
+
+    

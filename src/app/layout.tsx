@@ -1,4 +1,5 @@
-import type { Metadata } from 'next';
+
+import type { Metadata, Viewport } from 'next'; // Added Viewport
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import { AuthProvider } from '@/lib/auth/context';
@@ -37,10 +38,7 @@ export const metadata: Metadata = {
     telephone: false,
   },
   manifest: '/manifest.json',
-  themeColor: [ // For more granular control based on media query
-    { media: '(prefers-color-scheme: light)', color: '#FFB347' },
-    { media: '(prefers-color-scheme: dark)', color: '#222A3E' }, // Example dark theme color
-  ],
+  // themeColor removed from here
   icons: { // Next.js specific way to define icons, complements manifest
     icon: '/icons/icon-192x192.png',
     shortcut: '/icons/icon-72x72.png',
@@ -72,6 +70,19 @@ export const metadata: Metadata = {
   },
 };
 
+// Added viewport export for themeColor
+export const viewport: Viewport = {
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#FFB347' },
+    { media: '(prefers-color-scheme: dark)', color: '#222A3E' },
+  ],
+  viewportFit: "cover",
+  width: "device-width",
+  initialScale: 1,
+  minimumScale: 1,
+};
+
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -92,7 +103,7 @@ export default function RootLayout({
         <meta name="msapplication-TileColor" content="#FFB347" />
         <meta name="msapplication-tap-highlight" content="no" />
         
-        <meta name="theme-color" content="#FFB347" /> 
+        {/* Static theme-color meta tag removed, handled by viewport export and DynamicThemeColorEffect */}
 
         <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
         <link rel="manifest" href="/manifest.json" />
@@ -146,3 +157,4 @@ export default function RootLayout({
     </html>
   );
 }
+
