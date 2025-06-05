@@ -214,12 +214,12 @@ export interface RecipeIngredientItem {
 
 export interface MenuItem {
   id: string;
-  itemIdString: string; // Should match the document ID for collectionGroup queries
+  itemIdString: string; 
   restaurantId: string;
   categoryId: string;
   subcategoryId?: string | null;
   name:string;
-  description?: string | null; // Made optional as per schema
+  description?: string | null; 
   price: number;
   imageUrl?: string | null;
   videoUrl?: string | null;
@@ -239,11 +239,10 @@ export interface MenuItem {
   createdAt: Timestamp;
   updatedAt: Timestamp;
   taxOverrides?: TaxConfig[];
-  // Waiter app specific fields
   isSpicy?: boolean;
   isGlutenFree?: boolean;
   tags?: string[];
-  isAvailable?: boolean; // Duplicates 'availability', consider consolidating
+  isAvailable?: boolean; 
 }
 
 
@@ -253,7 +252,7 @@ export interface TableArea {
   id: string;
   restaurantId: string;
   name: string;
-  order: number; // For display sequence
+  order: number; 
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
@@ -272,11 +271,10 @@ export interface Table {
   assignedWaiterName?: string | null;
   lastOrderId?: string | null;
   lastOrderTotal?: number | null;
-  lastOrderAt?: Timestamp | string | null; // Allow string for ISO
+  lastOrderAt?: Timestamp | string | null; 
   currentOrderIds?: string[];
   createdAt: string; 
   updatedAt: string; 
-  // Waiter app static data properties (if needed temporarily, otherwise remove)
   name?: string; 
   shape?: 'square' | 'circle' | 'rectangle';
 }
@@ -293,25 +291,25 @@ export type OrderStatus =
   | 'cancelled_by_customer'
   | 'cancelled_by_restaurant';
 
+export type OrderItemStatus = 'pending' | 'sent_to_kitchen' | 'confirmed_by_kitchen' | 'preparing' | 'ready_for_pickup' | 'served' | 'cancelled_by_kitchen' | 'cancelled_by_customer';
+
 export interface OrderItem {
+  uniqueId: string; // Client-generated unique ID for this specific instance of the item in the order
   menuItemId: string;
   menuItemName: string;
   quantity: number;
   unitPrice: number;
   totalPrice: number;
-  variantChoices?: { variantName: string; optionName: string; optionPrice: number }[];
-  notes?: string;
-  categoryId?: string; 
-  taxOverrides?: TaxConfig[]; 
-  // Fields for waiter app internal state
-  menuItem?: MenuItem; // Full menu item details, might be redundant if fetching by ID always
-  status?: 'pending' | 'sent_to_kitchen' | 'ready_for_pickup' | 'served';
-  createdAt?: number; // Timestamp for when item was added to order
-  uniqueId?: string; // To differentiate same items added multiple times before sending to KOT
-  instructions?: string;
-  groupId?: string; 
-  // Cart Item specific (from Site/Public App)
-  imageUrl?: string; 
+  status: OrderItemStatus; // Individual status for this item
+  variantChoices?: { variantName: string; optionName: string; optionPrice: number }[] | null;
+  instructions?: string | null; // Customer instructions for this item
+  notes?: string | null; // Waiter/internal notes for this item
+  createdAt: number; // Timestamp (client-generated initially, server-generated on save)
+  groupId?: string | null;
+  imageUrl?: string | null; 
+  categoryId?: string | null; 
+  taxOverrides?: TaxConfig[] | null; 
+  menuItem?: MenuItem; // Reference to full MenuItem, optional, mostly for client-side rendering ease
 }
 
 export interface Order {
@@ -326,12 +324,12 @@ export interface Order {
   serviceCharge?: number;
   discountAmount?: number;
   totalAmount: number;
-  status: OrderStatus;
+  status: OrderStatus; // Overall order status, should be derived from item statuses
   customerName?: string | null;
   customerPhoneNumber?: string | null;
   customerWhatsapp?: string | null;
-  customerNotes?: string;
-  kitchenNotes?: string;
+  customerNotes?: string; // Overall order notes from customer
+  kitchenNotes?: string; // Overall order notes for kitchen
   paymentMethod?: string;
   transactionId?: string;
   groupId?: string | null;
@@ -372,7 +370,6 @@ export interface TableGroup {
   updatedAt: Timestamp;
 }
 
-// Client-side representation with stringified dates
 export interface ClientTableGroup extends Omit<TableGroup, 'createdAt' | 'updatedAt'> {
   createdAt: string;
   updatedAt: string;
@@ -386,7 +383,6 @@ export interface PopularItem {
   totalRevenue: number;
 }
 
-// --- Inventory Types ---
 export type InventoryItemCategory = 'raw_material' | 'semi_finished' | 'finished_good' | 'beverage_alcoholic' | 'beverage_nonalcoholic' | 'packaging' | 'cleaning_supply' | 'other';
 export const inventoryItemCategories: { value: InventoryItemCategory; label: string }[] = [
   { value: 'raw_material', label: 'Raw Material (e.g., Flour, Tomato)' },
@@ -441,7 +437,7 @@ export interface StockTransaction {
   inventoryItemId: string;
   inventoryItemName: string;
   transactionType: StockTransactionType;
-  quantity: number; // Positive for stock in, negative for stock out
+  quantity: number; 
   unitOfMeasure: UnitOfMeasure;
   transactionDate: Timestamp;
   costPerUnitAtTransaction?: number | null;
@@ -452,8 +448,8 @@ export interface StockTransaction {
   expiryDate?: Timestamp | null;
   paymentMode?: string | null;
   relatedOrderId?: string | null;
-  relatedPurchaseId?: string | null; // Could link to a more detailed purchase order if that module exists
-  userId?: string | null; // User who performed the transaction
+  relatedPurchaseId?: string | null; 
+  userId?: string | null; 
 }
 
 
@@ -466,44 +462,39 @@ export interface DailyStockSummary {
 export interface StaffInvitation {
   id: string;
   restaurantId: string;
-  email: string; // Stored in lowercase
-  role: StaffRole; // Specific staff role like 'Waiter', 'Manager'
-  staffRole: StaffRole; // Explicitly the specific staff role
+  email: string; 
+  role: StaffRole; 
+  staffRole: StaffRole; 
   status: 'pending' | 'accepted' | 'declined' | 'expired';
-  invitedBy: string; // UID of the owner/manager who sent the invitation
+  invitedBy: string; 
   createdAt: Timestamp;
   acceptedAt?: Timestamp;
   acceptedByUid?: string;
-  permissions?: StaffPermissions; // Permissions set at the time of invitation
+  permissions?: StaffPermissions; 
 }
 
-// ---- Waiter App Specific Types (From Static Data, to be reviewed for dynamic integration) ---
-// Kept Waiter type simple, might need to be merged with UserProfile if waiters are also Potoba users.
 export interface Waiter {
   id: string;
   name: string;
   avatar?: string;
 }
 
-// Tip Entry
 export interface TipEntry {
   id: string;
   amount: number;
-  timestamp: number; // Unix timestamp
-  tableId?: string; // Optional, if tip is associated with a specific table
-  notes?: string; // Optional notes for the tip
+  timestamp: number; 
+  tableId?: string | null; 
+  notes?: string | null; 
 }
 
-// Historical Order for Waiter App (simplified, might need to align with ClientOrder)
 export interface HistoricalOrder {
   id: string;
-  originalTableId?: string; // The ID of the table this order was originally for
-  items: OrderItem[]; // Re-uses OrderItem, assuming structure is compatible
-  completedAt: number; // Timestamp of completion
+  originalTableId?: string; 
+  items: OrderItem[]; 
+  completedAt: number; 
   totalAmount: number;
-  paymentMethod?: 'cash' | 'card' | 'upi' | 'wallet' | 'other';
-  paymentNote?: string;
-  // any other details to show in history
+  paymentMethod?: 'cash' | 'card' | 'upi' | 'wallet' | 'other' | null;
+  paymentNote?: string | null;
 }
 
 export interface ChatMessage {
@@ -511,8 +502,8 @@ export interface ChatMessage {
   user: string;
   text: string;
   timestamp: number;
-  avatar?: string; // URL to user's avatar
-  isCurrentUser?: boolean; // Optional flag to identify messages from the logged-in user
+  avatar?: string; 
+  isCurrentUser?: boolean; 
 }
 
 export interface SpecialOffer {
@@ -521,8 +512,8 @@ export interface SpecialOffer {
   description: string;
   specialPrice?: number;
   discountPercentage?: number;
-  applicableItems?: string[]; // Array of MenuItem IDs or names
+  applicableItems?: string[]; 
   imageUrl?: string;
   tags?: string[];
-  dataAiHint?: string; // For image generation hint
+  dataAiHint?: string; 
 }

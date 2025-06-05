@@ -10,7 +10,7 @@ This document outlines the Firebase Firestore data structure used in the Potoba 
 All primary data types and interfaces are defined in:
 - **`src/types/index.ts`**
 
-This file contains definitions for `UserProfile`, `RestaurantProfile`, `MenuCategory`, `MenuItem`, `Order`, `Table`, `InventoryItem`, `StaffInvitation`, etc.
+This file contains definitions for `UserProfile`, `RestaurantProfile`, `MenuCategory`, `MenuItem`, `OrderItem`, `Order`, `Table`, `InventoryItem`, `StaffInvitation`, etc.
 
 ## Firebase Collections & Associated Logic
 
@@ -47,10 +47,10 @@ This file contains definitions for `UserProfile`, `RestaurantProfile`, `MenuCate
 
 *   **Path (Directly under Category)**: `restaurants/{restaurantId}/menuCategories/{categoryId}/menuItems/{itemId}`
 *   **Path (Under Subcategory)**: `restaurants/{restaurantId}/menuCategories/{categoryId}/menuSubcategories/{subcategoryId}/menuItems/{itemId}`
-    *   *Note*: Menu items can exist directly under a category or nested under a subcategory.
+    *   *Note*: Menu items can exist directly under a category or nested under a subcategory. Each `MenuItem` document ID is also stored as `itemIdString` within the document for collection group queries.
 *   **Primary Schema/Type**: `MenuItem` (from `src/types/index.ts`)
 *   **CRUD Logic**: `src/lib/firebase/menu.ts` (functions like `getMenuItems`, `addMenuItem`, `updateMenuItem`, `deleteMenuItem`, `getMenuItemByIdFromGroup`)
-*   **Collection Group Query Note**: `getMenuItemByIdFromGroup` uses a collection group query on `menuItems`. Ensure the `itemIdString` field is populated and indexed correctly for this.
+*   **Collection Group Query Note**: `getMenuItemByIdFromGroup` uses a collection group query on `menuItems` using the `itemIdString` field.
 
 ### 4. Orders Collection
 
@@ -58,6 +58,14 @@ This file contains definitions for `UserProfile`, `RestaurantProfile`, `MenuCate
 *   **Primary Schema/Type**: `Order` / `ClientOrder` (from `src/types/index.ts`)
 *   **CRUD Logic**: `src/lib/firebase/orders.ts` (functions like `createOrder`, `getOrder`, `updateOrder`, `cancelOrder`, `getOrdersByRestaurant`, `getOrdersByTable`, dashboard-specific summaries)
 *   **Utility Path Function**: `getOrdersCollectionPath(restaurantId)` in `src/lib/firebase/utils.ts`
+*   **Key Feature - `items` array**:
+    *   The `items` field within an `Order` document is an array of `OrderItem` objects.
+    *   **Each `OrderItem` has its own `status`, `uniqueId`, `notes`, and `instructions` fields.** This allows for granular tracking and management of individual items within a single order.
+    *   `uniqueId`: A client-generated unique identifier for each line item instance, crucial for updating specific items (e.g., if "Coke x 2" is one line, and "Coke x 1, no ice" is another, they have different uniqueIds even if the menuItemId is the same).
+    *   `status`: Can be 'pending', 'sent_to_kitchen', 'preparing', 'ready_for_pickup', 'served', 'cancelled'.
+    *   `notes`: Internal staff notes about the item.
+    *   `instructions`: Customer-provided special instructions for the item.
+    *   The overall `Order` status (e.g., 'pending_kitchen', 'completed') is often derived from or influenced by the collective statuses of its `OrderItem`s.
 
 ### 5. Tables Collection
 
@@ -77,6 +85,7 @@ This file contains definitions for `UserProfile`, `RestaurantProfile`, `MenuCate
 *   **Path**: `restaurants/{restaurantId}/tableGroups/{groupCode}`
 *   **Primary Schema/Type**: `TableGroup` / `ClientTableGroup` (from `src/types/index.ts`)
 *   **CRUD Logic**: `src/lib/firebase/groups.ts` (functions like `createTableGroup`, `joinTableGroup`, `getTableGroup`, `addItemToGroupCart`)
+*   **Note**: `GroupCartItem` within `TableGroup.cartItems` also has its own `addedByUid` and `addedByName`.
 
 ### 7. Inventory Items Collection
 

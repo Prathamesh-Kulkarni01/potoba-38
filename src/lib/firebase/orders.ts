@@ -23,7 +23,7 @@ import {
   documentId,
 } from 'firebase/firestore';
 import { db } from './config';
-import type { Order, OrderStatus, OrderItem, ClientOrder, MenuItem, TaxConfig, MenuCategory, RestaurantProfile } from '@/types';
+import type { Order, OrderStatus, OrderItem, ClientOrder, MenuItem, TaxConfig, MenuCategory, RestaurantProfile, OrderItemStatus } from '@/types';
 import { convertFirebaseTimestampToString, getOrdersCollectionPath } from './utils';
 import { startOfDay, endOfDay, subDays } from 'date-fns';
 import { getRestaurant } from './firestore';
@@ -39,7 +39,7 @@ const sanitizeOrderItem = (item: Partial<OrderItem>): OrderItem => {
   const menuItemId = item.menuItemId || 'unknown-item';
   const menuItemName = item.menuItemName || 'Unknown Item';
   const unitPrice = typeof item.unitPrice === 'number' ? item.unitPrice : 0;
-  const quantity = typeof item.quantity === 'number' && item.quantity > 0 ? item.quantity : 0; // Quantity should be positive
+  const quantity = typeof item.quantity === 'number' && item.quantity > 0 ? item.quantity : 1; // Default quantity to 1 if 0 or less
 
   return {
     menuItemId: menuItemId,
@@ -49,9 +49,9 @@ const sanitizeOrderItem = (item: Partial<OrderItem>): OrderItem => {
     totalPrice: unitPrice * quantity,
     variantChoices: item.variantChoices || null,
     notes: safeString(item.notes),
-    status: item.status || 'pending',
+    status: item.status || 'pending', // Default status to 'pending'
     createdAt: item.createdAt || Date.now(),
-    uniqueId: item.uniqueId || `${menuItemId}-${item.createdAt || Date.now()}-${Math.random().toString(36).substring(7)}`,
+    uniqueId: item.uniqueId || `${menuItemId}-${item.createdAt || Date.now()}-${Math.random().toString(36).substring(7)}`, // Ensure uniqueId
     instructions: safeString(item.instructions),
     groupId: safeString(item.groupId),
     imageUrl: safeString(item.imageUrl),
@@ -67,7 +67,7 @@ const toClientOrder = (docId: string, data: any): ClientOrder => {
         userId: data.userId || null,
         tableId: data.tableId || null,
         tableNumber: data.tableNumber || null,
-        items: (data.items || []).map(sanitizeOrderItem), // Ensure items are sanitized
+        items: (data.items || []).map(sanitizeOrderItem), 
         subtotal: typeof data.subtotal === 'number' ? data.subtotal : 0,
         totalAmount: typeof data.totalAmount === 'number' ? data.totalAmount : 0,
         status: data.status as OrderStatus,
@@ -103,8 +103,13 @@ export async function createOrder(restaurantId: string, orderData: Omit<Order, '
   const categoriesData = await getMenuCategories(restaurantId);
   const categoryMap = Object.fromEntries(categoriesData.map(cat => [cat.id, cat]));
 
-  const itemsForTax = (orderData.items || []).map(item => ({
-    item: { // Construct a MenuItem-like object for tax calculation
+  const sanitizedItems = (orderData.items || []).map(item => sanitizeOrderItem({
+      ...item,
+      status: item.status || 'pending_kitchen', // Set a default status for items in a new order
+  }));
+
+  const itemsForTax = sanitizedItems.map(item => ({
+    item: { 
       id: item.menuItemId,
       itemIdString: item.menuItemId, 
       restaurantId,
@@ -122,12 +127,12 @@ export async function createOrder(restaurantId: string, orderData: Omit<Order, '
   }));
   const taxResult = calculateOrderTaxes({ items: itemsForTax, restaurant, categoryMap });
 
-  const dataToSave = {
+  const dataToSave: Omit<Order, 'id' | 'createdAt' | 'updatedAt'> & { createdAt: Timestamp; updatedAt: Timestamp } = {
     restaurantId: restaurantId,
     userId: orderData.userId ?? null,
     tableId: orderData.tableId ?? null,
     tableNumber: orderData.tableNumber ?? null,
-    items: (orderData.items || []).map(sanitizeOrderItem),
+    items: sanitizedItems,
     subtotal: taxResult.subtotal,
     taxAmount: taxResult.totalTax ?? null,
     serviceCharge: orderData.serviceCharge ?? null,
@@ -143,29 +148,25 @@ export async function createOrder(restaurantId: string, orderData: Omit<Order, '
     transactionId: orderData.transactionId ?? null,
     groupId: orderData.groupId ?? null,
     taxBreakup: (taxResult.taxBreakup && taxResult.taxBreakup.length > 0) ? taxResult.taxBreakup : null,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
+    createdAt: serverTimestamp() as Timestamp,
+    updatedAt: serverTimestamp() as Timestamp,
   };
 
   const docRef = await addDoc(ordersCol, dataToSave);
 
   try {
-    // Ensure items passed to deductStockForSoldItems are fully formed ClientOrderItems if necessary
-    // or that deductStockForSoldItems can handle the structure from dataToSave.items
     await deductStockForSoldItems(restaurantId, docRef.id, dataToSave.items as ClientOrderItem[]);
   } catch (error) {
     console.error(`Failed to deduct stock for order ${docRef.id}:`, error);
-    // Decide if order creation should fail or just log this error
   }
 
-  const nowForClient = Timestamp.now(); // Use a client-side timestamp for the return object
+  const nowForClient = Timestamp.now();
   return {
     id: docRef.id,
-    ...orderData, // Spread the original input data
-    // Override with sanitized/calculated values that were actually saved
+    ...orderData, 
     items: dataToSave.items, 
     subtotal: dataToSave.subtotal,
-    taxAmount: dataToSave.taxAmount ?? undefined, // Convert null back to undefined if type expects optional
+    taxAmount: dataToSave.taxAmount ?? undefined, 
     serviceCharge: dataToSave.serviceCharge ?? undefined,
     discountAmount: dataToSave.discountAmount ?? undefined,
     totalAmount: dataToSave.totalAmount,
@@ -179,7 +180,7 @@ export async function createOrder(restaurantId: string, orderData: Omit<Order, '
     transactionId: dataToSave.transactionId ?? undefined,
     groupId: dataToSave.groupId ?? undefined,
     taxBreakup: dataToSave.taxBreakup ?? undefined,
-    createdAt: nowForClient, // Use client-side Timestamp for immediate feedback
+    createdAt: nowForClient, 
     updatedAt: nowForClient,
   } as Order;
 }
@@ -279,7 +280,7 @@ export async function updateOrder(restaurantId: string, orderId: string, data: P
             updatePayload[field] = null;
         }
         
-        if (field === 'taxBreakup' && updatePayload[field] === undefined) {
+        if (field === 'taxBreakup' && (updatePayload[field] === undefined || (Array.isArray(updatePayload[field]) && updatePayload[field].length === 0))) {
             updatePayload[field] = null;
         }
       }
@@ -289,6 +290,7 @@ export async function updateOrder(restaurantId: string, orderId: string, data: P
       updatePayload.items = updatePayload.items.map(sanitizeOrderItem);
     }
 
+    // Recalculate totals if items are changing
     if (updatePayload.items) {
       const restaurant = await getRestaurant(restaurantId);
       if (!restaurant) throw new Error('Restaurant not found for order update.');
@@ -315,7 +317,7 @@ export async function updateOrder(restaurantId: string, orderId: string, data: P
       const taxResult = calculateOrderTaxes({ items: itemsForTax, restaurant, categoryMap });
       updatePayload.subtotal = taxResult.subtotal;
       updatePayload.taxAmount = taxResult.totalTax ?? null;
-      updatePayload.taxBreakup = taxResult.taxBreakup && taxResult.taxBreakup.length > 0 ? taxResult.taxBreakup : null;
+      updatePayload.taxBreakup = (taxResult.taxBreakup && taxResult.taxBreakup.length > 0) ? taxResult.taxBreakup : null;
       updatePayload.totalAmount = taxResult.total;
     }
 
@@ -347,7 +349,6 @@ export async function cancelOrder(restaurantId: string, orderId: string, cancell
   await updateDoc(orderRef, updateData);
 }
 
-// --- Dashboard Specific Data Fetching ---
 export interface RestaurantOrderSummary {
   totalRevenue: number;
   totalOrders: number;
@@ -369,7 +370,7 @@ export async function getRestaurantOrderSummary(
     ordersCol,
     where('createdAt', '>=', Timestamp.fromDate(startOfDay(startDate))),
     where('createdAt', '<=', Timestamp.fromDate(endOfDay(endDate))),
-    where('status', 'in', ['completed', 'served', 'payment_pending'])
+    where('status', 'in', ['completed', 'served', 'payment_pending']) 
   );
 
   const snapshot = await getDocs(q);
@@ -396,7 +397,7 @@ export async function getRestaurantOrderSummary(
 export interface OrderStatusDistribution {
   status: OrderStatus;
   count: number;
-  fill?: string; // For charts
+  fill?: string; 
 }
 export async function getRestaurantOrderStatusDistribution(
   restaurantId: string,
@@ -500,7 +501,6 @@ export function listenToRestaurantOrders(
     callback(orders);
   }, (error) => {
     console.error(`Error listening to orders for restaurant ${restaurantId}:`, error);
-    // Optionally, you could propagate this error to the UI
   });
 
   return unsubscribe;
