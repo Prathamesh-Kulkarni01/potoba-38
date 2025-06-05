@@ -58,24 +58,34 @@ This file contains definitions for `UserProfile`, `RestaurantProfile`, `MenuCate
 *   **Primary Schema/Type**: `Order` / `ClientOrder` (from `src/types/index.ts`)
 *   **CRUD Logic**: `src/lib/firebase/orders.ts` (functions like `createOrder`, `getOrder`, `updateOrder`, `cancelOrder`, `getOrdersByRestaurant`, `getOrdersByTable`, dashboard-specific summaries, `updateOrderItemStatusInFirestore`, `deriveOverallOrderStatus`)
 *   **Utility Path Function**: `getOrdersCollectionPath(restaurantId)` in `src/lib/firebase/utils.ts`
+*   **`groupId?: string | null;`**: Optional string identifying the sub-group within a table this order belongs to. Used when a table's order is split by groups, allowing for separate KOTs/bills per group.
 *   **Key Feature - `items` array**:
     *   The `items` field within an `Order` document is an array of `OrderItem` objects.
-    *   **Each `OrderItem` has its own `uniqueId`, `status`, `notes`, `instructions`, `createdAt`, and `updatedAt` fields.** This allows for granular tracking and management of individual items within a single order.
-    *   `uniqueId`: A client-generated unique identifier for each line item instance, crucial for updating specific items.
-    *   `status` (`OrderItemStatus`): `'pending'` (waiter app local), `'sent_to_kitchen'`, `'confirmed_by_kitchen'`, `'preparing'`, `'ready_for_pickup'`, `'served'`, `'cancelled_by_kitchen'`, `'cancelled_by_customer'`.
+    *   **Each `OrderItem` has its own `uniqueId`, `status`, `notes`, `instructions`, `createdAt`, `updatedAt`, and `groupId`.** This allows for granular tracking and management of individual items within a single order, potentially associated with a specific group order at a table.
+    *   `uniqueId`: A client-generated unique identifier for each line item instance (e.g., `menuItemId-timestamp-random`), crucial for updating specific items.
+    *   `status` (`OrderItemStatus`): Lifecycle of an item: `'pending'` (waiter app local, before sending to KDS) -> `'sent_to_kitchen'` (waiter sends to KDS) -> `'confirmed_by_kitchen'` (KDS acknowledges) -> `'preparing'` (KDS starts prep) -> `'ready_for_pickup'` (KDS completes item) -> `'served'` (waiter serves item) / `'cancelled_by_kitchen'` / `'cancelled_by_customer'`.
     *   `notes`: Internal staff notes about the item (can be used for kitchen remarks).
     *   `instructions`: Customer-provided special instructions for the item.
     *   `createdAt` (on `OrderItem`): Timestamp (number) for when the item was added to the order locally.
     *   `updatedAt` (on `OrderItem`): Timestamp (number) for when the individual item was last updated (e.g., status change).
-*   **Overall Order Status (`Order.status`)**: This status is **derived automatically** based on the collective statuses of all `OrderItem`s within that order. The logic for this derivation is primarily in `deriveOverallOrderStatus` function in `src/lib/firebase/orders.ts` and is applied before any Firestore write operation that might affect item statuses or item composition. Do not manually set the top-level order status; rely on the derivation logic.
+    *   `groupId` (on `OrderItem`): Optional string to link this item to a specific group order at a table.
+*   **Overall Order Status (`Order.status`)**: This status is **derived automatically** based on the collective statuses of all `OrderItem`s within that order. The logic for this derivation is primarily in the `deriveOverallOrderStatus` function in `src/lib/firebase/orders.ts` and is applied before any Firestore write operation that might affect item statuses or item composition. Do not manually set the top-level order status; rely on the derivation logic. Examples:
+    *   `pending_kitchen`: If any item is `sent_to_kitchen` but none are further.
+    *   `preparing`: If any item is `preparing`.
+    *   `ready_for_pickup`: If all active (non-cancelled) items are `ready_for_pickup`.
+    *   `payment_pending`: After all items are `served`.
 
 ### 5. Kitchen Display System (KDS) / Kitchen Order Ticket (KOT) Module
 
-*   **Primary Data Source**: Real-time listener on `restaurants/{restaurantId}/orders/{orderId}` for orders with overall statuses relevant to kitchen operations (e.g., `pending_kitchen`, `confirmed_by_kitchen`, `preparing`, `ready_for_pickup`). Individual item statuses are displayed within each KOT.
+*   **Primary Data Source**: Real-time listener on `restaurants/{restaurantId}/orders/{orderId}` for orders with overall statuses relevant to kitchen operations (e.g., `pending_kitchen`, `confirmed_by_kitchen`, `preparing`, `ready_for_pickup`).
 *   **Core Logic**:
     *   `src/app/dashboard/restaurant/[restaurantId]/kitchen/page.tsx`: Main client component for KDS display and interaction.
     *   `src/lib/firebase/orders.ts` (specifically `updateOrderItemStatusInFirestore`): Used by KDS to update the status of individual `OrderItem`s within an `Order` document. This function also triggers the re-derivation of the overall order status.
-*   **Functionality**: Allows kitchen staff to view incoming order items, manage their preparation status individually (e.g., confirm, prepare, mark as ready), and see relevant details like table number, item instructions, and elapsed time.
+*   **Functionality**:
+    *   Displays active orders as "tickets". If an order has a `groupId`, it should be visually indicated on the ticket or allow filtering/grouping by group.
+    *   Allows kitchen staff to view incoming order items.
+    *   Manage individual `OrderItem` preparation status (e.g., confirm, prepare, mark as ready).
+    *   See relevant details: table number, item instructions, elapsed time.
 
 ### 6. Tables Collection
 
@@ -95,7 +105,7 @@ This file contains definitions for `UserProfile`, `RestaurantProfile`, `MenuCate
 *   **Path**: `restaurants/{restaurantId}/tableGroups/{groupCode}`
 *   **Primary Schema/Type**: `TableGroup` / `ClientTableGroup` (from `src/types/index.ts`)
 *   **CRUD Logic**: `src/lib/firebase/groups.ts` (functions like `createTableGroup`, `joinTableGroup`, `getTableGroup`, `addItemToGroupCart`)
-*   **Note**: `GroupCartItem` within `TableGroup.cartItems` also has its own `addedByUid` and `addedByName`.
+*   **Note**: `GroupCartItem` within `TableGroup.cartItems` also has its own `addedByUid` and `addedByName`. When items from a `TableGroup` are sent to the kitchen, they are added to an `Order` document (either new or existing for that group), and the `OrderItem`s within that `Order` will have the `groupId` field set to the `groupCode`.
 
 ### 8. Inventory Items Collection
 
@@ -125,5 +135,3 @@ This file contains definitions for `UserProfile`, `RestaurantProfile`, `MenuCate
 *   **Firebase Configuration**: Firestore is initialized in `src/lib/firebase/config.ts`.
 
 **If changes to this data structure or these CRUD functions are made, this `README.ai.md` file MUST be updated to reflect those changes.**
-
-    

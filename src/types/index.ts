@@ -302,23 +302,23 @@ export type OrderItemStatus =
   | 'cancelled_by_customer';        // Waiter cancelled this item (e.g., customer changed mind before prep)
 
 export interface OrderItem {
-  uniqueId: string; // Client-generated unique ID for this specific instance of the item in the order
+  uniqueId: string; 
   menuItemId: string;
   menuItemName: string;
   quantity: number;
   unitPrice: number;
   totalPrice: number;
-  status: OrderItemStatus; // Individual status for this item
+  status: OrderItemStatus; 
   variantChoices?: { variantName: string; optionName: string; optionPrice: number }[] | null;
-  instructions?: string | null; // Customer instructions for this item
-  notes?: string | null; // Waiter/internal notes for this item
-  createdAt: number; // Timestamp (client-generated initially, server-generated on save)
-  updatedAt?: number; // Timestamp for last status update of this specific item
+  instructions?: string | null; 
+  notes?: string | null; 
+  createdAt: number; 
+  updatedAt?: number; 
   groupId?: string | null;
   imageUrl?: string | null; 
   categoryId?: string | null; 
   taxOverrides?: TaxConfig[] | null; 
-  menuItem?: MenuItem; // Reference to full MenuItem, optional, mostly for client-side rendering ease
+  menuItem?: MenuItem; 
 }
 
 export interface Order {
@@ -333,12 +333,12 @@ export interface Order {
   serviceCharge?: number;
   discountAmount?: number;
   totalAmount: number;
-  status: OrderStatus; // Overall order status, SHOULD BE DERIVED from item statuses
+  status: OrderStatus; 
   customerName?: string | null;
   customerPhoneNumber?: string | null;
   customerWhatsapp?: string | null;
-  customerNotes?: string; // Overall order notes from customer
-  kitchenNotes?: string; // Overall order notes for kitchen
+  customerNotes?: string; 
+  kitchenNotes?: string; 
   paymentMethod?: string;
   transactionId?: string;
   groupId?: string | null;
@@ -348,8 +348,9 @@ export interface Order {
 }
 
 export interface ClientOrder extends Omit<Order, 'createdAt' | 'updatedAt'> {
-  createdAt: string; // ISO string
-  updatedAt: string; // ISO string
+  createdAt: string; 
+  updatedAt: string; 
+  groupId?: string | null;
 }
 
 
@@ -526,5 +527,3 @@ export interface SpecialOffer {
   tags?: string[];
   dataAiHint?: string; 
 }
-
-    

@@ -15,7 +15,7 @@ import { formatDistanceToNowStrict, parseISO, differenceInMinutes } from 'date-f
 import { cn } from '@/lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import KitchenOrderTicket from '@/components/kds/KitchenOrderTicket';
-import { BellRing, Utensils, ChefHat, CheckCircle, Settings2 } from 'lucide-react'; 
+import { BellRing, Utensils, ChefHat, CheckCircle, Settings2, Users as GroupIcon } from 'lucide-react'; 
 import {
   Select,
   SelectContent,
@@ -23,7 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { KDS_ITEM_STATUS_CONFIG, KDS_OVERALL_STATUS_TABS_CONFIG } from '@/config/kdsConfig';
+import { KDS_ITEM_STATUS_CONFIG, KDS_OVERALL_STATUS_TABS_CONFIG } from '@/config/kdsConfig'; // Corrected import path
 
 const toClientOrder = (docId: string, data: any): ClientOrder => {
   const orderBase: Omit<ClientOrder, 'id' | 'createdAt' | 'updatedAt'> = {
@@ -31,9 +31,10 @@ const toClientOrder = (docId: string, data: any): ClientOrder => {
     items: (data.items || []).map((item: any) => ({
         ...item,
         uniqueId: item.uniqueId || `${item.menuItemId}-${item.createdAt || Date.now()}-${Math.random().toString(36).substring(7)}`,
-        status: item.status || 'sent_to_kitchen', // Default if somehow missing
+        status: item.status || 'sent_to_kitchen', 
         createdAt: typeof item.createdAt === 'number' ? item.createdAt : (item.createdAt?.toDate?.().getTime() || Date.now()),
         updatedAt: typeof item.updatedAt === 'number' ? item.updatedAt : (item.updatedAt?.toDate?.().getTime() || Date.now()),
+        groupId: typeof item.groupId === 'string' ? item.groupId : null,
     })),
     subtotal: data.subtotal, totalAmount: data.totalAmount, status: data.status as OverallOrderStatus,
     taxAmount: typeof data.taxAmount === 'number' ? data.taxAmount : undefined, serviceCharge: typeof data.serviceCharge === 'number' ? data.serviceCharge : undefined,
@@ -41,6 +42,7 @@ const toClientOrder = (docId: string, data: any): ClientOrder => {
     kitchenNotes: typeof data.kitchenNotes === 'string' ? data.kitchenNotes : undefined, paymentMethod: typeof data.paymentMethod === 'string' ? data.paymentMethod : undefined,
     transactionId: typeof data.transactionId === 'string' ? data.transactionId : undefined, customerName: typeof data.customerName === 'string' ? data.customerName : undefined,
     customerPhoneNumber: typeof data.customerPhoneNumber === 'string' ? data.customerPhoneNumber : undefined,
+    groupId: typeof data.groupId === 'string' ? data.groupId : null, 
   };
   return { id: docId, ...orderBase, createdAt: convertFirebaseTimestampToString(data.createdAt), updatedAt: convertFirebaseTimestampToString(data.updatedAt) };
 };
@@ -77,18 +79,21 @@ export default function KitchenDisplaySystemPage() {
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const previousOrderIds = new Set(allKitchenOrders.map(o => o.id));
+      const previousOrderMap = new Map(allKitchenOrders.map(o => [o.id, o]));
       const fetchedOrders = snapshot.docs.map(docSnap => toClientOrder(docSnap.id, docSnap.data()));
       
-      const newOrdersJustArrived = fetchedOrders.filter(fo => !previousOrderIds.has(fo.id) && (fo.status === 'pending_kitchen' || fo.status === 'confirmed_by_kitchen'));
-
-      if (newOrdersJustArrived.length > 0 && audioEnabled && newOrderSoundRef) {
-         try {
-           newOrderSoundRef.play().catch(e => console.warn("KDS new order sound play failed (non-critical):", e));
-         } catch (e) {
-           console.warn("Error attempting to play new order sound:", e);
-         }
-      }
+      let newOrderSoundPlayed = false;
+      fetchedOrders.forEach(newOrder => {
+        const oldOrder = previousOrderMap.get(newOrder.id);
+        if (!oldOrder && (newOrder.status === 'pending_kitchen' || newOrder.status === 'confirmed_by_kitchen')) {
+           if (audioEnabled && newOrderSoundRef && !newOrderSoundPlayed) {
+                try {
+                newOrderSoundRef.play().catch(e => console.warn("KDS new order sound play failed (non-critical):", e));
+                newOrderSoundPlayed = true; // Play sound only once per batch of new orders
+                } catch (e) { console.warn("Error attempting to play new order sound:", e); }
+            }
+        }
+      });
       setAllKitchenOrders(fetchedOrders);
       setLoading(false);
     }, (error) => {
@@ -99,19 +104,19 @@ export default function KitchenDisplaySystemPage() {
 
     return () => unsubscribe();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [restaurantId, toast]);
+  }, [restaurantId, toast, audioEnabled]); // Removed allKitchenOrders from deps to prevent sound on every item update
 
   const handleItemStatusChange = useCallback(async (orderId: string, itemUniqueId: string, newStatus: OrderItemStatus) => {
     setUpdatingItems(prev => ({ ...prev, [itemUniqueId]: true }));
     try {
       await updateOrderItemStatusInFirestore(restaurantId, orderId, itemUniqueId, newStatus); 
+      // Firestore listener will update the local state (allKitchenOrders), re-deriving overall status.
+      // The `updateOrderItemStatusInFirestore` now handles deriving and updating the overall order status too.
       toast({ title: "Item Status Updated", description: `Item marked as ${KDS_ITEM_STATUS_CONFIG[newStatus]?.label || newStatus}.` });
        if (newStatus === 'ready_for_pickup' && audioEnabled && itemReadySoundRef) {
         try {
             itemReadySoundRef.play().catch(e => console.warn("KDS item ready sound play failed (non-critical):", e));
-        } catch (e) {
-             console.warn("Error attempting to play item ready sound:", e);
-        }
+        } catch (e) { console.warn("Error attempting to play item ready sound:", e); }
       }
     } catch (error: any) {
       toast({ variant: "destructive", title: "Update Failed", description: error.message || "Could not update item status." });
@@ -127,15 +132,20 @@ export default function KitchenDisplaySystemPage() {
         if (!tabConfig.statuses.includes(order.status)) {
             return false;
         }
+        // For specific tabs, we might need to ensure items are actually in the relevant state
         if (activeKdsTabKey === 'new') {
-            return order.items.some(item => item.status === 'sent_to_kitchen' || item.status === 'confirmed_by_kitchen');
+            // Show if overall order status is pending/confirmed OR if any item is sent_to_kitchen or confirmed_by_kitchen
+            return tabConfig.statuses.includes(order.status) || 
+                   order.items.some(item => item.status === 'sent_to_kitchen' || item.status === 'confirmed_by_kitchen');
         }
         if (activeKdsTabKey === 'preparing') {
-            return order.items.some(item => item.status === 'preparing');
+            return tabConfig.statuses.includes(order.status) && order.items.some(item => item.status === 'preparing');
         }
         if (activeKdsTabKey === 'ready') {
-            return order.items.some(item => item.status === 'ready_for_pickup') && 
-                   !order.items.every(item => item.status === 'served' || item.status === 'cancelled_by_customer' || item.status === 'cancelled_by_kitchen');
+            // Show if overall is ready_for_pickup OR if any item is ready_for_pickup and not all served/cancelled
+            return tabConfig.statuses.includes(order.status) || 
+                  (order.items.some(item => item.status === 'ready_for_pickup') && 
+                   !order.items.every(item => item.status === 'served' || item.status === 'cancelled_by_customer' || item.status === 'cancelled_by_kitchen'));
         }
         return true; 
     });
@@ -217,5 +227,3 @@ export default function KitchenDisplaySystemPage() {
     </div>
   );
 }
-
-    

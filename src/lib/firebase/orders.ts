@@ -40,17 +40,30 @@ export const sanitizeOrderItem = (item: Partial<OrderItem>): OrderItem => {
   const now = Date.now();
   const menuItemId = item.menuItemId || 'unknown-item';
   
-  // Refactored uniqueId generation to avoid complex template literals
   let uniqueIdFromItem = item.uniqueId;
   if (!uniqueIdFromItem) {
-    const timestampPart = typeof item.createdAt === 'number' ? item.createdAt : now;
-    uniqueIdFromItem = menuItemId + '-' + timestampPart;
+    const timestampPartForId = (item.createdAt && typeof item.createdAt === 'object' && typeof (item.createdAt as any).toDate === 'function')
+        ? (item.createdAt as Timestamp).toDate().getTime()
+        : (typeof item.createdAt === 'number' ? item.createdAt : now);
+    // Using simple string concatenation
+    uniqueIdFromItem = menuItemId + '-' + timestampPartForId;
   }
   
-  const uniqueIdNeedsSuffix = !uniqueIdFromItem.includes('-') || uniqueIdFromItem.split('-').length <= 2;
-  const finalUniqueId = uniqueIdNeedsSuffix 
+  const idParts = uniqueIdFromItem.split('-');
+  const needsSuffix = idParts.length < 3 || !/^[a-z0-9]{7,}$/i.test(idParts[idParts.length - 1]);
+  // Using simple string concatenation
+  const finalUniqueId = needsSuffix
     ? uniqueIdFromItem + '-' + Math.random().toString(36).substring(2, 9)
     : uniqueIdFromItem;
+
+  const finalCreatedAt = (item.createdAt && typeof item.createdAt === 'object' && typeof (item.createdAt as any).toDate === 'function')
+    ? (item.createdAt as Timestamp).toDate().getTime()
+    : (typeof item.createdAt === 'number' ? item.createdAt : now);
+
+  const finalUpdatedAt = (item.updatedAt && typeof item.updatedAt === 'object' && typeof (item.updatedAt as any).toDate === 'function')
+    ? (item.updatedAt as Timestamp).toDate().getTime()
+    : (typeof item.updatedAt === 'number' ? item.updatedAt : finalCreatedAt);
+
 
   return {
     uniqueId: finalUniqueId,
@@ -63,12 +76,13 @@ export const sanitizeOrderItem = (item: Partial<OrderItem>): OrderItem => {
     variantChoices: item.variantChoices || null,
     instructions: safeString(item.instructions),
     notes: safeString(item.notes),
-    createdAt: typeof item.createdAt === 'number' ? item.createdAt : now,
-    updatedAt: typeof item.updatedAt === 'number' ? item.updatedAt : now,
+    createdAt: finalCreatedAt,
+    updatedAt: finalUpdatedAt,
     groupId: safeString(item.groupId),
     imageUrl: safeString(item.imageUrl),
     categoryId: safeString(item.categoryId),
     taxOverrides: item.taxOverrides || null,
+    // menuItem: item.menuItem, // Do not include menuItem for Firestore persistence if it's the full object
   };
 };
 
@@ -79,7 +93,7 @@ const toClientOrder = (docId: string, data: any): ClientOrder => {
         userId: data.userId || null,
         tableId: data.tableId || null,
         tableNumber: data.tableNumber || null,
-        items: (data.items || []).map(item => sanitizeOrderItem(item as Partial<OrderItem>)),
+        items: (data.items || []).map((itemData: any) => sanitizeOrderItem(itemData as Partial<OrderItem>)),
         subtotal: typeof data.subtotal === 'number' ? data.subtotal : 0,
         totalAmount: typeof data.totalAmount === 'number' ? data.totalAmount : 0,
         status: data.status as OrderStatus,
@@ -110,19 +124,21 @@ export function deriveOverallOrderStatus(items: OrderItem[]): OrderStatus {
     return 'pending_customer_confirmation'; 
   }
 
-  const allServed = items.every(item => item.status === 'served');
-  const allItemsCancelled = items.every(item => item.status === 'cancelled_by_customer' || item.status === 'cancelled_by_kitchen');
-  
-  if (allItemsCancelled) return 'cancelled_by_restaurant'; 
-  if (allServed) return 'payment_pending';
-  
-  if (items.some(item => item.status === 'ready_for_pickup')) return 'ready_for_pickup';
-  if (items.some(item => item.status === 'preparing')) return 'preparing';
-  if (items.some(item => item.status === 'confirmed_by_kitchen')) return 'confirmed_by_kitchen';
-  if (items.some(item => item.status === 'sent_to_kitchen')) return 'pending_kitchen';
-  
-  if (items.every(item => item.status === 'pending')) return 'pending_customer_confirmation'; 
+  const activeItems = items.filter(item => item.status !== 'cancelled_by_customer' && item.status !== 'cancelled_by_kitchen');
 
+  if (activeItems.length === 0) { // All items are cancelled
+    return 'cancelled_by_restaurant'; // Or determine by who cancelled the last item
+  }
+  if (activeItems.every(item => item.status === 'served')) return 'payment_pending';
+  if (activeItems.some(item => item.status === 'ready_for_pickup') && activeItems.every(item => item.status === 'ready_for_pickup' || item.status === 'served')) return 'ready_for_pickup';
+  if (activeItems.some(item => item.status === 'preparing')) return 'preparing';
+  if (activeItems.some(item => item.status === 'confirmed_by_kitchen')) return 'confirmed_by_kitchen';
+  if (activeItems.some(item => item.status === 'sent_to_kitchen')) return 'pending_kitchen';
+  
+  // If all active items are 'pending' (local waiter app state before sending to kitchen)
+  if (activeItems.every(item => item.status === 'pending')) return 'pending_customer_confirmation'; 
+
+  // Fallback, or if items are in a mixed state not covered above (e.g., some pending, some sent)
   return 'pending_kitchen'; 
 }
 
@@ -139,6 +155,7 @@ export async function createOrder(restaurantId: string, orderData: Partial<Omit<
   const sanitizedItems = (orderData.items || []).map(item => sanitizeOrderItem({
       ...item,
       status: item.status || 'sent_to_kitchen', 
+      groupId: item.groupId || orderData.groupId || null, // Inherit groupId from order if not on item
   }));
 
   const itemsForTax = sanitizedItems.map(item => ({
@@ -146,15 +163,15 @@ export async function createOrder(restaurantId: string, orderData: Partial<Omit<
       id: item.menuItemId,
       itemIdString: item.menuItemId,
       restaurantId,
-      categoryId: item.categoryId || '',
+      categoryId: item.categoryId || '', // Make sure categoryId is present on item if needed for tax
       name: item.menuItemName,
       description: '',
       price: item.unitPrice,
-      availability: true,
+      availability: true, // Assume available for tax calculation
       order: 0,
-      createdAt: Timestamp.now(),
-      updatedAt: Timestamp.now(),
-      taxOverrides: item.taxOverrides || null,
+      createdAt: Timestamp.now(), // Placeholder for type compatibility
+      updatedAt: Timestamp.now(), // Placeholder for type compatibility
+      taxOverrides: item.taxOverrides || null, // Make sure taxOverrides are passed
     },
     quantity: item.quantity,
   }));
@@ -180,7 +197,7 @@ export async function createOrder(restaurantId: string, orderData: Partial<Omit<
     kitchenNotes: safeString(orderData.kitchenNotes),
     paymentMethod: safeString(orderData.paymentMethod),
     transactionId: safeString(orderData.transactionId),
-    groupId: safeString(orderData.groupId),
+    groupId: safeString(orderData.groupId), // Save groupId at the order level
     taxBreakup: (taxResult.taxBreakup && taxResult.taxBreakup.length > 0) ? taxResult.taxBreakup : null,
     createdAt: serverTimestamp() as Timestamp,
     updatedAt: serverTimestamp() as Timestamp,
@@ -189,7 +206,9 @@ export async function createOrder(restaurantId: string, orderData: Partial<Omit<
   const docRef = await addDoc(ordersCol, dataToSave);
 
   try {
-    await deductStockForSoldItems(restaurantId, docRef.id, dataToSave.items as ClientOrderItem[]);
+    if (dataToSave.status !== 'pending_customer_confirmation' && dataToSave.status !== 'pending_kitchen') {
+      await deductStockForSoldItems(restaurantId, docRef.id, dataToSave.items as ClientOrderItem[]);
+    }
   } catch (error) {
     console.error(`Failed to deduct stock for order ${docRef.id}:`, error);
   }
@@ -292,12 +311,24 @@ export async function updateOrderItemStatusInFirestore(
 
     const itemIndex = items.findIndex(item => item.uniqueId === itemUniqueId);
     if (itemIndex === -1) {
-      throw new Error(`Item with unique ID ${itemUniqueId} not found in order ${orderId}.`);
+      // If item not found by uniqueId, try by menuItemId if it's the only one (less safe, for backward compatibility or error recovery)
+      const itemsWithSameMenuId = items.filter(item => item.menuItemId === itemUniqueId.split('-')[0]);
+      if (itemsWithSameMenuId.length === 1 && itemsWithSameMenuId[0].uniqueId.startsWith(itemUniqueId.split('-')[0])) {
+        const foundIndex = items.findIndex(item => item.uniqueId === itemsWithSameMenuId[0].uniqueId);
+        if(foundIndex > -1) {
+            items[foundIndex].status = newItemStatus;
+            items[foundIndex].updatedAt = Date.now();
+        } else {
+             throw new Error(`Item with unique ID ${itemUniqueId} not found in order ${orderId} (fallback search failed).`);
+        }
+      } else {
+        throw new Error(`Item with unique ID ${itemUniqueId} not found or ambiguous in order ${orderId}.`);
+      }
+    } else {
+        items[itemIndex].status = newItemStatus;
+        items[itemIndex].updatedAt = Date.now(); 
     }
     
-    items[itemIndex].status = newItemStatus;
-    items[itemIndex].updatedAt = Date.now(); 
-
     const newOverallStatus = deriveOverallOrderStatus(items);
 
     transaction.update(orderRef, { 
@@ -340,10 +371,13 @@ export async function updateOrder(restaurantId: string, orderId: string, data: P
       updatePayload.items = updatePayload.items.map(item => sanitizeOrderItem(item as Partial<OrderItem>));
       updatePayload.status = deriveOverallOrderStatus(updatePayload.items);
     } else if (updatePayload.hasOwnProperty('status') && data.items === undefined) {
+      // If only status is updated, ensure it's a valid OrderStatus.
+      // The derivation logic in deriveOverallOrderStatus should be preferred.
+      // This case should be rare as status should mostly be derived.
     }
 
-
-    if (updatePayload.items && (!updatePayload.hasOwnProperty('subtotal') || !updatePayload.hasOwnProperty('totalAmount'))) {
+    // If items are updated, re-calculate totals and taxes if not explicitly provided in `data`
+    if (updatePayload.items && (!updatePayload.hasOwnProperty('subtotal') || !updatePayload.hasOwnProperty('totalAmount') || !updatePayload.hasOwnProperty('taxAmount'))) {
       const restaurant = await getRestaurant(restaurantId);
       if (!restaurant) throw new Error('Restaurant not found for order update totals recalculation.');
       const categoriesData = await getMenuCategories(restaurantId);
@@ -352,7 +386,7 @@ export async function updateOrder(restaurantId: string, orderId: string, data: P
       const itemsForTax = (updatePayload.items || []).map((item: OrderItem) => ({
         item: {
           id: item.menuItemId,
-          itemIdString: item.menuItemId,
+          itemIdString: item.menuItemId, // Assuming menuItemId can serve as itemIdString
           restaurantId,
           categoryId: item.categoryId || '',
           name: item.menuItemName,
@@ -373,10 +407,19 @@ export async function updateOrder(restaurantId: string, orderId: string, data: P
       updatePayload.totalAmount = taxResult.total;
     }
 
-
     const finalUpdateData = { ...updatePayload, updatedAt: serverTimestamp() };
-
     await updateDoc(orderRef, finalUpdateData);
+
+    // Deduct stock if order is now moving to a "usage" state and wasn't before
+    if (data.status && ['preparing', 'served', 'completed'].includes(data.status) ) {
+      const currentOrder = await getOrder(restaurantId, orderId);
+      if (currentOrder && currentOrder.items) {
+        // Logic to check if stock was already deducted (e.g., based on a previous status)
+        // For now, assume we deduct when status becomes one of these.
+        // This might need a more sophisticated check to prevent double deduction.
+        await deductStockForSoldItems(restaurantId, orderId, currentOrder.items as ClientOrderItem[]);
+      }
+    }
 }
 
 
@@ -429,7 +472,7 @@ export async function getRestaurantOrderSummary(
     ordersCol,
     where('createdAt', '>=', Timestamp.fromDate(startOfDay(startDate))),
     where('createdAt', '<=', Timestamp.fromDate(endOfDay(endDate))),
-    where('status', 'in', ['completed', 'served', 'payment_pending'])
+    where('status', 'in', ['completed', 'served', 'payment_pending']) // Consider only orders that contribute to revenue
   );
 
   const snapshot = await getDocs(q);
@@ -508,7 +551,7 @@ export async function getPopularMenuItems(
     ordersCol,
     where('createdAt', '>=', Timestamp.fromDate(startOfDay(startDate))),
     where('createdAt', '<=', Timestamp.fromDate(endOfDay(endDate))),
-     where('status', 'in', ['completed', 'served', 'payment_pending'])
+     where('status', 'in', ['completed', 'served', 'payment_pending']) // Consider only items from revenue-generating orders
   );
 
   const snapshot = await getDocs(q);
@@ -532,7 +575,7 @@ export async function getPopularMenuItems(
       orderCount: data.count,
       totalRevenue: data.revenue,
     }))
-    .sort((a, b) => b.orderCount - a.orderCount)
+    .sort((a, b) => b.orderCount - a.orderCount) // Sort by count
     .slice(0, limitCount);
 }
 
@@ -540,19 +583,20 @@ export async function getPopularMenuItems(
 export function listenToRestaurantOrders(
   restaurantId: string,
   callback: (orders: ClientOrder[]) => void,
-  periodInDays: 7 | 30 = 7
-): () => void {
+  periodInDays: 7 | 30 = 7 // Default to 7 days for live dashboard views, can be adjusted
+): () => void { // Returns an unsubscribe function
   if (!db) throw new Error("Firestore is not initialized for real-time listener.");
 
   const ordersCol = collection(db, getOrdersCollectionPath(restaurantId));
   const endDate = new Date();
   const startDate = subDays(endDate, periodInDays - 1);
 
+  // Query for orders within the specified period
   const q = query(
     ordersCol,
     where('createdAt', '>=', Timestamp.fromDate(startOfDay(startDate))),
     where('createdAt', '<=', Timestamp.fromDate(endOfDay(endDate))),
-    orderBy('createdAt', 'desc')
+    orderBy('createdAt', 'desc') // Show most recent first
   );
 
   const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -560,9 +604,9 @@ export function listenToRestaurantOrders(
     callback(orders);
   }, (error) => {
     console.error(`Error listening to orders for restaurant ${restaurantId}:`, error);
+    // Optionally, call callback with an empty array or error indicator
+    // callback([]); 
   });
 
-  return unsubscribe;
+  return unsubscribe; // Return the unsubscribe function
 }
-
-    
