@@ -305,6 +305,7 @@ export interface OrderItem {
   instructions?: string | null; // Customer instructions for this item
   notes?: string | null; // Waiter/internal notes for this item
   createdAt: number; // Timestamp (client-generated initially, server-generated on save)
+  updatedAt?: number; // Timestamp for last status update of this specific item
   groupId?: string | null;
   imageUrl?: string | null; 
   categoryId?: string | null; 

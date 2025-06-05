@@ -1,10 +1,11 @@
+
 'use client';
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { getRestaurant } from '@/lib/firebase/firestore';
-import { updateOrder } from '@/lib/firebase/orders';
+import { updateOrderItemStatusInFirestore, getOrder } from '@/lib/firebase/orders'; // Changed from updateOrder
 import { getOrdersCollectionPath, convertFirebaseTimestampToString } from '@/lib/firebase/utils';
-import type { RestaurantProfile, OrderStatus as OrderStatusType, OrderItem, ClientOrder } from '@/types';
+import type { RestaurantProfile, OrderStatus as OrderStatusType, OrderItem, ClientOrder, OrderItemStatus } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import LoadingSpinner from '@/components/shared/loading-spinner';
 import { Button } from '@/components/ui/button';
@@ -16,8 +17,8 @@ import { useToast } from '@/hooks/use-toast';
 import { ChevronDown, ChevronUp, Clock, Loader2, CheckCircle, PlayCircle, XCircle, Utensils, ArrowRight } from 'lucide-react';
 import { formatDistanceToNowStrict, format, addMinutes, differenceInMinutes, parseISO } from 'date-fns';
 
-const kitchenStatuses: OrderStatusType[] = ['pending_kitchen', 'confirmed_by_kitchen', 'preparing'];
-const orderStatusConfig: Record<OrderStatusType, { label: string; color?: string }> = {
+const kitchenStatuses: OrderStatusType[] = ['pending_kitchen', 'confirmed_by_kitchen', 'preparing', 'ready_for_pickup'];
+const orderStatusConfig: Record<OrderStatusType | OrderItemStatus, { label: string; color?: string; shortLabel?: string }> = {
   pending_customer_confirmation: { label: 'Pending Customer Confirmation', color: 'text-yellow-500' },
   pending_kitchen: { label: 'Pending Kitchen', color: 'text-yellow-600' },
   confirmed_by_kitchen: { label: 'Kitchen Confirmed', color: 'text-orange-500' },
@@ -28,24 +29,35 @@ const orderStatusConfig: Record<OrderStatusType, { label: string; color?: string
   completed: { label: 'Completed', color: 'text-gray-500' },
   cancelled_by_customer: { label: 'Cancelled by Customer', color: 'text-red-500' },
   cancelled_by_restaurant: { label: 'Cancelled by Restaurant', color: 'text-red-700' },
+  // Item Specific (can reuse or add more)
+  pending: { label: 'Pending Item', color: 'text-yellow-400', shortLabel: 'Pending' },
+  sent_to_kitchen: { label: 'Item Sent', color: 'text-orange-400', shortLabel: 'Sent' },
+  cancelled_by_kitchen: { label: 'Cancelled (Kitchen)', color: 'text-red-600', shortLabel: 'Cancelled'},
 };
-const possibleNextStatuses: Record<OrderStatusType, OrderStatusType[]> = {
-  pending_customer_confirmation: ['pending_kitchen', 'cancelled_by_restaurant', 'cancelled_by_customer'],
-  pending_kitchen: ['confirmed_by_kitchen', 'cancelled_by_restaurant'],
-  confirmed_by_kitchen: ['preparing', 'cancelled_by_restaurant'],
-  preparing: ['ready_for_pickup', 'served', 'cancelled_by_restaurant'],
-  ready_for_pickup: ['served', 'completed', 'cancelled_by_restaurant'],
-  served: ['payment_pending', 'completed'],
-  payment_pending: ['completed', 'cancelled_by_restaurant'],
-  completed: [],
-  cancelled_by_customer: [],
-  cancelled_by_restaurant: [],
+
+const possibleNextItemStatuses: Record<OrderItemStatus, OrderItemStatus[]> = {
+    pending: ['sent_to_kitchen', 'cancelled_by_kitchen'],
+    sent_to_kitchen: ['confirmed_by_kitchen', 'preparing', 'cancelled_by_kitchen'],
+    confirmed_by_kitchen: ['preparing', 'cancelled_by_kitchen'],
+    preparing: ['ready_for_pickup', 'cancelled_by_kitchen'],
+    ready_for_pickup: ['served', 'cancelled_by_kitchen'], // 'served' might be done by waiter
+    served: [], // Typically no next KDS status
+    cancelled_by_kitchen: [],
+    cancelled_by_customer: [], // Should not be set by KDS
 };
+
 
 const toClientOrder = (docId: string, data: any): ClientOrder => {
   const orderBase: Omit<ClientOrder, 'id' | 'createdAt' | 'updatedAt'> = {
     restaurantId: data.restaurantId, userId: data.userId, tableId: data.tableId || null, tableNumber: data.tableNumber || null,
-    items: data.items as OrderItem[], subtotal: data.subtotal, totalAmount: data.totalAmount, status: data.status as OrderStatusType,
+    items: (data.items || []).map((item: any) => ({
+        ...item,
+        uniqueId: item.uniqueId || `${item.menuItemId}-${item.createdAt || Date.now()}`,
+        status: item.status || 'pending_kitchen', // Default for items if not set
+        createdAt: item.createdAt || Date.now(),
+        updatedAt: item.updatedAt || Date.now(),
+    })) as OrderItem[], 
+    subtotal: data.subtotal, totalAmount: data.totalAmount, status: data.status as OrderStatusType,
     taxAmount: typeof data.taxAmount === 'number' ? data.taxAmount : undefined, serviceCharge: typeof data.serviceCharge === 'number' ? data.serviceCharge : undefined,
     discountAmount: typeof data.discountAmount === 'number' ? data.discountAmount : undefined, customerNotes: typeof data.customerNotes === 'string' ? data.customerNotes : undefined,
     kitchenNotes: typeof data.kitchenNotes === 'string' ? data.kitchenNotes : undefined, paymentMethod: typeof data.paymentMethod === 'string' ? data.paymentMethod : undefined,
@@ -61,7 +73,7 @@ export default function KitchenOrderTicketPage() {
   const { toast } = useToast();
   const [orders, setOrders] = useState<ClientOrder[]>([]);
   const [loading, setLoading] = useState(true);
-  const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
+  const [updatingItem, setUpdatingItem] = useState<{ orderId: string; itemUniqueId: string } | null>(null);
 
   useEffect(() => {
     if (!restaurantId || !db) return;
@@ -83,19 +95,21 @@ export default function KitchenOrderTicketPage() {
     return () => unsubscribe();
   }, [restaurantId, toast]);
 
-  const handleStatusChange = async (orderId: string, currentStatus: OrderStatusType, newStatus: OrderStatusType) => {
-    setUpdatingOrderId(orderId);
+  const handleItemStatusChange = async (orderId: string, itemUniqueId: string, newStatus: OrderItemStatus) => {
+    setUpdatingItem({ orderId, itemUniqueId });
     try {
-      await updateOrder(restaurantId, orderId, { status: newStatus });
-      toast({ title: "Order Status Updated", description: `Order moved to ${orderStatusConfig[newStatus].label}.` });
+      await updateOrderItemStatusInFirestore(restaurantId, orderId, itemUniqueId, newStatus);
+      toast({ title: "Item Status Updated", description: `Item marked as ${orderStatusConfig[newStatus].label}.` });
+      // After item status change, check if overall order status needs update
+      // This logic should be in OrderContext or a shared utility to ensure consistency
+      // For now, KDS focuses on item status. Waiter app might handle overall status progression.
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Update Failed", description: error.message || "Could not update order status." });
+      toast({ variant: "destructive", title: "Update Failed", description: error.message || "Could not update item status." });
     } finally {
-      setUpdatingOrderId(null);
+      setUpdatingItem(null);
     }
   };
 
-  // Helper to get elapsed time and color
   function getElapsedInfo(createdAt: string) {
     const created = typeof createdAt === 'string' ? parseISO(createdAt) : new Date(createdAt);
     const now = new Date();
@@ -106,7 +120,6 @@ export default function KitchenOrderTicketPage() {
     return { mins, color };
   }
 
-  // Helper for ETA (20min after createdAt for demo)
   function getEta(createdAt: string) {
     const created = typeof createdAt === 'string' ? parseISO(createdAt) : new Date(createdAt);
     return addMinutes(created, 20);
@@ -124,92 +137,82 @@ export default function KitchenOrderTicketPage() {
           {loading ? (
             <div className="flex justify-center items-center h-40"><LoadingSpinner /></div>
           ) : orders.length === 0 ? (
-            <div className="text-center text-muted-foreground py-10">No kitchen orders at the moment.</div>
+            <div className="text-center text-muted-foreground py-10">No active kitchen orders at the moment.</div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
               {orders.map(order => {
-                const { mins, color } = getElapsedInfo(order.createdAt);
-                const eta = getEta(order.createdAt);
-                const isUpdating = updatingOrderId === order.id;
-                // Status color bar
-                const statusColor = orderStatusConfig[order.status].color?.replace('text-', 'bg-') || 'bg-gray-500';
+                const { mins: elapsedMins, color: elapsedColor } = getElapsedInfo(order.createdAt);
+                const etaTime = getEta(order.createdAt);
+                const overallOrderStatusInfo = orderStatusConfig[order.status] || { label: order.status, color: 'text-gray-500'};
+                const statusColorBar = overallOrderStatusInfo.color?.replace('text-', 'bg-') || 'bg-gray-500';
+                
                 return (
-                  <div key={order.id} className={`relative bg-card rounded-2xl shadow-2xl flex flex-col border border-muted min-h-[260px] p-0 overflow-hidden transition-all duration-200 ${isUpdating ? 'opacity-70' : ''}`}
-                    style={{ boxShadow: '0 4px 24px 0 rgba(0,0,0,0.08)' }}>
-                    {/* Status color bar */}
-                    <div className={`h-2 w-full ${statusColor}`} />
-                    {/* Overlay spinner when updating */}
-                    {isUpdating && (
-                      <div className="absolute inset-0 bg-white/60 flex items-center justify-center z-10 rounded-2xl">
-                        <Loader2 className="animate-spin h-10 w-10 text-primary" />
-                      </div>
-                    )}
-                    <div className="flex flex-col gap-2 p-5 pb-0">
-                      <div className="flex items-center gap-3 mb-2">
-                        <span className="font-mono text-lg text-muted-foreground">#{order.id.substring(0, 6)}...</span>
-                        <span className="ml-2 font-bold text-xl">Table {order.tableNumber || 'N/A'}</span>
-                        <Badge className={statusColor + ' text-white font-bold px-3 py-1 text-base'}>
-                          {orderStatusConfig[order.status].label}
+                  <div key={order.id} className={`relative bg-card rounded-xl shadow-lg flex flex-col border border-muted min-h-[260px] p-0 overflow-hidden transition-all duration-200`}>
+                    <div className={`h-2 w-full ${statusColorBar}`} />
+                    <div className="flex flex-col gap-2 p-4 pb-0">
+                      <div className="flex items-start justify-between mb-1">
+                        <div>
+                            <span className="font-mono text-md text-muted-foreground">#{order.id.substring(0, 6)}</span>
+                            <span className="ml-2 font-bold text-lg">Table {order.tableNumber || 'N/A'}</span>
+                        </div>
+                        <Badge className={`${statusColorBar} text-white font-semibold px-2.5 py-1 text-xs`}>
+                          {overallOrderStatusInfo.label}
                         </Badge>
                       </div>
-                      <div className="flex flex-wrap gap-4 text-base text-muted-foreground font-medium mb-2">
-                        <span><Clock className="inline h-5 w-5 mr-1" />{format(parseISO(order.createdAt), 'HH:mm')}</span>
-                        <span className={color + ' font-bold'}>Elapsed: {mins} min</span>
-                        <span>ETA: {format(eta, 'HH:mm')}</span>
+                      <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground font-medium mb-1">
+                        <span><Clock className="inline h-3.5 w-3.5 mr-0.5" />{format(parseISO(order.createdAt), 'HH:mm')}</span>
+                        <span className={elapsedColor + ' font-semibold'}>Elapsed: {elapsedMins} min</span>
+                        <span>ETA: {format(etaTime, 'HH:mm')}</span>
                       </div>
-                      <div className="mb-2">
-                        <div className="font-bold text-lg mb-2 text-primary">Items:</div>
-                        <ul className="space-y-3">
-                          {(order.items || []).map((item, idx) => (
-                            <li key={idx} className="bg-muted rounded-xl px-4 py-3 text-xl font-extrabold flex flex-col gap-1 shadow-sm border border-muted-foreground/10">
-                              <div className="flex items-center gap-4 flex-wrap">
-                                <Utensils className="h-6 w-6 text-primary" />
-                                <span className="text-2xl font-black text-foreground">{item.menuItemName}</span>
-                                <span className="text-primary text-2xl font-black ml-2">x{item.quantity}</span>
-                              </div>
-                              {/* Customizations/Variants */}
-                              {item.variantChoices && item.variantChoices.length > 0 && (
-                                <div className="flex flex-wrap gap-2 mt-1">
-                                  {item.variantChoices.map((v, i) => (
-                                    <span key={i} className="bg-accent text-accent-foreground rounded-full px-3 py-1 text-base font-semibold border border-accent-foreground/20">
-                                      {v.variantName}: <span className="font-bold">{v.optionName}</span>{v.optionPrice ? ` (+$${v.optionPrice})` : ''}
-                                    </span>
-                                  ))}
+
+                      <div className="mb-1">
+                        <div className="font-semibold text-md mb-1.5 text-primary">Items:</div>
+                        <ul className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                          {(order.items || []).map((item) => {
+                            const itemStatusInfo = orderStatusConfig[item.status] || { label: item.status, color: 'text-gray-500' };
+                            const isItemUpdating = updatingItem?.orderId === order.id && updatingItem?.itemUniqueId === item.uniqueId;
+                            const nextItemAction = item.status === 'sent_to_kitchen' ? 'confirmed_by_kitchen' :
+                                                   item.status === 'confirmed_by_kitchen' ? 'preparing' :
+                                                   item.status === 'preparing' ? 'ready_for_pickup' : null;
+                            return (
+                              <li key={item.uniqueId} className="bg-muted/50 rounded-lg p-2.5 text-sm flex flex-col gap-1 shadow-sm border border-muted-foreground/10">
+                                <div className="flex justify-between items-start">
+                                    <div className="flex-grow">
+                                        <span className="font-bold text-foreground">{item.menuItemName}</span>
+                                        <span className="text-primary font-semibold ml-2">x{item.quantity}</span>
+                                        {item.variantChoices && item.variantChoices.length > 0 && (
+                                        <div className="flex flex-wrap gap-1 mt-0.5">
+                                            {item.variantChoices.map((v, i) => (
+                                            <Badge key={i} variant="outline" className="text-xs px-1.5 py-0.5">{v.variantName}: {v.optionName}</Badge>
+                                            ))}
+                                        </div>
+                                        )}
+                                    </div>
+                                    <div className="flex items-center gap-1 shrink-0 ml-2">
+                                        {isItemUpdating && <Loader2 className="animate-spin h-4 w-4 text-primary" />}
+                                        <Badge variant="secondary" className={`${itemStatusInfo.color} text-xs`}>{itemStatusInfo.shortLabel || itemStatusInfo.label}</Badge>
+                                    </div>
                                 </div>
-                              )}
-                              {/* Notes */}
-                              {item.notes && <div className="ml-1 text-blue-700 text-base font-normal mt-1">Note: {item.notes}</div>}
-                            </li>
-                          ))}
+                                {item.instructions && <div className="text-xs text-blue-700 font-medium mt-0.5 italic">Note: {item.instructions}</div>}
+                                
+                                {nextItemAction && (
+                                    <Button
+                                        size="xs"
+                                        variant="outline"
+                                        className="mt-1.5 w-full text-xs h-7"
+                                        disabled={isItemUpdating}
+                                        onClick={() => handleItemStatusChange(order.id, item.uniqueId, nextItemAction)}
+                                    >
+                                        <ArrowRight className="h-3 w-3 mr-1.5"/> Mark as {orderStatusConfig[nextItemAction].label}
+                                    </Button>
+                                )}
+                              </li>
+                            );
+                          })}
                         </ul>
                       </div>
-                      {order.kitchenNotes && <div className="text-base text-orange-700 font-semibold mb-1">Kitchen Notes: {order.kitchenNotes}</div>}
-                      {order.customerNotes && <div className="text-base text-blue-700 font-semibold mb-1">Customer Notes: {order.customerNotes}</div>}
-                    </div>
-                    {/* Actions */}
-                    <div className="flex flex-col gap-3 p-5 pt-0 mt-auto">
-                      {possibleNextStatuses[order.status]?.map(nextStatus => {
-                        let btnColor: 'default' | 'destructive' | 'secondary' | 'outline' | 'ghost' | 'link' | undefined = 'default';
-                        let btnIcon = <ArrowRight className="h-6 w-6 mr-2" />;
-                        if (nextStatus === 'confirmed_by_kitchen') { btnColor = 'secondary'; btnIcon = <CheckCircle className="h-6 w-6 mr-2" />; }
-                        if (nextStatus === 'preparing') { btnColor = 'secondary'; btnIcon = <PlayCircle className="h-6 w-6 mr-2" />; }
-                        if (nextStatus === 'ready_for_pickup') { btnColor = 'secondary'; btnIcon = <CheckCircle className="h-6 w-6 mr-2" />; }
-                        if (nextStatus === 'served') { btnColor = 'default'; btnIcon = <CheckCircle className="h-6 w-6 mr-2" />; }
-                        if (nextStatus === 'cancelled_by_restaurant') { btnColor = 'destructive'; btnIcon = <XCircle className="h-6 w-6 mr-2" />; }
-                        return (
-                          <Button
-                            key={nextStatus}
-                            size="lg"
-                            variant={btnColor}
-                            className={`w-full text-lg font-bold px-6 py-4 rounded-xl shadow flex items-center justify-center ${isUpdating ? 'opacity-60' : ''}`}
-                            disabled={isUpdating}
-                            onClick={() => handleStatusChange(order.id, order.status, nextStatus)}
-                          >
-                            {btnIcon}
-                            {orderStatusConfig[nextStatus].label}
-                          </Button>
-                        );
-                      })}
+                      {order.kitchenNotes && <div className="text-xs text-orange-600 font-semibold mb-1 bg-orange-500/10 p-1.5 rounded">Kitchen Notes: {order.kitchenNotes}</div>}
+                      {order.customerNotes && <div className="text-xs text-blue-600 font-semibold mb-1 bg-blue-500/10 p-1.5 rounded">Customer Notes: {order.customerNotes}</div>}
                     </div>
                   </div>
                 );
@@ -220,4 +223,4 @@ export default function KitchenOrderTicketPage() {
       </Card>
     </div>
   );
-} 
+}

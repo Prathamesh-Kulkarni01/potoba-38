@@ -21,6 +21,7 @@ import {
   startAt,
   endAt,
   documentId,
+  runTransaction,
 } from 'firebase/firestore';
 import { db } from './config';
 import type { Order, OrderStatus, OrderItem, ClientOrder, MenuItem, TaxConfig, MenuCategory, RestaurantProfile, OrderItemStatus } from '@/types';
@@ -40,6 +41,7 @@ const sanitizeOrderItem = (item: Partial<OrderItem>): OrderItem => {
   const menuItemName = item.menuItemName || 'Unknown Item';
   const unitPrice = typeof item.unitPrice === 'number' ? item.unitPrice : 0;
   const quantity = typeof item.quantity === 'number' && item.quantity > 0 ? item.quantity : 1; // Default quantity to 1 if 0 or less
+  const now = Date.now();
 
   return {
     menuItemId: menuItemId,
@@ -50,8 +52,9 @@ const sanitizeOrderItem = (item: Partial<OrderItem>): OrderItem => {
     variantChoices: item.variantChoices || null,
     notes: safeString(item.notes),
     status: item.status || 'pending', // Default status to 'pending'
-    createdAt: item.createdAt || Date.now(),
-    uniqueId: item.uniqueId || `${menuItemId}-${item.createdAt || Date.now()}-${Math.random().toString(36).substring(7)}`, // Ensure uniqueId
+    createdAt: typeof item.createdAt === 'number' ? item.createdAt : now,
+    updatedAt: typeof item.updatedAt === 'number' ? item.updatedAt : now, // Ensure updatedAt is set
+    uniqueId: item.uniqueId || `${menuItemId}-${typeof item.createdAt === 'number' ? item.createdAt : now}-${Math.random().toString(36).substring(2, 9)}`, // Ensure uniqueId
     instructions: safeString(item.instructions),
     groupId: safeString(item.groupId),
     imageUrl: safeString(item.imageUrl),
@@ -132,7 +135,7 @@ export async function createOrder(restaurantId: string, orderData: Omit<Order, '
     userId: orderData.userId ?? null,
     tableId: orderData.tableId ?? null,
     tableNumber: orderData.tableNumber ?? null,
-    items: sanitizedItems,
+    items: sanitizedItems, // Use fully sanitized items
     subtotal: taxResult.subtotal,
     taxAmount: taxResult.totalTax ?? null,
     serviceCharge: orderData.serviceCharge ?? null,
@@ -245,18 +248,36 @@ export async function getOrdersByTable(restaurantId: string, tableId: string, ac
   return snapshot.docs.map(docSnap => toClientOrder(docSnap.id, docSnap.data()));
 }
 
-export async function updateOrderStatus(restaurantId: string, orderId: string, status: OrderStatus, kitchenNotes?: string): Promise<void> {
+export async function updateOrderItemStatusInFirestore(
+  restaurantId: string,
+  orderId: string,
+  itemUniqueId: string,
+  newItemStatus: OrderItemStatus
+): Promise<void> {
   if (!db) throw new Error("Firestore is not initialized.");
   const orderRef = doc(db, getOrdersCollectionPath(restaurantId), orderId);
-  const updateData: any = {
-    status,
-    updatedAt: serverTimestamp(),
-  };
-  if (kitchenNotes !== undefined) {
-    updateData.kitchenNotes = safeString(kitchenNotes);
-  }
-  await updateDoc(orderRef, updateData);
+
+  await runTransaction(db, async (transaction) => {
+    const orderDoc = await transaction.get(orderRef);
+    if (!orderDoc.exists()) {
+      throw new Error(`Order ${orderId} not found.`);
+    }
+
+    const orderData = orderDoc.data() as Order;
+    const items = (orderData.items || []).map(sanitizeOrderItem); // Sanitize all items on read
+
+    const itemIndex = items.findIndex(item => item.uniqueId === itemUniqueId);
+    if (itemIndex === -1) {
+      throw new Error(`Item ${itemUniqueId} not found in order ${orderId}.`);
+    }
+
+    items[itemIndex].status = newItemStatus;
+    items[itemIndex].updatedAt = Date.now(); // Update individual item timestamp
+
+    transaction.update(orderRef, { items: items, updatedAt: serverTimestamp() });
+  });
 }
+
 
 export async function updateOrder(restaurantId: string, orderId: string, data: Partial<Omit<Order, 'id' | 'restaurantId' | 'createdAt' | 'updatedAt'>>): Promise<void> {
     if (!db) throw new Error("Firestore is not initialized.");
@@ -505,4 +526,3 @@ export function listenToRestaurantOrders(
 
   return unsubscribe;
 }
-

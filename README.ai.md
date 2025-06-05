@@ -56,15 +56,16 @@ This file contains definitions for `UserProfile`, `RestaurantProfile`, `MenuCate
 
 *   **Path**: `restaurants/{restaurantId}/orders/{orderId}`
 *   **Primary Schema/Type**: `Order` / `ClientOrder` (from `src/types/index.ts`)
-*   **CRUD Logic**: `src/lib/firebase/orders.ts` (functions like `createOrder`, `getOrder`, `updateOrder`, `cancelOrder`, `getOrdersByRestaurant`, `getOrdersByTable`, dashboard-specific summaries)
+*   **CRUD Logic**: `src/lib/firebase/orders.ts` (functions like `createOrder`, `getOrder`, `updateOrder`, `cancelOrder`, `getOrdersByRestaurant`, `getOrdersByTable`, dashboard-specific summaries, `updateOrderItemStatusInFirestore`)
 *   **Utility Path Function**: `getOrdersCollectionPath(restaurantId)` in `src/lib/firebase/utils.ts`
 *   **Key Feature - `items` array**:
     *   The `items` field within an `Order` document is an array of `OrderItem` objects.
     *   **Each `OrderItem` has its own `status`, `uniqueId`, `notes`, and `instructions` fields.** This allows for granular tracking and management of individual items within a single order.
     *   `uniqueId`: A client-generated unique identifier for each line item instance, crucial for updating specific items (e.g., if "Coke x 2" is one line, and "Coke x 1, no ice" is another, they have different uniqueIds even if the menuItemId is the same).
-    *   `status`: Can be 'pending', 'sent_to_kitchen', 'preparing', 'ready_for_pickup', 'served', 'cancelled'.
+    *   `status`: Can be 'pending', 'sent_to_kitchen', 'preparing', 'ready_for_pickup', 'served', 'cancelled_by_kitchen', 'cancelled_by_customer'.
     *   `notes`: Internal staff notes about the item.
     *   `instructions`: Customer-provided special instructions for the item.
+    *   `updatedAt` (on `OrderItem`): Timestamp for when the individual item was last updated (e.g., status change).
     *   The overall `Order` status (e.g., 'pending_kitchen', 'completed') is often derived from or influenced by the collective statuses of its `OrderItem`s.
 
 ### 5. Tables Collection
@@ -109,8 +110,8 @@ This file contains definitions for `UserProfile`, `RestaurantProfile`, `MenuCate
 
 *   **Schema Adherence**: Strictly follow the types defined in `src/types/index.ts`.
 *   **Use Existing Functions**: Prioritize using the CRUD functions in the `src/lib/firebase/` directory.
-*   **Server Timestamps**: Use `serverTimestamp()` for `createdAt` and `updatedAt` fields when creating or updating documents.
-*   **Data Sanitization**: Ensure that any optional fields that are `undefined` are explicitly set to `null` before writing to Firestore (see utility functions in `src/lib/firebase/orders.ts` for examples).
+*   **Server Timestamps**: Use `serverTimestamp()` for `createdAt` and `updatedAt` fields on main documents when creating or updating documents. Individual `OrderItem` timestamps can be client-generated `Date.now()` for local state and then converted/set as server timestamps when persisted.
+*   **Data Sanitization**: Ensure that any optional fields that are `undefined` are explicitly set to `null` before writing to Firestore (see utility functions in `src/lib/firebase/orders.ts` for examples of sanitization).
 *   **Collection Group Queries**: Be mindful of fields needed for collection group queries (e.g., `itemIdString` on `menuItems`, `tableDocId` on `tables`) and ensure they are correctly populated and indexed in `firestore.indexes.json` (if manual indexing is used, otherwise via Firebase console).
 *   **Firebase Configuration**: Firestore is initialized in `src/lib/firebase/config.ts`.
 
