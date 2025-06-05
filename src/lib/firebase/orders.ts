@@ -38,16 +38,22 @@ const safeNumber = (value: any): number | null => typeof value === 'number' && !
 // Helper to sanitize an OrderItem
 export const sanitizeOrderItem = (item: Partial<OrderItem>): OrderItem => {
   const now = Date.now();
-  const menuItemId = item.menuItemId || 'unknown-item'; 
-  const uniqueIdBase = item.uniqueId || `${menuItemId}-${typeof item.createdAt === 'number' ? item.createdAt : now}`;
+  const menuItemId = item.menuItemId || 'unknown-item';
   
-  // Ensure uniqueId always has a random suffix if not already fully formed
-  const uniqueId = uniqueIdBase.includes('-') && uniqueIdBase.split('-').length > 2 
-    ? uniqueIdBase 
-    : `${uniqueIdBase}-${Math.random().toString(36).substring(2, 9)}`;
+  // Refactored uniqueId generation to avoid complex template literals
+  let uniqueIdFromItem = item.uniqueId;
+  if (!uniqueIdFromItem) {
+    const timestampPart = typeof item.createdAt === 'number' ? item.createdAt : now;
+    uniqueIdFromItem = menuItemId + '-' + timestampPart;
+  }
+  
+  const uniqueIdNeedsSuffix = !uniqueIdFromItem.includes('-') || uniqueIdFromItem.split('-').length <= 2;
+  const finalUniqueId = uniqueIdNeedsSuffix 
+    ? uniqueIdFromItem + '-' + Math.random().toString(36).substring(2, 9)
+    : uniqueIdFromItem;
 
   return {
-    uniqueId: uniqueId,
+    uniqueId: finalUniqueId,
     menuItemId: menuItemId,
     menuItemName: item.menuItemName || 'Unknown Item',
     quantity: typeof item.quantity === 'number' && item.quantity > 0 ? item.quantity : 1,
@@ -101,22 +107,23 @@ const toClientOrder = (docId: string, data: any): ClientOrder => {
 
 export function deriveOverallOrderStatus(items: OrderItem[]): OrderStatus {
   if (!items || items.length === 0) {
-    return 'pending_customer_confirmation'; // Or handle as an error state like 'new'
+    return 'pending_customer_confirmation'; 
   }
 
   const allServed = items.every(item => item.status === 'served');
-  const allCancelled = items.every(item => item.status === 'cancelled_by_customer' || item.status === 'cancelled_by_kitchen');
+  const allItemsCancelled = items.every(item => item.status === 'cancelled_by_customer' || item.status === 'cancelled_by_kitchen');
   
+  if (allItemsCancelled) return 'cancelled_by_restaurant'; 
   if (allServed) return 'payment_pending';
-  if (allCancelled) return 'cancelled_by_restaurant'; // Or a more specific 'all_items_cancelled'
+  
   if (items.some(item => item.status === 'ready_for_pickup')) return 'ready_for_pickup';
   if (items.some(item => item.status === 'preparing')) return 'preparing';
   if (items.some(item => item.status === 'confirmed_by_kitchen')) return 'confirmed_by_kitchen';
   if (items.some(item => item.status === 'sent_to_kitchen')) return 'pending_kitchen';
-  // If all items are 'pending' (local waiter app state before sending)
-  if (items.every(item => item.status === 'pending')) return 'pending_customer_confirmation'; // Or a more generic 'draft' if applicable
+  
+  if (items.every(item => item.status === 'pending')) return 'pending_customer_confirmation'; 
 
-  return 'pending_kitchen'; // Default or if mixed states not covered above
+  return 'pending_kitchen'; 
 }
 
 
@@ -131,7 +138,7 @@ export async function createOrder(restaurantId: string, orderData: Partial<Omit<
 
   const sanitizedItems = (orderData.items || []).map(item => sanitizeOrderItem({
       ...item,
-      status: item.status || 'sent_to_kitchen', // Default items to 'sent_to_kitchen' if created this way
+      status: item.status || 'sent_to_kitchen', 
   }));
 
   const itemsForTax = sanitizedItems.map(item => ({
@@ -165,7 +172,7 @@ export async function createOrder(restaurantId: string, orderData: Partial<Omit<
     serviceCharge: safeNumber(orderData.serviceCharge),
     discountAmount: safeNumber(orderData.discountAmount),
     totalAmount: taxResult.total,
-    status: derivedStatus, // Use derived status
+    status: derivedStatus, 
     customerName: safeString(orderData.customerName),
     customerPhoneNumber: safeString(orderData.customerPhoneNumber),
     customerWhatsapp: safeString(orderData.customerWhatsapp),
@@ -190,8 +197,8 @@ export async function createOrder(restaurantId: string, orderData: Partial<Omit<
   const nowForClient = Timestamp.now();
   return {
     id: docRef.id,
-    ...dataToSave, // Spread the fully prepared dataToSave
-    createdAt: nowForClient, // Use client-side timestamp for immediate return
+    ...dataToSave, 
+    createdAt: nowForClient, 
     updatedAt: nowForClient,
     taxAmount: dataToSave.taxAmount ?? undefined,
     serviceCharge: dataToSave.serviceCharge ?? undefined,
@@ -289,14 +296,14 @@ export async function updateOrderItemStatusInFirestore(
     }
     
     items[itemIndex].status = newItemStatus;
-    items[itemIndex].updatedAt = Date.now(); // Use client-side timestamp for updatedAt of item
+    items[itemIndex].updatedAt = Date.now(); 
 
     const newOverallStatus = deriveOverallOrderStatus(items);
 
     transaction.update(orderRef, { 
       items: items, 
-      status: newOverallStatus, // Update overall order status
-      updatedAt: serverTimestamp() // Update main order's timestamp
+      status: newOverallStatus, 
+      updatedAt: serverTimestamp() 
     });
   });
 }
@@ -331,19 +338,11 @@ export async function updateOrder(restaurantId: string, orderId: string, data: P
 
     if (updatePayload.items && Array.isArray(updatePayload.items)) {
       updatePayload.items = updatePayload.items.map(item => sanitizeOrderItem(item as Partial<OrderItem>));
-      // If items are updated, derive the overall status
       updatePayload.status = deriveOverallOrderStatus(updatePayload.items);
     } else if (updatePayload.hasOwnProperty('status') && data.items === undefined) {
-      // If status is being set directly AND items aren't, this might be an override.
-      // However, the guideline is to derive status. If we still want to allow direct status override:
-      // console.warn("Overall order status is being set directly. This should ideally be derived from item statuses.");
-      // No change needed here if we allow direct status update.
-      // If we STRICTLY want to derive, then `updatePayload.status` should be removed if items are not changing.
-      // For now, let's assume if 'status' is in 'data', it's an intentional override or comes from a derivation logic.
     }
 
 
-    // Recalculate totals if items are changing AND totals are not explicitly provided
     if (updatePayload.items && (!updatePayload.hasOwnProperty('subtotal') || !updatePayload.hasOwnProperty('totalAmount'))) {
       const restaurant = await getRestaurant(restaurantId);
       if (!restaurant) throw new Error('Restaurant not found for order update totals recalculation.');
@@ -398,7 +397,7 @@ export async function cancelOrder(restaurantId: string, orderId: string, cancell
 
   const updateData: any = {
     items: updatedItems,
-    status: newStatus, // Overall status also reflects cancellation
+    status: newStatus, 
     updatedAt: serverTimestamp()
   };
 
