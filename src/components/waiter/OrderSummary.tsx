@@ -4,12 +4,13 @@
 import type { OrderItem, MenuItem } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Plus, Minus, Trash2, CheckCircle, Circle, ShoppingBag, Edit3, ChefHat, Bell, RotateCcw, PlusCircle, Users } from 'lucide-react';
+import { Plus, Minus, Trash2, CheckCircle, Circle, ShoppingBag, Edit3, ChefHat, Bell, RotateCcw, PlusCircle, Users, Send } from 'lucide-react'; // Added Send
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
 import { EditInstructionsDialog } from './EditInstructionsDialog';
 import Link from 'next/link'; // Import Link
+import { useOrders } from '@/contexts/waiter/OrderContext'; // Import useOrders to use updateItemStatus
 
 
 interface OrderSummaryProps {
@@ -17,7 +18,7 @@ interface OrderSummaryProps {
   orderItems: OrderItem[];
   onUpdateQuantity: (tableId: string, menuItemId: string, quantity: number, itemInstructions?: string, itemUniqueId?: string) => void;
   onRemoveItem: (tableId: string, menuItemId: string, itemUniqueId?: string) => void;
-  onUpdateStatus: (tableId: string, menuItemId: string, status: OrderItem['status'], itemUniqueId?: string) => void;
+  // onUpdateStatus is now handled by context's updateItemStatus for individual items
   onUpdateInstructions: (tableId: string, menuItemId: string, instructions: string, itemUniqueId?: string) => void;
   onAddItem: (tableId: string, menuItem: MenuItem, quantity: number, instructions?: string, groupId?: string) => void;
   isPaying: boolean;
@@ -33,6 +34,10 @@ const getStatusInfo = (status: OrderItem['status']) => {
       return { text: 'Ready for Pickup', color: 'text-purple-600', iconColor: 'fill-purple-500 text-purple-500', Icon: Bell };
     case 'served':
       return { text: 'Served', color: 'text-green-600', iconColor: 'fill-green-500 text-green-100', Icon: CheckCircle };
+    case 'confirmed_by_kitchen':
+      return { text: 'Kitchen Confirmed', color: 'text-sky-600', iconColor: 'fill-sky-500 text-sky-100', Icon: ChefHat};
+    case 'preparing':
+      return { text: 'Preparing', color: 'text-orange-600', iconColor: 'fill-orange-500 text-orange-100', Icon: ChefHat};
     default:
       return { text: 'Unknown', color: 'text-gray-500', iconColor: 'fill-gray-400 text-gray-400', Icon: Circle };
   }
@@ -44,12 +49,14 @@ export function OrderSummary({
     orderItems,
     onUpdateQuantity,
     onRemoveItem,
-    onUpdateStatus,
+    // onUpdateStatus is removed as prop, will use context's updateItemStatus
     onUpdateInstructions,
     onAddItem,
     isPaying,
 }: OrderSummaryProps) {
   const { toast } = useToast();
+  const { updateItemStatus: contextUpdateItemStatus } = useOrders(); // Get the context function
+
   const [isInstructionsDialogOpen, setIsInstructionsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<OrderItem | null>(null);
 
@@ -92,14 +99,17 @@ export function OrderSummary({
     });
   };
 
-  const handleUpdateStatusInternal = (item: OrderItem, newStatus: OrderItem['status']) => {
-    if (isPaying) return;
-    onUpdateStatus(tableId, item.menuItem.id, newStatus, item.uniqueId);
-    toast({
-      title: "Status Updated",
-      description: `${item.menuItem?.name || 'Item'} marked as ${getStatusInfo(newStatus).text.toLowerCase()}.`,
-    });
+  const handleSendItemToKitchen = async (item: OrderItem) => {
+    if (isPaying || item.status !== 'pending') return;
+    await contextUpdateItemStatus(tableId, item.uniqueId, 'sent_to_kitchen', item.groupId);
+    // Toast is handled by contextUpdateItemStatus or its callees
   };
+  
+  const handleMarkItemServed = async (item: OrderItem) => {
+    if (isPaying || item.status !== 'ready_for_pickup') return;
+    await contextUpdateItemStatus(tableId, item.uniqueId, 'served', item.groupId);
+  };
+
 
   const openEditInstructionsDialog = (item: OrderItem) => {
     if (isPaying || item.status !== 'pending') return;
@@ -147,7 +157,7 @@ export function OrderSummary({
             </CardTitle>
             <Button asChild variant="ghost" size="sm" className="h-8 px-2.5 rounded-full text-primary hover:bg-primary/10" disabled={isPaying}>
               <Link href={`/waiter/order/${tableId}/add-item?groupId=${groupId === 'general' ? '' : groupId}`}>
-                <PlusCircle size={16} className="mr-1" /> Add to Group
+                <PlusCircle size={16} className="mr-1" /> Add to {groupId === 'general' ? 'Order' : 'Group'}
               </Link>
             </Button>
           </CardHeader>
@@ -183,61 +193,22 @@ export function OrderSummary({
                               variant="outline"
                               size="sm"
                               className="text-xs h-8 px-2.5 border-blue-500 text-blue-600 hover:bg-blue-500/10"
-                              onClick={() => handleUpdateStatusInternal(item, 'sent_to_kitchen')}
+                              onClick={() => handleSendItemToKitchen(item)}
                           >
-                              Mark Sent
+                              <Send size={12} className="mr-1" /> Send to Kitchen
                           </Button>
-                        )}
-                        {item.status === 'sent_to_kitchen' && !isPaying && (
-                          <>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                className="text-xs h-8 px-2.5 border-purple-500 text-purple-600 hover:bg-purple-500/10"
-                                onClick={() => handleUpdateStatusInternal(item, 'ready_for_pickup')}
-                            >
-                                <ChefHat size={12} className="mr-1" /> Mark Ready
-                            </Button>
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-xs h-8 px-2.5 text-muted-foreground hover:text-yellow-600"
-                                onClick={() => handleUpdateStatusInternal(item, 'pending')}
-                            >
-                                <RotateCcw size={12} className="mr-1" /> Revert to Pending
-                            </Button>
-                          </>
                         )}
                         {item.status === 'ready_for_pickup' && !isPaying && (
-                          <>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                className="text-xs h-8 px-2.5 border-green-500 text-green-600 hover:bg-green-500/10"
-                                onClick={() => handleUpdateStatusInternal(item, 'served')}
-                            >
-                                <CheckCircle size={12} className="mr-1" /> Mark Served
-                            </Button>
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-xs h-8 px-2.5 text-muted-foreground hover:text-blue-600"
-                                onClick={() => handleUpdateStatusInternal(item, 'sent_to_kitchen')}
-                            >
-                                <RotateCcw size={12} className="mr-1" /> Revert to Sent
-                            </Button>
-                          </>
-                        )}
-                        {item.status === 'served' && !isPaying && (
                           <Button
-                              variant="ghost"
+                              variant="outline"
                               size="sm"
-                              className="text-xs h-8 px-2.5 text-muted-foreground hover:text-purple-600"
-                              onClick={() => handleUpdateStatusInternal(item, 'ready_for_pickup')}
+                              className="text-xs h-8 px-2.5 border-green-500 text-green-600 hover:bg-green-500/10"
+                              onClick={() => handleMarkItemServed(item)}
                           >
-                              <RotateCcw size={12} className="mr-1" /> Revert to Ready
+                              <CheckCircle size={12} className="mr-1" /> Mark Served
                           </Button>
                         )}
+                         {/* Revert actions could be added here if complex state machine is needed */}
                         <Button
                             variant="ghost"
                             size="icon"

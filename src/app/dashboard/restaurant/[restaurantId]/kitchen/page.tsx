@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import { updateOrderItemStatusInFirestore, deriveOverallOrderStatus } from '@/lib/firebase/orders';
 import { getOrdersCollectionPath, convertFirebaseTimestampToString } from '@/lib/firebase/utils';
 import type { OrderStatus as OverallOrderStatus, ClientOrder, OrderItemStatus, OrderItem } from '@/types';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import LoadingSpinner from '@/components/shared/loading-spinner';
 import { Button } from '@/components/ui/button';
 import { db } from '@/lib/firebase/config';
