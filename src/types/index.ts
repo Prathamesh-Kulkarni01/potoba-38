@@ -280,18 +280,26 @@ export interface Table {
 }
 
 export type OrderStatus =
-  | 'pending_customer_confirmation'
-  | 'pending_kitchen'
-  | 'confirmed_by_kitchen'
-  | 'preparing'
-  | 'ready_for_pickup'
-  | 'served'
-  | 'payment_pending'
-  | 'completed'
+  | 'pending_customer_confirmation' // For online orders before any action by restaurant
+  | 'pending_kitchen'               // Waiter sent, KDS not yet confirmed
+  | 'confirmed_by_kitchen'          // KDS confirmed they got it
+  | 'preparing'                     // KDS started preparing
+  | 'ready_for_pickup'              // KDS marked all items ready for this order
+  | 'served'                        // Waiter marked all items as served for this order
+  | 'payment_pending'               // All items served, awaiting payment
+  | 'completed'                     // Payment done, order finished
   | 'cancelled_by_customer'
   | 'cancelled_by_restaurant';
 
-export type OrderItemStatus = 'pending' | 'sent_to_kitchen' | 'confirmed_by_kitchen' | 'preparing' | 'ready_for_pickup' | 'served' | 'cancelled_by_kitchen' | 'cancelled_by_customer';
+export type OrderItemStatus = 
+  | 'pending'                       // Waiter app local, before sending to kitchen
+  | 'sent_to_kitchen'             // Waiter sent to kitchen
+  | 'confirmed_by_kitchen'          // KDS confirmed receipt of item
+  | 'preparing'                     // KDS is preparing this item
+  | 'ready_for_pickup'              // KDS marked this item ready
+  | 'served'                        // Waiter marked this item as served
+  | 'cancelled_by_kitchen'          // Kitchen cancelled this item
+  | 'cancelled_by_customer';        // Waiter cancelled this item (e.g., customer changed mind before prep)
 
 export interface OrderItem {
   uniqueId: string; // Client-generated unique ID for this specific instance of the item in the order
@@ -325,7 +333,7 @@ export interface Order {
   serviceCharge?: number;
   discountAmount?: number;
   totalAmount: number;
-  status: OrderStatus; // Overall order status, should be derived from item statuses
+  status: OrderStatus; // Overall order status, SHOULD BE DERIVED from item statuses
   customerName?: string | null;
   customerPhoneNumber?: string | null;
   customerWhatsapp?: string | null;
@@ -518,3 +526,5 @@ export interface SpecialOffer {
   tags?: string[];
   dataAiHint?: string; 
 }
+
+    

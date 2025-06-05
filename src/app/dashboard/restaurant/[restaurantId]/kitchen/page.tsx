@@ -1,42 +1,28 @@
-
-
 'use client';
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useParams } from 'next/navigation';
-import { updateOrderItemStatusInFirestore } from '@/lib/firebase/orders';
+import { updateOrderItemStatusInFirestore, deriveOverallOrderStatus } from '@/lib/firebase/orders'; // Added deriveOverallOrderStatus
 import { getOrdersCollectionPath, convertFirebaseTimestampToString } from '@/lib/firebase/utils';
-import type { OrderStatus as OverallOrderStatus, ClientOrder, OrderItemStatus } from '@/types';
+import type { OrderStatus as OverallOrderStatus, ClientOrder, OrderItemStatus, OrderItem } from '@/types'; // Added OrderItem
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import LoadingSpinner from '@/components/shared/loading-spinner';
 import { Button } from '@/components/ui/button';
 import { db } from '@/lib/firebase/config';
-import { collection, query, where, orderBy, onSnapshot, Timestamp } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot, Timestamp, doc, runTransaction } from 'firebase/firestore'; // Added doc, runTransaction
 import { useToast } from '@/hooks/use-toast';
 import { formatDistanceToNowStrict, parseISO, differenceInMinutes } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import KitchenOrderTicket from '@/components/kds/KitchenOrderTicket';
-import { BellRing, Utensils, ChefHat, CheckCircle } from 'lucide-react'; // Icons for tabs
-
-type KdsTabStatus = 'new' | 'preparing' | 'ready';
-
-const KDS_STATUS_MAP: Record<KdsTabStatus, { label: string; statuses: OverallOrderStatus[], icon: React.ElementType }> = {
-  new: { label: 'New Orders', statuses: ['pending_kitchen', 'confirmed_by_kitchen'], icon: BellRing },
-  preparing: { label: 'Preparing', statuses: ['preparing'], icon: Utensils },
-  ready: { label: 'Ready for Pickup', statuses: ['ready_for_pickup'], icon: ChefHat },
-};
-
-// Re-defined here for KDS specific display, might differ from main order status config
-const KDS_ITEM_STATUS_CONFIG: Record<OrderItemStatus, { label: string; color: string; nextAction?: OrderItemStatus, nextActionLabel?: string }> = {
-  pending: { label: 'Pending', color: 'bg-gray-400 text-gray-800', nextAction: 'sent_to_kitchen', nextActionLabel: "Send to Kitchen" },
-  sent_to_kitchen: { label: 'New', color: 'bg-blue-500 text-white', nextAction: 'confirmed_by_kitchen', nextActionLabel: "Confirm" },
-  confirmed_by_kitchen: { label: 'Confirmed', color: 'bg-sky-500 text-white', nextAction: 'preparing', nextActionLabel: "Start Preparing" },
-  preparing: { label: 'Preparing', color: 'bg-yellow-500 text-yellow-900', nextAction: 'ready_for_pickup', nextActionLabel: "Mark Ready" },
-  ready_for_pickup: { label: 'Ready', color: 'bg-green-500 text-white', nextAction: 'served', nextActionLabel: "Mark Served" }, // 'served' is a waiter action usually
-  served: { label: 'Served', color: 'bg-teal-500 text-white' },
-  cancelled_by_kitchen: { label: 'Cancelled (Kitchen)', color: 'bg-red-500 text-white' },
-  cancelled_by_customer: { label: 'Cancelled (Cust)', color: 'bg-red-400 text-white' },
-};
+import { BellRing, Utensils, ChefHat, CheckCircle, Settings2 } from 'lucide-react'; 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { KDS_ITEM_STATUS_CONFIG, KDS_OVERALL_STATUS_TABS_CONFIG } from '@/config/kdsConfig';
 
 const toClientOrder = (docId: string, data: any): ClientOrder => {
   const orderBase: Omit<ClientOrder, 'id' | 'createdAt' | 'updatedAt'> = {
@@ -44,9 +30,9 @@ const toClientOrder = (docId: string, data: any): ClientOrder => {
     items: (data.items || []).map((item: any) => ({
         ...item,
         uniqueId: item.uniqueId || `${item.menuItemId}-${item.createdAt || Date.now()}-${Math.random().toString(36).substring(7)}`,
-        status: item.status || 'sent_to_kitchen',
-        createdAt: item.createdAt || Date.now(),
-        updatedAt: item.updatedAt || Date.now(),
+        status: item.status || 'sent_to_kitchen', // Default if somehow missing
+        createdAt: typeof item.createdAt === 'number' ? item.createdAt : (item.createdAt?.toDate?.().getTime() || Date.now()),
+        updatedAt: typeof item.updatedAt === 'number' ? item.updatedAt : (item.updatedAt?.toDate?.().getTime() || Date.now()),
     })),
     subtotal: data.subtotal, totalAmount: data.totalAmount, status: data.status as OverallOrderStatus,
     taxAmount: typeof data.taxAmount === 'number' ? data.taxAmount : undefined, serviceCharge: typeof data.serviceCharge === 'number' ? data.serviceCharge : undefined,
@@ -64,29 +50,40 @@ export default function KitchenDisplaySystemPage() {
   const { toast } = useToast();
   const [allKitchenOrders, setAllKitchenOrders] = useState<ClientOrder[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeKdsTab, setActiveKdsTab] = useState<KdsTabStatus>('new');
-  const [updatingItems, setUpdatingItems] = useState<Record<string, boolean>>({}); // { itemUniqueId: true/false }
+  const [activeKdsTabKey, setActiveKdsTabKey] = useState<keyof typeof KDS_OVERALL_STATUS_TABS_CONFIG>('new');
+  const [updatingItems, setUpdatingItems] = useState<Record<string, boolean>>({});
 
   const newOrderSoundRef = typeof Audio !== "undefined" ? new Audio('/sounds/kds-new-order.mp3') : null;
+  const itemReadySoundRef = typeof Audio !== "undefined" ? new Audio('/sounds/kds-item-ready.mp3') : null; // Add a sound for ready items
+
+  const [audioEnabled, setAudioEnabled] = useState(true);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+
 
   useEffect(() => {
     if (!restaurantId || !db) return;
     setLoading(true);
     const ordersColRef = collection(db, getOrdersCollectionPath(restaurantId));
-    const relevantStatuses: OverallOrderStatus[] = ['pending_kitchen', 'confirmed_by_kitchen', 'preparing', 'ready_for_pickup'];
+    
+    // Listen to orders that are not yet fully completed or cancelled by customer
+    const relevantOverallStatuses: OverallOrderStatus[] = [
+      'pending_kitchen', 'confirmed_by_kitchen', 'preparing', 'ready_for_pickup'
+    ];
     
     const q = query(
       ordersColRef,
-      where('status', 'in', relevantStatuses),
-      orderBy('createdAt', 'asc')
+      where('status', 'in', relevantOverallStatuses),
+      orderBy('createdAt', 'asc') // Oldest orders first
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const previousOrderCount = allKitchenOrders.length;
+      const previousOrderIds = new Set(allKitchenOrders.map(o => o.id));
       const fetchedOrders = snapshot.docs.map(docSnap => toClientOrder(docSnap.id, docSnap.data()));
       
-      if (fetchedOrders.length > previousOrderCount && previousOrderCount > 0 && newOrderSoundRef) {
-         newOrderSoundRef.play().catch(e => console.warn("KDS sound play failed:", e));
+      const newOrdersJustArrived = fetchedOrders.filter(fo => !previousOrderIds.has(fo.id) && (fo.status === 'pending_kitchen' || fo.status === 'confirmed_by_kitchen'));
+
+      if (newOrdersJustArrived.length > 0 && audioEnabled && newOrderSoundRef) {
+         newOrderSoundRef.play().catch(e => console.warn("KDS new order sound play failed:", e));
       }
       setAllKitchenOrders(fetchedOrders);
       setLoading(false);
@@ -100,59 +97,88 @@ export default function KitchenDisplaySystemPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restaurantId, toast]);
 
-  const handleItemStatusChange = async (orderId: string, itemUniqueId: string, newStatus: OrderItemStatus) => {
+  const handleItemStatusChange = useCallback(async (orderId: string, itemUniqueId: string, newStatus: OrderItemStatus) => {
     setUpdatingItems(prev => ({ ...prev, [itemUniqueId]: true }));
     try {
-      await updateOrderItemStatusInFirestore(restaurantId, orderId, itemUniqueId, newStatus);
+      await updateOrderItemStatusInFirestore(restaurantId, orderId, itemUniqueId, newStatus); // This will also derive and update overall order status
       toast({ title: "Item Status Updated", description: `Item marked as ${KDS_ITEM_STATUS_CONFIG[newStatus]?.label || newStatus}.` });
-      // Optional: Trigger overall order status check here if KDS should influence it
-      // await checkAndUpdateOverallOrderStatus(restaurantId, orderId);
+       if (newStatus === 'ready_for_pickup' && audioEnabled && itemReadySoundRef) {
+        itemReadySoundRef.play().catch(e => console.warn("KDS item ready sound play failed:", e));
+      }
     } catch (error: any) {
       toast({ variant: "destructive", title: "Update Failed", description: error.message || "Could not update item status." });
     } finally {
       setUpdatingItems(prev => ({ ...prev, [itemUniqueId]: false }));
     }
-  };
+  }, [restaurantId, toast, audioEnabled, itemReadySoundRef]);
+
 
   const filteredOrders = useMemo(() => {
-    const targetStatuses = KDS_STATUS_MAP[activeKdsTab].statuses;
-    return allKitchenOrders.filter(order => targetStatuses.includes(order.status));
-  }, [activeKdsTab, allKitchenOrders]);
+    const tabConfig = KDS_OVERALL_STATUS_TABS_CONFIG[activeKdsTabKey];
+    return allKitchenOrders.filter(order => {
+        // Filter by overall order status first
+        if (!tabConfig.statuses.includes(order.status)) {
+            return false;
+        }
+        // For 'new' and 'preparing' tabs, ensure there are actually items matching item-level criteria
+        if (activeKdsTabKey === 'new') {
+            return order.items.some(item => item.status === 'sent_to_kitchen' || item.status === 'confirmed_by_kitchen');
+        }
+        if (activeKdsTabKey === 'preparing') {
+            return order.items.some(item => item.status === 'preparing');
+        }
+        // For 'ready' tab, ensure AT LEAST ONE item is ready_for_pickup and not all are served/cancelled.
+        // The overall order status 'ready_for_pickup' should ideally mean this.
+        if (activeKdsTabKey === 'ready') {
+            return order.items.some(item => item.status === 'ready_for_pickup') && 
+                   !order.items.every(item => item.status === 'served' || item.status === 'cancelled_by_customer' || item.status === 'cancelled_by_kitchen');
+        }
+        return true; 
+    });
+  }, [activeKdsTabKey, allKitchenOrders]);
 
 
   return (
-    <div className="h-screen flex flex-col bg-muted/40">
-      <header className="bg-background border-b shadow-sm p-3 sticky top-0 z-10">
-        <div className="container mx-auto flex items-center justify-between">
-          <h1 className="text-xl font-bold text-primary flex items-center">
-             <ChefHat className="mr-2 h-6 w-6" /> Kitchen Display System
+    <div className="h-screen flex flex-col bg-muted/20 print:bg-white">
+      <header className="bg-card border-b shadow-sm p-3 sticky top-0 z-30 print:hidden">
+        <div className="container mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-4">
+          <h1 className="text-lg sm:text-xl font-bold text-primary flex items-center self-start sm:self-center">
+             <ChefHat className="mr-2 h-5 w-5 sm:h-6 sm:w-6" /> Kitchen Display System
           </h1>
-          <Tabs value={activeKdsTab} onValueChange={(value) => setActiveKdsTab(value as KdsTabStatus)}>
-            <TabsList className="grid grid-cols-3 gap-1 h-10">
-              {(Object.keys(KDS_STATUS_MAP) as KdsTabStatus[]).map(tabKey => {
-                const TabIcon = KDS_STATUS_MAP[tabKey].icon;
-                return (
-                  <TabsTrigger key={tabKey} value={tabKey} className="text-xs px-2 py-1.5 h-full flex items-center gap-1.5">
-                     <TabIcon className="h-4 w-4"/> {KDS_STATUS_MAP[tabKey].label}
-                  </TabsTrigger>
-                )
-              })}
-            </TabsList>
-          </Tabs>
+          <div className="flex w-full sm:w-auto items-center justify-between sm:justify-end gap-2">
+            <Tabs value={activeKdsTabKey} onValueChange={(value) => setActiveKdsTabKey(value as keyof typeof KDS_OVERALL_STATUS_TABS_CONFIG)} className="flex-grow sm:flex-grow-0">
+              <TabsList className="grid grid-cols-3 gap-0.5 h-9 w-full sm:w-auto">
+                {(Object.keys(KDS_OVERALL_STATUS_TABS_CONFIG) as Array<keyof typeof KDS_OVERALL_STATUS_TABS_CONFIG>).map(tabKey => {
+                  const TabIcon = KDS_OVERALL_STATUS_TABS_CONFIG[tabKey].icon;
+                  return (
+                    <TabsTrigger key={tabKey} value={tabKey} className="text-xs px-1.5 sm:px-2 py-1 h-full flex items-center gap-1 sm:gap-1.5">
+                      <TabIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4"/> 
+                      <span className="hidden sm:inline">{KDS_OVERALL_STATUS_TABS_CONFIG[tabKey].label}</span>
+                      <span className="sm:hidden">{KDS_OVERALL_STATUS_TABS_CONFIG[tabKey].shortLabel || KDS_OVERALL_STATUS_TABS_CONFIG[tabKey].label}</span>
+                    </TabsTrigger>
+                  )
+                })}
+              </TabsList>
+            </Tabs>
+            <Button variant="ghost" size="icon" onClick={() => setShowSettingsModal(true)} className="text-muted-foreground hover:text-primary">
+                <Settings2 size={20}/>
+                <span className="sr-only">KDS Settings</span>
+            </Button>
+          </div>
         </div>
       </header>
 
-      <main className="flex-grow overflow-y-auto p-3 md:p-4">
+      <main className="flex-grow overflow-y-auto p-2 sm:p-3 md:p-4 print:p-0">
         {loading ? (
           <div className="flex justify-center items-center h-full"><LoadingSpinner className="w-12 h-12 text-primary" /></div>
         ) : filteredOrders.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground p-8">
             <CheckCircle size={64} className="mb-4 text-green-500" />
             <p className="text-xl font-semibold">All caught up!</p>
-            <p>No orders currently in the "{KDS_STATUS_MAP[activeKdsTab].label}" queue.</p>
+            <p>No orders currently in the "{KDS_OVERALL_STATUS_TABS_CONFIG[activeKdsTabKey].label}" queue.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 md:gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2 sm:gap-3 print:grid-cols-2 print:gap-2">
             {filteredOrders.map(order => (
               <KitchenOrderTicket
                 key={order.id}
@@ -165,9 +191,25 @@ export default function KitchenDisplaySystemPage() {
           </div>
         )}
       </main>
+       {showSettingsModal && (
+        <div className="fixed inset-0 bg-black/50 z-40 flex items-center justify-center print:hidden" onClick={() => setShowSettingsModal(false)}>
+          <Card className="w-full max-w-sm m-4" onClick={(e) => e.stopPropagation()}>
+            <CardHeader>
+              <CardTitle>KDS Settings</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <label htmlFor="audio-toggle" className="text-sm font-medium">Enable Sound Notifications</label>
+                <input type="checkbox" id="audio-toggle" checked={audioEnabled} onChange={(e) => setAudioEnabled(e.target.checked)} className="toggle toggle-primary"/>
+              </div>
+               <p className="text-xs text-muted-foreground">More settings like display density, theme, etc. can be added here.</p>
+            </CardContent>
+            <CardFooter>
+              <Button onClick={() => setShowSettingsModal(false)} className="w-full">Close</Button>
+            </CardFooter>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
-
-
-    

@@ -36,12 +36,18 @@ const safeString = (value: any): string | null => typeof value === 'string' && v
 const safeNumber = (value: any): number | null => typeof value === 'number' && !isNaN(value) ? value : null;
 
 // Helper to sanitize an OrderItem
-const sanitizeOrderItem = (item: Partial<OrderItem>): OrderItem => {
+export const sanitizeOrderItem = (item: Partial<OrderItem>): OrderItem => {
   const now = Date.now();
-  const menuItemId = item.menuItemId || 'unknown-item'; // Default if menuItemId is missing
+  const menuItemId = item.menuItemId || 'unknown-item'; 
+  const uniqueIdBase = item.uniqueId || `${menuItemId}-${typeof item.createdAt === 'number' ? item.createdAt : now}`;
+  
+  // Ensure uniqueId always has a random suffix if not already fully formed
+  const uniqueId = uniqueIdBase.includes('-') && uniqueIdBase.split('-').length > 2 
+    ? uniqueIdBase 
+    : `${uniqueIdBase}-${Math.random().toString(36).substring(2, 9)}`;
 
   return {
-    uniqueId: item.uniqueId || `${menuItemId}-${typeof item.createdAt === 'number' ? item.createdAt : now}-${Math.random().toString(36).substring(2, 9)}`,
+    uniqueId: uniqueId,
     menuItemId: menuItemId,
     menuItemName: item.menuItemName || 'Unknown Item',
     quantity: typeof item.quantity === 'number' && item.quantity > 0 ? item.quantity : 1,
@@ -67,7 +73,7 @@ const toClientOrder = (docId: string, data: any): ClientOrder => {
         userId: data.userId || null,
         tableId: data.tableId || null,
         tableNumber: data.tableNumber || null,
-        items: (data.items || []).map(sanitizeOrderItem),
+        items: (data.items || []).map(item => sanitizeOrderItem(item as Partial<OrderItem>)),
         subtotal: typeof data.subtotal === 'number' ? data.subtotal : 0,
         totalAmount: typeof data.totalAmount === 'number' ? data.totalAmount : 0,
         status: data.status as OrderStatus,
@@ -93,6 +99,26 @@ const toClientOrder = (docId: string, data: any): ClientOrder => {
     };
 };
 
+export function deriveOverallOrderStatus(items: OrderItem[]): OrderStatus {
+  if (!items || items.length === 0) {
+    return 'pending_customer_confirmation'; // Or handle as an error state like 'new'
+  }
+
+  const allServed = items.every(item => item.status === 'served');
+  const allCancelled = items.every(item => item.status === 'cancelled_by_customer' || item.status === 'cancelled_by_kitchen');
+  
+  if (allServed) return 'payment_pending';
+  if (allCancelled) return 'cancelled_by_restaurant'; // Or a more specific 'all_items_cancelled'
+  if (items.some(item => item.status === 'ready_for_pickup')) return 'ready_for_pickup';
+  if (items.some(item => item.status === 'preparing')) return 'preparing';
+  if (items.some(item => item.status === 'confirmed_by_kitchen')) return 'confirmed_by_kitchen';
+  if (items.some(item => item.status === 'sent_to_kitchen')) return 'pending_kitchen';
+  // If all items are 'pending' (local waiter app state before sending)
+  if (items.every(item => item.status === 'pending')) return 'pending_customer_confirmation'; // Or a more generic 'draft' if applicable
+
+  return 'pending_kitchen'; // Default or if mixed states not covered above
+}
+
 
 export async function createOrder(restaurantId: string, orderData: Partial<Omit<Order, 'id' | 'createdAt' | 'updatedAt'>>): Promise<Order> {
   if (!db) throw new Error("Firestore is not initialized.");
@@ -105,7 +131,7 @@ export async function createOrder(restaurantId: string, orderData: Partial<Omit<
 
   const sanitizedItems = (orderData.items || []).map(item => sanitizeOrderItem({
       ...item,
-      status: item.status || 'pending_kitchen', 
+      status: item.status || 'sent_to_kitchen', // Default items to 'sent_to_kitchen' if created this way
   }));
 
   const itemsForTax = sanitizedItems.map(item => ({
@@ -126,6 +152,7 @@ export async function createOrder(restaurantId: string, orderData: Partial<Omit<
     quantity: item.quantity,
   }));
   const taxResult = calculateOrderTaxes({ items: itemsForTax, restaurant, categoryMap });
+  const derivedStatus = deriveOverallOrderStatus(sanitizedItems);
 
   const dataToSave: Omit<Order, 'id' | 'createdAt' | 'updatedAt'> & { createdAt: Timestamp; updatedAt: Timestamp } = {
     restaurantId: restaurantId,
@@ -138,7 +165,7 @@ export async function createOrder(restaurantId: string, orderData: Partial<Omit<
     serviceCharge: safeNumber(orderData.serviceCharge),
     discountAmount: safeNumber(orderData.discountAmount),
     totalAmount: taxResult.total,
-    status: orderData.status || 'pending_kitchen',
+    status: derivedStatus, // Use derived status
     customerName: safeString(orderData.customerName),
     customerPhoneNumber: safeString(orderData.customerPhoneNumber),
     customerWhatsapp: safeString(orderData.customerWhatsapp),
@@ -161,31 +188,20 @@ export async function createOrder(restaurantId: string, orderData: Partial<Omit<
   }
 
   const nowForClient = Timestamp.now();
-  // Construct the returned Order object fully, ensuring all optional fields from input orderData are handled
   return {
     id: docRef.id,
-    restaurantId: dataToSave.restaurantId,
-    userId: dataToSave.userId,
-    tableId: dataToSave.tableId,
-    tableNumber: dataToSave.tableNumber,
-    items: dataToSave.items,
-    subtotal: dataToSave.subtotal,
+    ...dataToSave, // Spread the fully prepared dataToSave
+    createdAt: nowForClient, // Use client-side timestamp for immediate return
+    updatedAt: nowForClient,
     taxAmount: dataToSave.taxAmount ?? undefined,
     serviceCharge: dataToSave.serviceCharge ?? undefined,
     discountAmount: dataToSave.discountAmount ?? undefined,
-    totalAmount: dataToSave.totalAmount,
-    status: dataToSave.status,
-    customerName: dataToSave.customerName ?? undefined,
-    customerPhoneNumber: dataToSave.customerPhoneNumber ?? undefined,
-    customerWhatsapp: dataToSave.customerWhatsapp ?? undefined,
     customerNotes: dataToSave.customerNotes ?? undefined,
     kitchenNotes: dataToSave.kitchenNotes ?? undefined,
     paymentMethod: dataToSave.paymentMethod ?? undefined,
     transactionId: dataToSave.transactionId ?? undefined,
     groupId: dataToSave.groupId ?? undefined,
     taxBreakup: dataToSave.taxBreakup ?? undefined,
-    createdAt: nowForClient,
-    updatedAt: nowForClient,
   };
 }
 
@@ -264,26 +280,24 @@ export async function updateOrderItemStatusInFirestore(
       throw new Error(`Order ${orderId} not found.`);
     }
 
-    const orderData = orderDoc.data() as Order; // Assume Order type here, will be cast to ClientOrder if needed
-    const items = (orderData.items || []).map(item => sanitizeOrderItem(item as Partial<OrderItem>)); // Ensure items are sanitized
+    const orderData = orderDoc.data() as Order;
+    let items = (orderData.items || []).map(item => sanitizeOrderItem(item as Partial<OrderItem>));
 
     const itemIndex = items.findIndex(item => item.uniqueId === itemUniqueId);
     if (itemIndex === -1) {
-      // Attempt to find item by menuItemId and no uniqueId (for older items before uniqueId was robustly set)
-      const fallbackIndex = items.findIndex(item => item.menuItemId === itemUniqueId.split('-')[0] && !item.uniqueId.includes('-')); // very basic fallback
-      if (fallbackIndex !== -1) {
-         console.warn(`Item with uniqueId ${itemUniqueId} not found, but found a match by menuItemId. Updating this item. Consider data migration for uniqueIds.`);
-         items[fallbackIndex].status = newItemStatus;
-         items[fallbackIndex].updatedAt = Date.now();
-      } else {
-        throw new Error(`Item with unique ID ${itemUniqueId} not found in order ${orderId}.`);
-      }
-    } else {
-      items[itemIndex].status = newItemStatus;
-      items[itemIndex].updatedAt = Date.now();
+      throw new Error(`Item with unique ID ${itemUniqueId} not found in order ${orderId}.`);
     }
+    
+    items[itemIndex].status = newItemStatus;
+    items[itemIndex].updatedAt = Date.now(); // Use client-side timestamp for updatedAt of item
 
-    transaction.update(orderRef, { items: items, updatedAt: serverTimestamp() });
+    const newOverallStatus = deriveOverallOrderStatus(items);
+
+    transaction.update(orderRef, { 
+      items: items, 
+      status: newOverallStatus, // Update overall order status
+      updatedAt: serverTimestamp() // Update main order's timestamp
+    });
   });
 }
 
@@ -309,7 +323,6 @@ export async function updateOrder(restaurantId: string, orderId: string, data: P
         } else if (updatePayload[field] === undefined) {
             updatePayload[field] = null;
         }
-
         if (field === 'taxBreakup' && (updatePayload[field] === undefined || (Array.isArray(updatePayload[field]) && updatePayload[field].length === 0))) {
             updatePayload[field] = null;
         }
@@ -318,11 +331,20 @@ export async function updateOrder(restaurantId: string, orderId: string, data: P
 
     if (updatePayload.items && Array.isArray(updatePayload.items)) {
       updatePayload.items = updatePayload.items.map(item => sanitizeOrderItem(item as Partial<OrderItem>));
+      // If items are updated, derive the overall status
+      updatePayload.status = deriveOverallOrderStatus(updatePayload.items);
+    } else if (updatePayload.hasOwnProperty('status') && data.items === undefined) {
+      // If status is being set directly AND items aren't, this might be an override.
+      // However, the guideline is to derive status. If we still want to allow direct status override:
+      // console.warn("Overall order status is being set directly. This should ideally be derived from item statuses.");
+      // No change needed here if we allow direct status update.
+      // If we STRICTLY want to derive, then `updatePayload.status` should be removed if items are not changing.
+      // For now, let's assume if 'status' is in 'data', it's an intentional override or comes from a derivation logic.
     }
 
-    // Recalculate totals if items are changing
-    if (updatePayload.items && (updatePayload.hasOwnProperty('subtotal') || updatePayload.hasOwnProperty('totalAmount') || updatePayload.hasOwnProperty('taxAmount'))) {
-      console.warn("Updating items and totals simultaneously. Ensuring recalculation.");
+
+    // Recalculate totals if items are changing AND totals are not explicitly provided
+    if (updatePayload.items && (!updatePayload.hasOwnProperty('subtotal') || !updatePayload.hasOwnProperty('totalAmount'))) {
       const restaurant = await getRestaurant(restaurantId);
       if (!restaurant) throw new Error('Restaurant not found for order update totals recalculation.');
       const categoriesData = await getMenuCategories(restaurantId);
@@ -362,20 +384,27 @@ export async function updateOrder(restaurantId: string, orderId: string, data: P
 export async function cancelOrder(restaurantId: string, orderId: string, cancelledBy: 'customer' | 'restaurant', reason?: string): Promise<void> {
   if (!db) throw new Error("Firestore is not initialized.");
   const orderRef = doc(db, getOrdersCollectionPath(restaurantId), orderId);
-  const status: OrderStatus = cancelledBy === 'customer' ? 'cancelled_by_customer' : 'cancelled_by_restaurant';
+  const newStatus: OrderStatus = cancelledBy === 'customer' ? 'cancelled_by_customer' : 'cancelled_by_restaurant';
+  
+  const orderDoc = await getDoc(orderRef);
+  if (!orderDoc.exists()) throw new Error("Order to cancel not found.");
+  
+  const orderData = orderDoc.data() as Order;
+  const updatedItems = (orderData.items || []).map(item => sanitizeOrderItem({
+    ...item,
+    status: cancelledBy === 'customer' ? 'cancelled_by_customer' : 'cancelled_by_kitchen',
+    updatedAt: Date.now(),
+  }));
+
   const updateData: any = {
-    status,
+    items: updatedItems,
+    status: newStatus, // Overall status also reflects cancellation
     updatedAt: serverTimestamp()
   };
+
   if (reason !== undefined) {
-    const currentOrderSnapshot = await getDoc(orderRef);
-    if (currentOrderSnapshot.exists()){
-        const currentOrderData = currentOrderSnapshot.data();
-        const existingNotes = currentOrderData?.customerNotes || "";
-        updateData.customerNotes = safeString(`${existingNotes} Cancellation Reason (${cancelledBy}): ${reason}`.trim());
-    } else {
-        updateData.customerNotes = safeString(`Cancellation Reason (${cancelledBy}): ${reason}`);
-    }
+    const existingNotes = orderData.customerNotes || "";
+    updateData.customerNotes = safeString(`${existingNotes} Cancellation Reason (${cancelledBy}): ${reason}`.trim());
   }
   await updateDoc(orderRef, updateData);
 }
@@ -537,3 +566,4 @@ export function listenToRestaurantOrders(
   return unsubscribe;
 }
 
+    
