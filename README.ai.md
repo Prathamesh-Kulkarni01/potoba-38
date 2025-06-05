@@ -1,4 +1,5 @@
 
+
 # AI Context for Firebase Studio (Potoba Project)
 
 This document outlines the Firebase Firestore data structure used in the Potoba project. It is intended as a reference for AI-assisted development to ensure consistency and leverage existing schemas and data access patterns.
@@ -60,15 +61,23 @@ This file contains definitions for `UserProfile`, `RestaurantProfile`, `MenuCate
 *   **Utility Path Function**: `getOrdersCollectionPath(restaurantId)` in `src/lib/firebase/utils.ts`
 *   **Key Feature - `items` array**:
     *   The `items` field within an `Order` document is an array of `OrderItem` objects.
-    *   **Each `OrderItem` has its own `status`, `uniqueId`, `notes`, and `instructions` fields.** This allows for granular tracking and management of individual items within a single order.
+    *   **Each `OrderItem` has its own `status` (`OrderItemStatus`), `uniqueId`, `notes`, `instructions`, and `updatedAt` fields.** This allows for granular tracking and management of individual items within a single order.
     *   `uniqueId`: A client-generated unique identifier for each line item instance, crucial for updating specific items (e.g., if "Coke x 2" is one line, and "Coke x 1, no ice" is another, they have different uniqueIds even if the menuItemId is the same).
-    *   `status`: Can be 'pending', 'sent_to_kitchen', 'preparing', 'ready_for_pickup', 'served', 'cancelled_by_kitchen', 'cancelled_by_customer'.
-    *   `notes`: Internal staff notes about the item.
+    *   `status`: Can be `'pending'` (waiter app local), `'sent_to_kitchen'`, `'confirmed_by_kitchen'`, `'preparing'`, `'ready_for_pickup'`, `'served'`, `'cancelled_by_kitchen'`, `'cancelled_by_customer'`.
+    *   `notes`: Internal staff notes about the item (can be used for kitchen remarks).
     *   `instructions`: Customer-provided special instructions for the item.
-    *   `updatedAt` (on `OrderItem`): Timestamp for when the individual item was last updated (e.g., status change).
-    *   The overall `Order` status (e.g., 'pending_kitchen', 'completed') is often derived from or influenced by the collective statuses of its `OrderItem`s.
+    *   `updatedAt` (on `OrderItem`): Timestamp (number) for when the individual item was last updated (e.g., status change).
+    *   The overall `Order` status (e.g., 'pending_kitchen', 'completed') is often derived from or influenced by the collective statuses of its `OrderItem`s. Logic for this derivation is typically handled in application services/contexts (e.g., `OrderContext` or specific KDS logic).
 
-### 5. Tables Collection
+### 5. Kitchen Display System (KDS) / Kitchen Order Ticket (KOT) Module
+
+*   **Primary Data Source**: Real-time listener on `restaurants/{restaurantId}/orders/{orderId}` for orders with statuses relevant to kitchen operations (e.g., `pending_kitchen`, `confirmed_by_kitchen`, `preparing`, `ready_for_pickup`).
+*   **Core Logic**:
+    *   `src/app/dashboard/restaurant/[restaurantId]/kitchen/page.tsx`: Main client component for KDS display and interaction.
+    *   `src/lib/firebase/orders.ts` (specifically `updateOrderItemStatusInFirestore`): Used by KDS to update the status of individual `OrderItem`s within an `Order` document.
+*   **Functionality**: Allows kitchen staff to view incoming order items, manage their preparation status individually (e.g., confirm, prepare, mark as ready), and see relevant details like table number, item instructions, and elapsed time.
+
+### 6. Tables Collection
 
 *   **Path**: `restaurants/{restaurantId}/tables/{tableId}` (where `tableId` is the Firestore document ID, and this is also stored as `tableDocId` within the document for collection group queries).
 *   **Primary Schema/Type**: `Table` (from `src/types/index.ts`)
@@ -81,26 +90,26 @@ This file contains definitions for `UserProfile`, `RestaurantProfile`, `MenuCate
 *   **Primary Schema/Type**: `TableArea` (from `src/types/index.ts`)
 *   **CRUD Logic**: `src/lib/firebase/tables.ts` (functions like `addTableArea`, `getTableAreas`, `updateTableArea`, `deleteTableArea`)
 
-### 6. Table Groups Collection (for group ordering at a table)
+### 7. Table Groups Collection (for group ordering at a table)
 
 *   **Path**: `restaurants/{restaurantId}/tableGroups/{groupCode}`
 *   **Primary Schema/Type**: `TableGroup` / `ClientTableGroup` (from `src/types/index.ts`)
 *   **CRUD Logic**: `src/lib/firebase/groups.ts` (functions like `createTableGroup`, `joinTableGroup`, `getTableGroup`, `addItemToGroupCart`)
 *   **Note**: `GroupCartItem` within `TableGroup.cartItems` also has its own `addedByUid` and `addedByName`.
 
-### 7. Inventory Items Collection
+### 8. Inventory Items Collection
 
 *   **Path**: `restaurants/{restaurantId}/inventoryItems/{itemId}`
 *   **Primary Schema/Type**: `InventoryItem` (from `src/types/index.ts`)
 *   **CRUD Logic**: `src/lib/firebase/inventory.ts` (functions like `addInventoryItem`, `getInventoryItems`, `updateInventoryItem`, `deleteInventoryItem`)
 
-### 8. Stock Transactions Collection
+### 9. Stock Transactions Collection
 
 *   **Path**: `restaurants/{restaurantId}/stockTransactions/{transactionId}`
 *   **Primary Schema/Type**: `StockTransaction` (from `src/types/index.ts`)
 *   **CRUD Logic**: `src/lib/firebase/inventory.ts` (functions like `recordPurchase`, `recordStockOutflow`, `deductStockForSoldItems`, `getStockTransactions`)
 
-### 9. Staff Invitations (Subcollection under a Restaurant)
+### 10. Staff Invitations (Subcollection under a Restaurant)
 
 *   **Path**: `restaurants/{restaurantId}/staffInvitations/{invitationId}`
 *   **Primary Schema/Type**: `StaffInvitation` (from `src/types/index.ts`)
@@ -116,3 +125,5 @@ This file contains definitions for `UserProfile`, `RestaurantProfile`, `MenuCate
 *   **Firebase Configuration**: Firestore is initialized in `src/lib/firebase/config.ts`.
 
 **If changes to this data structure or these CRUD functions are made, this `README.ai.md` file MUST be updated to reflect those changes.**
+
+    

@@ -1,63 +1,54 @@
 
+
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useParams } from 'next/navigation';
-import { getRestaurant } from '@/lib/firebase/firestore';
-import { updateOrderItemStatusInFirestore, getOrder } from '@/lib/firebase/orders'; // Changed from updateOrder
+import { updateOrderItemStatusInFirestore } from '@/lib/firebase/orders';
 import { getOrdersCollectionPath, convertFirebaseTimestampToString } from '@/lib/firebase/utils';
-import type { RestaurantProfile, OrderStatus as OrderStatusType, OrderItem, ClientOrder, OrderItemStatus } from '@/types';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import type { OrderStatus as OverallOrderStatus, ClientOrder, OrderItemStatus } from '@/types';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import LoadingSpinner from '@/components/shared/loading-spinner';
 import { Button } from '@/components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from '@/components/ui/badge';
 import { db } from '@/lib/firebase/config';
-import { collection, query, where, orderBy, onSnapshot, Timestamp, QueryConstraint } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot, Timestamp } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
-import { ChevronDown, ChevronUp, Clock, Loader2, CheckCircle, PlayCircle, XCircle, Utensils, ArrowRight } from 'lucide-react';
-import { formatDistanceToNowStrict, format, addMinutes, differenceInMinutes, parseISO } from 'date-fns';
+import { formatDistanceToNowStrict, parseISO, differenceInMinutes } from 'date-fns';
+import { cn } from '@/lib/utils';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import KitchenOrderTicket from '@/components/kds/KitchenOrderTicket';
+import { BellRing, Utensils, ChefHat, CheckCircle } from 'lucide-react'; // Icons for tabs
 
-const kitchenStatuses: OrderStatusType[] = ['pending_kitchen', 'confirmed_by_kitchen', 'preparing', 'ready_for_pickup'];
-const orderStatusConfig: Record<OrderStatusType | OrderItemStatus, { label: string; color?: string; shortLabel?: string }> = {
-  pending_customer_confirmation: { label: 'Pending Customer Confirmation', color: 'text-yellow-500' },
-  pending_kitchen: { label: 'Pending Kitchen', color: 'text-yellow-600' },
-  confirmed_by_kitchen: { label: 'Kitchen Confirmed', color: 'text-orange-500' },
-  preparing: { label: 'Preparing', color: 'text-blue-500' },
-  ready_for_pickup: { label: 'Ready for Pickup', color: 'text-green-500' },
-  served: { label: 'Served', color: 'text-green-700' },
-  payment_pending: { label: 'Payment Pending', color: 'text-purple-500' },
-  completed: { label: 'Completed', color: 'text-gray-500' },
-  cancelled_by_customer: { label: 'Cancelled by Customer', color: 'text-red-500' },
-  cancelled_by_restaurant: { label: 'Cancelled by Restaurant', color: 'text-red-700' },
-  // Item Specific (can reuse or add more)
-  pending: { label: 'Pending Item', color: 'text-yellow-400', shortLabel: 'Pending' },
-  sent_to_kitchen: { label: 'Item Sent', color: 'text-orange-400', shortLabel: 'Sent' },
-  cancelled_by_kitchen: { label: 'Cancelled (Kitchen)', color: 'text-red-600', shortLabel: 'Cancelled'},
+type KdsTabStatus = 'new' | 'preparing' | 'ready';
+
+const KDS_STATUS_MAP: Record<KdsTabStatus, { label: string; statuses: OverallOrderStatus[], icon: React.ElementType }> = {
+  new: { label: 'New Orders', statuses: ['pending_kitchen', 'confirmed_by_kitchen'], icon: BellRing },
+  preparing: { label: 'Preparing', statuses: ['preparing'], icon: Utensils },
+  ready: { label: 'Ready for Pickup', statuses: ['ready_for_pickup'], icon: ChefHat },
 };
 
-const possibleNextItemStatuses: Record<OrderItemStatus, OrderItemStatus[]> = {
-    pending: ['sent_to_kitchen', 'cancelled_by_kitchen'],
-    sent_to_kitchen: ['confirmed_by_kitchen', 'preparing', 'cancelled_by_kitchen'],
-    confirmed_by_kitchen: ['preparing', 'cancelled_by_kitchen'],
-    preparing: ['ready_for_pickup', 'cancelled_by_kitchen'],
-    ready_for_pickup: ['served', 'cancelled_by_kitchen'], // 'served' might be done by waiter
-    served: [], // Typically no next KDS status
-    cancelled_by_kitchen: [],
-    cancelled_by_customer: [], // Should not be set by KDS
+// Re-defined here for KDS specific display, might differ from main order status config
+const KDS_ITEM_STATUS_CONFIG: Record<OrderItemStatus, { label: string; color: string; nextAction?: OrderItemStatus, nextActionLabel?: string }> = {
+  pending: { label: 'Pending', color: 'bg-gray-400 text-gray-800', nextAction: 'sent_to_kitchen', nextActionLabel: "Send to Kitchen" },
+  sent_to_kitchen: { label: 'New', color: 'bg-blue-500 text-white', nextAction: 'confirmed_by_kitchen', nextActionLabel: "Confirm" },
+  confirmed_by_kitchen: { label: 'Confirmed', color: 'bg-sky-500 text-white', nextAction: 'preparing', nextActionLabel: "Start Preparing" },
+  preparing: { label: 'Preparing', color: 'bg-yellow-500 text-yellow-900', nextAction: 'ready_for_pickup', nextActionLabel: "Mark Ready" },
+  ready_for_pickup: { label: 'Ready', color: 'bg-green-500 text-white', nextAction: 'served', nextActionLabel: "Mark Served" }, // 'served' is a waiter action usually
+  served: { label: 'Served', color: 'bg-teal-500 text-white' },
+  cancelled_by_kitchen: { label: 'Cancelled (Kitchen)', color: 'bg-red-500 text-white' },
+  cancelled_by_customer: { label: 'Cancelled (Cust)', color: 'bg-red-400 text-white' },
 };
-
 
 const toClientOrder = (docId: string, data: any): ClientOrder => {
   const orderBase: Omit<ClientOrder, 'id' | 'createdAt' | 'updatedAt'> = {
     restaurantId: data.restaurantId, userId: data.userId, tableId: data.tableId || null, tableNumber: data.tableNumber || null,
     items: (data.items || []).map((item: any) => ({
         ...item,
-        uniqueId: item.uniqueId || `${item.menuItemId}-${item.createdAt || Date.now()}`,
-        status: item.status || 'pending_kitchen', // Default for items if not set
+        uniqueId: item.uniqueId || `${item.menuItemId}-${item.createdAt || Date.now()}-${Math.random().toString(36).substring(7)}`,
+        status: item.status || 'sent_to_kitchen',
         createdAt: item.createdAt || Date.now(),
         updatedAt: item.updatedAt || Date.now(),
-    })) as OrderItem[], 
-    subtotal: data.subtotal, totalAmount: data.totalAmount, status: data.status as OrderStatusType,
+    })),
+    subtotal: data.subtotal, totalAmount: data.totalAmount, status: data.status as OverallOrderStatus,
     taxAmount: typeof data.taxAmount === 'number' ? data.taxAmount : undefined, serviceCharge: typeof data.serviceCharge === 'number' ? data.serviceCharge : undefined,
     discountAmount: typeof data.discountAmount === 'number' ? data.discountAmount : undefined, customerNotes: typeof data.customerNotes === 'string' ? data.customerNotes : undefined,
     kitchenNotes: typeof data.kitchenNotes === 'string' ? data.kitchenNotes : undefined, paymentMethod: typeof data.paymentMethod === 'string' ? data.paymentMethod : undefined,
@@ -67,160 +58,116 @@ const toClientOrder = (docId: string, data: any): ClientOrder => {
   return { id: docId, ...orderBase, createdAt: convertFirebaseTimestampToString(data.createdAt), updatedAt: convertFirebaseTimestampToString(data.updatedAt) };
 };
 
-export default function KitchenOrderTicketPage() {
+export default function KitchenDisplaySystemPage() {
   const params = useParams();
   const restaurantId = params.restaurantId as string;
   const { toast } = useToast();
-  const [orders, setOrders] = useState<ClientOrder[]>([]);
+  const [allKitchenOrders, setAllKitchenOrders] = useState<ClientOrder[]>([]);
   const [loading, setLoading] = useState(true);
-  const [updatingItem, setUpdatingItem] = useState<{ orderId: string; itemUniqueId: string } | null>(null);
+  const [activeKdsTab, setActiveKdsTab] = useState<KdsTabStatus>('new');
+  const [updatingItems, setUpdatingItems] = useState<Record<string, boolean>>({}); // { itemUniqueId: true/false }
+
+  const newOrderSoundRef = typeof Audio !== "undefined" ? new Audio('/sounds/kds-new-order.mp3') : null;
 
   useEffect(() => {
     if (!restaurantId || !db) return;
     setLoading(true);
     const ordersColRef = collection(db, getOrdersCollectionPath(restaurantId));
+    const relevantStatuses: OverallOrderStatus[] = ['pending_kitchen', 'confirmed_by_kitchen', 'preparing', 'ready_for_pickup'];
+    
     const q = query(
       ordersColRef,
-      where('status', 'in', kitchenStatuses),
+      where('status', 'in', relevantStatuses),
       orderBy('createdAt', 'asc')
     );
+
     const unsubscribe = onSnapshot(q, (snapshot) => {
+      const previousOrderCount = allKitchenOrders.length;
       const fetchedOrders = snapshot.docs.map(docSnap => toClientOrder(docSnap.id, docSnap.data()));
-      setOrders(fetchedOrders);
+      
+      if (fetchedOrders.length > previousOrderCount && previousOrderCount > 0 && newOrderSoundRef) {
+         newOrderSoundRef.play().catch(e => console.warn("KDS sound play failed:", e));
+      }
+      setAllKitchenOrders(fetchedOrders);
       setLoading(false);
     }, (error) => {
+      console.error("Error fetching KDS orders:", error);
       toast({ variant: "destructive", title: "Error", description: "Could not load kitchen orders." });
       setLoading(false);
     });
+
     return () => unsubscribe();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restaurantId, toast]);
 
   const handleItemStatusChange = async (orderId: string, itemUniqueId: string, newStatus: OrderItemStatus) => {
-    setUpdatingItem({ orderId, itemUniqueId });
+    setUpdatingItems(prev => ({ ...prev, [itemUniqueId]: true }));
     try {
       await updateOrderItemStatusInFirestore(restaurantId, orderId, itemUniqueId, newStatus);
-      toast({ title: "Item Status Updated", description: `Item marked as ${orderStatusConfig[newStatus].label}.` });
-      // After item status change, check if overall order status needs update
-      // This logic should be in OrderContext or a shared utility to ensure consistency
-      // For now, KDS focuses on item status. Waiter app might handle overall status progression.
+      toast({ title: "Item Status Updated", description: `Item marked as ${KDS_ITEM_STATUS_CONFIG[newStatus]?.label || newStatus}.` });
+      // Optional: Trigger overall order status check here if KDS should influence it
+      // await checkAndUpdateOverallOrderStatus(restaurantId, orderId);
     } catch (error: any) {
       toast({ variant: "destructive", title: "Update Failed", description: error.message || "Could not update item status." });
     } finally {
-      setUpdatingItem(null);
+      setUpdatingItems(prev => ({ ...prev, [itemUniqueId]: false }));
     }
   };
 
-  function getElapsedInfo(createdAt: string) {
-    const created = typeof createdAt === 'string' ? parseISO(createdAt) : new Date(createdAt);
-    const now = new Date();
-    const mins = differenceInMinutes(now, created);
-    let color = 'text-green-600';
-    if (mins >= 20) color = 'text-red-600';
-    else if (mins >= 10) color = 'text-yellow-600';
-    return { mins, color };
-  }
+  const filteredOrders = useMemo(() => {
+    const targetStatuses = KDS_STATUS_MAP[activeKdsTab].statuses;
+    return allKitchenOrders.filter(order => targetStatuses.includes(order.status));
+  }, [activeKdsTab, allKitchenOrders]);
 
-  function getEta(createdAt: string) {
-    const created = typeof createdAt === 'string' ? parseISO(createdAt) : new Date(createdAt);
-    return addMinutes(created, 20);
-  }
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center text-2xl">
-            Kitchen Order Tickets (KOT)
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="flex justify-center items-center h-40"><LoadingSpinner /></div>
-          ) : orders.length === 0 ? (
-            <div className="text-center text-muted-foreground py-10">No active kitchen orders at the moment.</div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
-              {orders.map(order => {
-                const { mins: elapsedMins, color: elapsedColor } = getElapsedInfo(order.createdAt);
-                const etaTime = getEta(order.createdAt);
-                const overallOrderStatusInfo = orderStatusConfig[order.status] || { label: order.status, color: 'text-gray-500'};
-                const statusColorBar = overallOrderStatusInfo.color?.replace('text-', 'bg-') || 'bg-gray-500';
-                
+    <div className="h-screen flex flex-col bg-muted/40">
+      <header className="bg-background border-b shadow-sm p-3 sticky top-0 z-10">
+        <div className="container mx-auto flex items-center justify-between">
+          <h1 className="text-xl font-bold text-primary flex items-center">
+             <ChefHat className="mr-2 h-6 w-6" /> Kitchen Display System
+          </h1>
+          <Tabs value={activeKdsTab} onValueChange={(value) => setActiveKdsTab(value as KdsTabStatus)}>
+            <TabsList className="grid grid-cols-3 gap-1 h-10">
+              {(Object.keys(KDS_STATUS_MAP) as KdsTabStatus[]).map(tabKey => {
+                const TabIcon = KDS_STATUS_MAP[tabKey].icon;
                 return (
-                  <div key={order.id} className={`relative bg-card rounded-xl shadow-lg flex flex-col border border-muted min-h-[260px] p-0 overflow-hidden transition-all duration-200`}>
-                    <div className={`h-2 w-full ${statusColorBar}`} />
-                    <div className="flex flex-col gap-2 p-4 pb-0">
-                      <div className="flex items-start justify-between mb-1">
-                        <div>
-                            <span className="font-mono text-md text-muted-foreground">#{order.id.substring(0, 6)}</span>
-                            <span className="ml-2 font-bold text-lg">Table {order.tableNumber || 'N/A'}</span>
-                        </div>
-                        <Badge className={`${statusColorBar} text-white font-semibold px-2.5 py-1 text-xs`}>
-                          {overallOrderStatusInfo.label}
-                        </Badge>
-                      </div>
-                      <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground font-medium mb-1">
-                        <span><Clock className="inline h-3.5 w-3.5 mr-0.5" />{format(parseISO(order.createdAt), 'HH:mm')}</span>
-                        <span className={elapsedColor + ' font-semibold'}>Elapsed: {elapsedMins} min</span>
-                        <span>ETA: {format(etaTime, 'HH:mm')}</span>
-                      </div>
-
-                      <div className="mb-1">
-                        <div className="font-semibold text-md mb-1.5 text-primary">Items:</div>
-                        <ul className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                          {(order.items || []).map((item) => {
-                            const itemStatusInfo = orderStatusConfig[item.status] || { label: item.status, color: 'text-gray-500' };
-                            const isItemUpdating = updatingItem?.orderId === order.id && updatingItem?.itemUniqueId === item.uniqueId;
-                            const nextItemAction = item.status === 'sent_to_kitchen' ? 'confirmed_by_kitchen' :
-                                                   item.status === 'confirmed_by_kitchen' ? 'preparing' :
-                                                   item.status === 'preparing' ? 'ready_for_pickup' : null;
-                            return (
-                              <li key={item.uniqueId} className="bg-muted/50 rounded-lg p-2.5 text-sm flex flex-col gap-1 shadow-sm border border-muted-foreground/10">
-                                <div className="flex justify-between items-start">
-                                    <div className="flex-grow">
-                                        <span className="font-bold text-foreground">{item.menuItemName}</span>
-                                        <span className="text-primary font-semibold ml-2">x{item.quantity}</span>
-                                        {item.variantChoices && item.variantChoices.length > 0 && (
-                                        <div className="flex flex-wrap gap-1 mt-0.5">
-                                            {item.variantChoices.map((v, i) => (
-                                            <Badge key={i} variant="outline" className="text-xs px-1.5 py-0.5">{v.variantName}: {v.optionName}</Badge>
-                                            ))}
-                                        </div>
-                                        )}
-                                    </div>
-                                    <div className="flex items-center gap-1 shrink-0 ml-2">
-                                        {isItemUpdating && <Loader2 className="animate-spin h-4 w-4 text-primary" />}
-                                        <Badge variant="secondary" className={`${itemStatusInfo.color} text-xs`}>{itemStatusInfo.shortLabel || itemStatusInfo.label}</Badge>
-                                    </div>
-                                </div>
-                                {item.instructions && <div className="text-xs text-blue-700 font-medium mt-0.5 italic">Note: {item.instructions}</div>}
-                                
-                                {nextItemAction && (
-                                    <Button
-                                        size="xs"
-                                        variant="outline"
-                                        className="mt-1.5 w-full text-xs h-7"
-                                        disabled={isItemUpdating}
-                                        onClick={() => handleItemStatusChange(order.id, item.uniqueId, nextItemAction)}
-                                    >
-                                        <ArrowRight className="h-3 w-3 mr-1.5"/> Mark as {orderStatusConfig[nextItemAction].label}
-                                    </Button>
-                                )}
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      </div>
-                      {order.kitchenNotes && <div className="text-xs text-orange-600 font-semibold mb-1 bg-orange-500/10 p-1.5 rounded">Kitchen Notes: {order.kitchenNotes}</div>}
-                      {order.customerNotes && <div className="text-xs text-blue-600 font-semibold mb-1 bg-blue-500/10 p-1.5 rounded">Customer Notes: {order.customerNotes}</div>}
-                    </div>
-                  </div>
-                );
+                  <TabsTrigger key={tabKey} value={tabKey} className="text-xs px-2 py-1.5 h-full flex items-center gap-1.5">
+                     <TabIcon className="h-4 w-4"/> {KDS_STATUS_MAP[tabKey].label}
+                  </TabsTrigger>
+                )
               })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            </TabsList>
+          </Tabs>
+        </div>
+      </header>
+
+      <main className="flex-grow overflow-y-auto p-3 md:p-4">
+        {loading ? (
+          <div className="flex justify-center items-center h-full"><LoadingSpinner className="w-12 h-12 text-primary" /></div>
+        ) : filteredOrders.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground p-8">
+            <CheckCircle size={64} className="mb-4 text-green-500" />
+            <p className="text-xl font-semibold">All caught up!</p>
+            <p>No orders currently in the "{KDS_STATUS_MAP[activeKdsTab].label}" queue.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 md:gap-4">
+            {filteredOrders.map(order => (
+              <KitchenOrderTicket
+                key={order.id}
+                order={order}
+                onItemStatusChange={handleItemStatusChange}
+                updatingItems={updatingItems}
+                itemStatusConfig={KDS_ITEM_STATUS_CONFIG}
+              />
+            ))}
+          </div>
+        )}
+      </main>
     </div>
   );
 }
+
+
+    

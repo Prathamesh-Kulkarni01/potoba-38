@@ -9,7 +9,7 @@ import { useAuth } from '@/lib/auth/context';
 import { getMenuItems, getMenuCategories, getMenuSubcategories } from '@/lib/firebase/menu';
 import { getTables as fetchTablesFromDb, updateTable as updateFirebaseTable } from '@/lib/firebase/tables';
 import { createOrder as createFirebaseOrder, updateOrder as updateFirebaseOrder, getOrdersByTable, getOrder, updateOrderItemStatusInFirestore } from '@/lib/firebase/orders';
-import { Timestamp } from 'firebase/firestore';
+import { serverTimestamp, Timestamp } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 
 interface OrderContextType {
