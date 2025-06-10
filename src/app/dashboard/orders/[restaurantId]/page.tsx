@@ -4,45 +4,39 @@
 
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import Image from 'next/image';
 import { useAuth } from '@/lib/auth/context';
 import { getRestaurant } from '@/lib/firebase/firestore';
 import { updateOrder, createOrder } from '@/lib/firebase/orders';
-import { getOrdersCollectionPath, getTablesCollectionPath, convertFirebaseTimestampToString } from '@/lib/firebase/utils';
+import { getOrdersCollectionPath, convertFirebaseTimestampToString } from '@/lib/firebase/utils';
 import { getMenuItems as fetchMenuItemsFirebase, getMenuCategories, getMenuSubcategories } from '@/lib/firebase/menu';
-import type { RestaurantProfile, OrderStatus as OrderStatusType, OrderItem, ClientOrder, MenuItem as MenuItemType, MenuCategory, MenuSubcategory, Table as FirebaseTableType } from '@/types';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import type { RestaurantProfile, OrderStatus as OrderStatusType, OrderItem, ClientOrder, MenuItem as MenuItemType, MenuCategory, MenuSubcategory } from '@/types';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import LoadingSpinner from '@/components/shared/loading-spinner';
-import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Input } from '@/components/ui/input';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from '@/components/ui/badge';
-import { ShoppingCart, Eye, MoreHorizontal, Clock, Utensils, CheckCircle, XCircle, Send, CalendarIcon, Filter, ArrowUpDown, PlusCircle, ListOrdered, Hourglass, FilterIcon, FilterXIcon } from 'lucide-react';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs"; // TabsList and TabsTrigger moved to OrderFilters
 import { useToast } from '@/hooks/use-toast';
-import { format, parseISO } from 'date-fns';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
+import { format, parseISO, startOfDay, endOfDay } from 'date-fns';
 import type { DateRange } from "react-day-picker";
 import { cn } from '@/lib/utils';
-import { collection, query, where, orderBy, onSnapshot, Timestamp, QueryConstraint, Unsubscribe } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot, Timestamp, QueryConstraint } from 'firebase/firestore';
 import { db } from '@/lib/firebase/config';
 import MenuSelectionForBill from '@/components/table-management/menu-selection-for-bill';
 import BillingPanel from '@/components/shared/billing-panel';
 
+import OrderPageHeader from '@/components/dashboard/orders/OrderPageHeader';
+import OrderFilters from '@/components/dashboard/orders/OrderFilters';
+import OrderList from '@/components/dashboard/orders/OrderList';
+
 const orderStatusConfig: Record<OrderStatusType, { label: string; icon?: React.ElementType; color: string; shortLabel?: string }> = {
-  pending_customer_confirmation: { label: 'Pending Customer Confirmation', shortLabel: 'Pending Cust.', icon: Hourglass, color: 'text-yellow-600' },
-  pending_kitchen: { label: 'Pending Kitchen Acceptance', shortLabel: 'Pending Kitchen', icon: Hourglass, color: 'text-yellow-600' },
-  confirmed_by_kitchen: { label: 'Kitchen Confirmed', shortLabel: 'Kitchen Confirmed', icon: Utensils, color: 'text-blue-600' },
-  preparing: { label: 'Preparing', shortLabel: 'Preparing', icon: Utensils, color: 'text-blue-600' },
-  ready_for_pickup: { label: 'Ready for Pickup', shortLabel: 'Ready Pickup', icon: ShoppingCart, color: 'text-orange-600' },
-  served: { label: 'Served', shortLabel: 'Served', icon: CheckCircle, color: 'text-green-600' },
-  payment_pending: { label: 'Payment Pending', shortLabel: 'Payment Pend.', icon: Clock, color: 'text-red-600' },
-  completed: { label: 'Completed', shortLabel: 'Completed', icon: CheckCircle, color: 'text-green-700' },
-  cancelled_by_customer: { label: 'Cancelled by Customer', shortLabel: 'Cancelled (Cust)', icon: XCircle, color: 'text-gray-500' },
-  cancelled_by_restaurant: { label: 'Cancelled by Restaurant', shortLabel: 'Cancelled (Rest)', icon: XCircle, color: 'text-gray-500' },
+  pending_customer_confirmation: { label: 'Pending Customer Confirmation', shortLabel: 'Pending Cust.', icon: undefined, color: 'text-yellow-600' },
+  pending_kitchen: { label: 'Pending Kitchen Acceptance', shortLabel: 'Pending Kitchen', icon: undefined, color: 'text-yellow-600' },
+  confirmed_by_kitchen: { label: 'Kitchen Confirmed', shortLabel: 'Kitchen Confirmed', icon: undefined, color: 'text-blue-600' },
+  preparing: { label: 'Preparing', shortLabel: 'Preparing', icon: undefined, color: 'text-blue-600' },
+  ready_for_pickup: { label: 'Ready for Pickup', shortLabel: 'Ready Pickup', icon: undefined, color: 'text-orange-600' },
+  served: { label: 'Served', shortLabel: 'Served', icon: undefined, color: 'text-green-600' },
+  payment_pending: { label: 'Payment Pending', shortLabel: 'Payment Pend.', icon: undefined, color: 'text-red-600' },
+  completed: { label: 'Completed', shortLabel: 'Completed', icon: undefined, color: 'text-green-700' },
+  cancelled_by_customer: { label: 'Cancelled by Customer', shortLabel: 'Cancelled (Cust)', icon: undefined, color: 'text-gray-500' },
+  cancelled_by_restaurant: { label: 'Cancelled by Restaurant', shortLabel: 'Cancelled (Rest)', icon: undefined, color: 'text-gray-500' },
 };
 
 const ALL_STATUSES_VALUE = "_all_";
@@ -74,13 +68,21 @@ const toClientOrder = (docId: string, data: any): ClientOrder => {
     kitchenNotes: typeof data.kitchenNotes === 'string' ? data.kitchenNotes : undefined, paymentMethod: typeof data.paymentMethod === 'string' ? data.paymentMethod : undefined,
     transactionId: typeof data.transactionId === 'string' ? data.transactionId : undefined, customerName: typeof data.customerName === 'string' ? data.customerName : undefined,
     customerPhoneNumber: typeof data.customerPhoneNumber === 'string' ? data.customerPhoneNumber : undefined,
-    customerWhatsapp: typeof data.customerWhatsapp === 'string' ? data.customerWhatsapp : undefined, // New
-    email: typeof data.email === 'string' ? data.email : undefined, // New
+    customerWhatsapp: typeof data.customerWhatsapp === 'string' ? data.customerWhatsapp : undefined, 
+    email: typeof data.email === 'string' ? data.email : undefined, 
     groupId: typeof data.groupId === 'string' ? data.groupId : null,
     taxBreakup: data.taxBreakup || null,
   };
   return { id: docId, ...orderBase, createdAt: convertFirebaseTimestampToString(data.createdAt), updatedAt: convertFirebaseTimestampToString(data.updatedAt) };
 };
+
+type MainTabValue = 'active' | 'all' | 'pending_kitchen' | 'cancelled';
+const MAIN_TABS: { value: MainTabValue; label: string; statuses?: OrderStatusType[] }[] = [
+  { value: 'all', label: 'All Orders' },
+  { value: 'active', label: 'Active', statuses: ['pending_customer_confirmation', 'pending_kitchen', 'confirmed_by_kitchen', 'preparing', 'ready_for_pickup', 'served', 'payment_pending'] },
+  { value: 'pending_kitchen', label: 'Pending Kitchen', statuses: ['pending_kitchen', 'confirmed_by_kitchen'] }, 
+  { value: 'cancelled', label: 'Cancelled', statuses: ['cancelled_by_customer', 'cancelled_by_restaurant'] },
+];
 
 export default function OrderManagementPage() {
   const params = useParams();
@@ -112,12 +114,11 @@ export default function OrderManagementPage() {
 
   const [menuItems, setMenuItemsState] = useState<MenuItemType[]>([]);
   const [categories, setCategoriesState] = useState<MenuCategory[]>([]);
-  const [subcategories, setSubcategoriesState] = useState<MenuSubcategory[]>([]); // Not used in this file directly but fetched
+  const [subcategories, setSubcategoriesState] = useState<MenuSubcategory[]>([]);
 
   const [showFilters, setShowFilters] = useState(false);
   const [activeOrderEditTab, setActiveOrderEditTab] = useState<'bill' | 'details'>('bill');
   
-  // State for new BillingPanel fields
   const [customerName, setCustomerName] = useState('');
   const [customerPhoneNumber, setCustomerPhoneNumber] = useState('');
   const [customerWhatsapp, setCustomerWhatsapp] = useState('');
@@ -130,8 +131,6 @@ export default function OrderManagementPage() {
   const [discountValue, setDiscountValue] = useState(0);
   const [serviceChargeValue, setServiceChargeValue] = useState(0);
 
-
-  // Fetch restaurant and menu data
   useEffect(() => {
     if (!restaurantId || !user) return;
     setPageLoading(true);
@@ -158,7 +157,6 @@ export default function OrderManagementPage() {
     });
   }, [restaurantId, user, role, router, toast]);
 
-  // Real-time orders listener (existing logic)
   useEffect(() => {
     if (!restaurantId || !user || !db) return;
     setPageLoading(true);
@@ -175,11 +173,9 @@ export default function OrderManagementPage() {
     if (statusFilterToUse && statusFilterToUse.length > 0) {
       queryConstraints.push(where('status', 'in', statusFilterToUse));
     }
-    if (dateRange?.from) queryConstraints.push(where('createdAt', '>=', Timestamp.fromDate(dateRange.from)));
-    if (dateRange?.to) {
-      const toDate = new Date(dateRange.to); toDate.setHours(23, 59, 59, 999);
-      queryConstraints.push(where('createdAt', '<=', Timestamp.fromDate(toDate)));
-    }
+    if (dateRange?.from) queryConstraints.push(where('createdAt', '>=', Timestamp.fromDate(startOfDay(dateRange.from))));
+    if (dateRange?.to) queryConstraints.push(where('createdAt', '<=', Timestamp.fromDate(endOfDay(dateRange.to))));
+    
     if (tableIdFilter) queryConstraints.push(where('tableId', '==', tableIdFilter));
     queryConstraints.push(orderBy('createdAt', 'desc'));
 
@@ -196,7 +192,6 @@ export default function OrderManagementPage() {
     return () => unsubscribe();
   }, [restaurantId, user, activeMainTab, detailedStatusFilter, dateRange, tableIdFilter, toast]);
 
-  // Client-side filtering (existing logic)
   useEffect(() => {
     let filtered = [...allFetchedOrders];
     const minPrice = parseFloat(priceRange.min); const maxPrice = parseFloat(priceRange.max);
@@ -231,12 +226,6 @@ export default function OrderManagementPage() {
     setSortConfig(prev => ({ key, direction: prev.key === key && prev.direction === 'ascending' ? 'descending' : 'ascending' }));
   };
 
-  const getItemsSummary = (items: OrderItem[]) => {
-    if (!items || items.length === 0) return "No items";
-    const totalQuantity = items.reduce((sum, item) => sum + item.quantity, 0);
-    return `${totalQuantity} item${totalQuantity > 1 ? 's' : ''}`;
-  };
-
   const handleClearFilters = () => {
     setActiveMainTab('active'); setDetailedStatusFilter(null); setDateRange(undefined); setPriceRange({ min: '', max: '' });
   };
@@ -249,7 +238,7 @@ export default function OrderManagementPage() {
   };
 
   const handleOpenEditPanel = (order: ClientOrder) => {
-    resetBillingPanelStates(); // Reset before populating
+    resetBillingPanelStates();
     const enrichedItems = order.items.map(item => {
       const menuItem = menuItems.find(mi => mi.id === item.menuItemId);
       return { ...item, categoryId: menuItem?.categoryId, taxOverrides: menuItem?.taxOverrides };
@@ -264,23 +253,20 @@ export default function OrderManagementPage() {
     setCurrentCustomerNotes(order.customerNotes || '');
     setCurrentKitchenNotes(order.kitchenNotes || '');
     setCurrentOrderStatus(order.status);
-    // For discount and service charge, we might need to calculate them if they are stored as percentages
-    // For now, assume they are stored as final amounts, or need to be re-entered if edited.
-    setDiscountValue(order.discountAmount || 0); // Assuming discountAmount is the direct value
-    setDiscountType(order.discountAmount && order.totalAmount > 0 && order.subtotal > 0 ? ( (order.discountAmount / order.subtotal * 100) % 1 === 0 ? 'percentage' : 'amount' ) : 'amount' ); // Basic heuristic for type
+    setDiscountValue(order.discountAmount || 0);
+    setDiscountType(order.discountAmount && order.totalAmount > 0 && order.subtotal > 0 ? ( (order.discountAmount / order.subtotal * 100) % 1 === 0 ? 'percentage' : 'amount' ) : 'amount' );
     setServiceChargeValue(order.serviceCharge || 0);
-
     setEditingMode('edit');
-    setActiveOrderEditTab('bill'); // Default to bill view first
+    setActiveOrderEditTab('bill');
     setIsOrderEditPanelVisible(true);
     setIsMenuSelectionForOrderOpen(false);
   };
 
   const handleOpenNewOrderPanel = () => {
-    resetBillingPanelStates(); // Reset for new order
+    resetBillingPanelStates();
     setSelectedOrderToEdit(null);
     setEditingMode('new');
-    setActiveOrderEditTab('details'); // Default to details view for new order
+    setActiveOrderEditTab('details');
     setIsOrderEditPanelVisible(true);
     setIsMenuSelectionForOrderOpen(false);
   };
@@ -297,7 +283,7 @@ export default function OrderManagementPage() {
         return [...prevBillItems, {
           menuItemId: menuItem.id, menuItemName: menuItem.name, quantity, unitPrice: menuItem.price,
           totalPrice: quantity * menuItem.price, categoryId: menuItem.categoryId, taxOverrides: menuItem.taxOverrides,
-          uniqueId: `${menuItem.id}-${Date.now()}-${Math.random().toString(36).substring(7)}`, // Ensure uniqueId
+          uniqueId: `${menuItem.id}-${Date.now()}-${Math.random().toString(36).substring(7)}`,
           status: 'pending_kitchen', createdAt: Date.now()
         }];
       }
@@ -320,7 +306,6 @@ export default function OrderManagementPage() {
       const payload: Partial<ClientOrder> = {
         items: currentOrderBillItems,
         ...finalizedOrderData,
-        // subtotal, taxAmount, totalAmount will be recalculated by createOrder/updateOrder based on items, discount, SC
       };
       if (editingMode === 'edit' && selectedOrderToEdit) {
         await updateOrder(restaurantId, selectedOrderToEdit.id, payload);
@@ -340,8 +325,8 @@ export default function OrderManagementPage() {
           kitchenNotes: currentKitchenNotes || undefined,
           discountAmount: finalizedOrderData.discountAmount || 0,
           serviceCharge: finalizedOrderData.serviceCharge || 0,
-          subtotal: 0, // Will be recalc'd
-          totalAmount: 0, // Will be recalc'd
+          subtotal: 0, 
+          totalAmount: 0, 
         };
         await createOrder(restaurantId, newOrderPayload);
         toast({ title: "New Order Created", description: `New order placed.` });
@@ -354,12 +339,6 @@ export default function OrderManagementPage() {
 
   if (authLoading || (pageLoading && !restaurant && allFetchedOrders.length === 0)) return <div className="flex h-full items-center justify-center"><LoadingSpinner className="h-10 w-10 text-primary" /></div>;
   if (!restaurant && !pageLoading) return <Card><CardHeader><CardTitle>Error</CardTitle></CardHeader><CardContent><p>Restaurant data could not be loaded.</p></CardContent></Card>;
-
-  const SortableTableHead = ({ columnKey, children }: { columnKey: keyof ClientOrder, children: React.ReactNode }) => (
-    <TableHead onClick={() => handleSort(columnKey)} className="cursor-pointer hover:bg-muted/50">
-      <div className="flex items-center gap-2">{children}{sortConfig.key === columnKey && <ArrowUpDown className={`h-3 w-3 ${sortConfig.direction === 'descending' ? 'rotate-180' : ''}`} />}</div>
-    </TableHead>
-  );
 
   const orderListPanelClasses = cn("p-4 overflow-y-auto transition-all duration-300 ease-in-out flex-grow", isOrderEditPanelVisible ? "w-full md:w-3/5" : "w-full");
   const orderEditPanelClasses = cn("absolute top-0 right-0 h-full bg-card shadow-xl z-20 transition-transform duration-300 ease-in-out overflow-y-auto ", "w-full sm:w-[380px] md:w-[420px] lg:w-[450px]", isOrderEditPanelVisible ? "transform translate-x-0" : "transform translate-x-full");
@@ -378,57 +357,42 @@ export default function OrderManagementPage() {
         <div className={orderListPanelClasses}>
           <Card className="shadow-xl h-full flex flex-col">
             <CardHeader>
-              <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
-                 <div className="mb-4 md:mb-0">
-                  <CardTitle className="text-2xl md:text-3xl flex items-center">
-                    <ListOrdered className="mr-3 h-7 w-7 text-primary" /> Order Management
-                  </CardTitle>
-                  <CardDescription>
-                    View, manage, and create orders for {restaurant?.name || 'your restaurant'}.
-                    {tableIdFilter ? `(Filtered for Table ${allFetchedOrders.find(o => o.tableId === tableIdFilter)?.tableNumber || tableIdFilter})` : ''}
-                  </CardDescription>
-                </div>
-                <Button onClick={handleOpenNewOrderPanel} className="bg-accent hover:bg-accent/90 text-accent-foreground">
-                  <PlusCircle className="mr-2 h-4 w-4" /> New Order
-                </Button>
-              </div>
+              <OrderPageHeader
+                restaurantName={restaurant?.name}
+                tableIdFilter={tableIdFilter}
+                onOpenNewOrderPanel={handleOpenNewOrderPanel}
+                allFetchedOrders={allFetchedOrders} // Pass for table number display in description
+                orderCount={displayedOrders.length}
+              />
             </CardHeader>
             <CardContent className="flex-grow">
-              <div className="mb-6 space-y-4">
-                <div className="flex items-center justify-between border rounded-md ">
-                  <Tabs value={activeMainTab} onValueChange={(value) => setActiveMainTab(value as MainTabValue)} className="w-full">
-                    <TabsList className="flex overflow-x-auto m-1 flex-nowrap overflow-y-hidden">
-                    {MAIN_TABS.map(tab => (<TabsTrigger key={tab.value} value={tab.value} className="text-xs px-2 py-1.5 h-auto sm:flex-initial">{tab.label}</TabsTrigger>))}
-                  </TabsList></Tabs>
-                  <div className="md:hidden ml-1"><Button variant="outline" className="w-full" onClick={() => setShowFilters(!showFilters)}>{showFilters ?<FilterXIcon className="mr-2 h-4 w-4" /> : <FilterIcon className="mr-2 h-4 w-4" />}</Button></div>
-                </div>
-                <div className={`${showFilters ? "block" : "hidden"} md:grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end`}>
-                  <div className="space-y-1">
-                    <label htmlFor="detailed-status-filter" className="text-sm font-medium text-muted-foreground">Specific Status</label>
-                    <Select value={detailedStatusFilter || ALL_STATUSES_VALUE} onValueChange={(value) => setDetailedStatusFilter(value === ALL_STATUSES_VALUE ? null : value as OrderStatusType)}>
-                      <SelectTrigger id="detailed-status-filter" className="h-10"><SelectValue placeholder="Select status..." /></SelectTrigger>
-                      <SelectContent><SelectItem value={ALL_STATUSES_VALUE}>All Specific Statuses</SelectItem>{DETAILED_STATUS_OPTIONS.map(opt => (<SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>))}</SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-sm font-medium text-muted-foreground">Date Range</label>
-                    <Popover><PopoverTrigger asChild><Button id="date" variant={"outline"} className={cn("w-full justify-start text-left font-normal h-10", !dateRange && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{dateRange?.from ? (dateRange.to ? (<span>{format(dateRange.from, "LLL dd, y")} - {format(dateRange.to, "LLL dd, y")}</span>) : (<span>{format(dateRange.from, "LLL dd, y")}</span>)) : (<span>Pick a date range</span>)}</Button></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar initialFocus mode="range" defaultMonth={dateRange?.from} selected={dateRange} onSelect={setDateRange} numberOfMonths={2} /></PopoverContent></Popover>
-                  </div>
-                  <div className="space-y-1"><label className="text-sm font-medium text-muted-foreground">Price Range</label><div className="flex gap-2"><Input type="number" placeholder="Min $" value={priceRange.min} onChange={e => setPriceRange(p => ({ ...p, min: e.target.value }))} className="h-10" /><Input type="number" placeholder="Max $" value={priceRange.max} onChange={e => setPriceRange(p => ({ ...p, max: e.target.value }))} className="h-10" /></div></div>
-                  <Button onClick={handleClearFilters} variant="outline" className="h-10 self-end"><Filter className="mr-2 h-4 w-4" /> Clear Filters</Button>
-                </div>
-              </div>
-              {(pageLoading && displayedOrders.length === 0) ? (<div className="text-center py-10"><LoadingSpinner className="h-8 w-8 text-primary" /></div>
-              ) : displayedOrders.length > 0 ? (
-                <Table><TableHeader><TableRow><SortableTableHead columnKey="id">Order ID</SortableTableHead><SortableTableHead columnKey="tableNumber">Table</SortableTableHead><SortableTableHead columnKey="createdAt">Created</SortableTableHead><TableHead>Items</TableHead><SortableTableHead columnKey="totalAmount">Total</SortableTableHead><SortableTableHead columnKey="status">Status</SortableTableHead><TableHead className="text-right w-[200px]">Actions</TableHead></TableRow></TableHeader>
-                  <TableBody>{displayedOrders.map(order => { const StatusIcon = orderStatusConfig[order.status]?.icon; return (
-                        <TableRow key={order.id} className="hover:bg-muted/50 cursor-pointer" onClick={() => handleOpenEditPanel(order)}><TableCell className="font-medium text-xs">#{order.id.substring(0, 6)}...</TableCell><TableCell>{order.tableNumber || 'N/A'}</TableCell><TableCell className="text-xs">{format(parseISO(order.createdAt), 'MMM d, p')}</TableCell><TableCell className="text-xs">{getItemsSummary(order.items)}</TableCell><TableCell className="text-right font-medium">${order.totalAmount.toFixed(2)}</TableCell><TableCell><Badge className={cn("text-xs whitespace-nowrap", orderStatusConfig[order.status]?.color ? orderStatusConfig[order.status]?.color.replace('text-', 'bg-') + " text-white" : "bg-gray-500 text-white")}>{StatusIcon && <StatusIcon className="h-3 w-3 mr-1.5" />}{orderStatusConfig[order.status]?.label || order.status}</Badge></TableCell>
-                          <TableCell className="text-right"><div className="flex items-center justify-end space-x-1">
-                              <Select value={order.status} onValueChange={(newStatus) => handleStatusChange(order.id, newStatus as OrderStatusType)} onClick={(e) => e.stopPropagation()} disabled={updatingOrderId === order.id || (possibleNextStatuses[order.status]?.length === 0 && order.status !== 'completed')}><SelectTrigger id={`status-${order.id}`} className="h-8 text-xs w-[130px] bg-card"><SelectValue placeholder="Update..." /></SelectTrigger><SelectContent><SelectItem value={order.status} disabled className="text-xs">{orderStatusConfig[order.status].shortLabel || orderStatusConfig[order.status].label} (Current)</SelectItem>{possibleNextStatuses[order.status]?.map(nextStatus => (<SelectItem key={nextStatus} value={nextStatus} className="text-xs">{orderStatusConfig[nextStatus].label}</SelectItem>))}{!['completed', 'cancelled_by_customer', 'cancelled_by_restaurant'].includes(order.status) && (<SelectItem value="completed" className="text-xs">{orderStatusConfig.completed.label}</SelectItem>)}</SelectContent></Select>
-                              <Button variant="outline" size="sm" className="h-8 px-2 text-xs" onClick={(e) => { e.stopPropagation(); handleOpenEditPanel(order); }}>Edit</Button>
-                          </div></TableCell></TableRow>);})}
-                  </TableBody></Table>
-              ) : (<div className="text-center py-10 border-2 border-dashed rounded-lg bg-muted/30"><ShoppingCart className="mx-auto h-12 w-12 text-muted-foreground mb-4" /><h3 className="text-xl font-semibold mb-2">No Orders Found</h3><p className="text-muted-foreground">Try adjusting your filters or check back later.</p><Image src="https://picsum.photos/seed/noordersfilter/300/200" alt="No orders illustration" width={300} height={200} className="mt-6 mx-auto rounded-md opacity-70" data-ai-hint="empty plate filter"/></div>)}
+              <OrderFilters
+                activeMainTab={activeMainTab}
+                onActiveMainTabChange={setActiveMainTab}
+                mainTabs={MAIN_TABS}
+                detailedStatusFilter={detailedStatusFilter}
+                onDetailedStatusFilterChange={setDetailedStatusFilter}
+                detailedStatusOptions={DETAILED_STATUS_OPTIONS}
+                allStatusesValue={ALL_STATUSES_VALUE}
+                dateRange={dateRange}
+                onDateRangeChange={setDateRange}
+                priceRange={priceRange}
+                onPriceRangeChange={setPriceRange}
+                onClearFilters={handleClearFilters}
+                showFilters={showFilters}
+                onToggleShowFilters={() => setShowFilters(!showFilters)}
+              />
+              <OrderList
+                orders={displayedOrders}
+                orderStatusConfig={orderStatusConfig}
+                possibleNextStatuses={possibleNextStatuses}
+                onOpenEditPanel={handleOpenEditPanel}
+                onUpdateStatus={handleStatusChange}
+                updatingOrderId={updatingOrderId}
+                isLoading={pageLoading && displayedOrders.length === 0}
+                sortConfig={sortConfig}
+                onSort={handleSort}
+              />
             </CardContent>
           </Card>
         </div>
@@ -483,14 +447,3 @@ export default function OrderManagementPage() {
     </div>
   );
 }
-
-// Added for MAIN_TABS type
-type MainTabValue = 'active' | 'all' | 'pending_kitchen' | 'cancelled';
-const MAIN_TABS: { value: MainTabValue; label: string; statuses?: OrderStatusType[] }[] = [
-  { value: 'all', label: 'All Orders' },
-  { value: 'active', label: 'Active', statuses: ['pending_customer_confirmation', 'pending_kitchen', 'confirmed_by_kitchen', 'preparing', 'ready_for_pickup', 'served', 'payment_pending'] },
-  { value: 'pending_kitchen', label: 'Pending Kitchen', statuses: ['pending_kitchen', 'confirmed_by_kitchen'] }, 
-  { value: 'cancelled', label: 'Cancelled', statuses: ['cancelled_by_customer', 'cancelled_by_restaurant'] },
-];
-
-    
