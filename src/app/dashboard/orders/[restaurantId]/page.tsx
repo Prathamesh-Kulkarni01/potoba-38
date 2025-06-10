@@ -12,7 +12,7 @@ import { getMenuItems as fetchMenuItemsFirebase, getMenuCategories, getMenuSubca
 import type { RestaurantProfile, OrderStatus as OrderStatusType, OrderItem, ClientOrder, MenuItem as MenuItemType, MenuCategory, MenuSubcategory } from '@/types';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import LoadingSpinner from '@/components/shared/loading-spinner';
-import { Tabs, TabsContent } from "@/components/ui/tabs"; // TabsList and TabsTrigger moved to OrderFilters
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"; // Corrected import
 import { useToast } from '@/hooks/use-toast';
 import { format, parseISO, startOfDay, endOfDay } from 'date-fns';
 import type { DateRange } from "react-day-picker";
