@@ -1,20 +1,21 @@
+
 // src/components/shared/app-loading-screen.tsx
 'use client';
 
 import { CookingPot } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import Image from 'next/image';
+// import Image from 'next/image'; // Commented out image
 
 export default function AppLoadingScreen({ message = "Loading Potoba..." }: { message?: string }) {
   return (
     <div className={cn(
         "fixed inset-0 z-[200] flex h-screen w-screen flex-col items-center justify-center bg-background theme-transition",
-        "wavy-bg" // Added a subtle background pattern from globals.css
+        "wavy-bg" 
     )}>
-      {/* <div className="relative flex flex-col items-center p-8 bg-card/80 backdrop-blur-sm rounded-xl shadow-2xl">
+      <div className="relative flex flex-col items-center p-8 bg-card/80 backdrop-blur-sm rounded-xl shadow-2xl">
         <CookingPot
           className={cn(
-            "h-24 w-24 md:h-32 md:w-32 text-primary opacity-0" // Increased size for splash feel
+            "h-24 w-24 md:h-32 md:w-32 text-primary opacity-0" 
           )}
           style={{ 
             animationName: 'potoba-bounce, potoba-fade-in',
@@ -28,12 +29,9 @@ export default function AppLoadingScreen({ message = "Loading Potoba..." }: { me
         <p className="mt-6 text-xl font-semibold text-primary animate-pulse">
           {message}
         </p>
-      </div> */}
-      <img className={cn(
-        "fixed inset-0 z-[200] flex h-screen w-screen flex-col items-center justify-center bg-background theme-transition",
-        "wavy-bg" // Added a subtle background pattern from globals.css
-    )} src='/images/spash.svg'/>
+      </div>
       {/* Keyframes are defined in globals.css to keep this component cleaner */}
     </div>
   );
 }
+    
