@@ -45,6 +45,13 @@ const orderStatusConfig: Record<OrderStatusType, { label: string; icon?: React.E
   cancelled_by_restaurant: { label: 'Cancelled by Restaurant', shortLabel: 'Cancelled (Rest)', icon: XCircle, color: 'text-gray-500' },
 };
 
+const ALL_STATUSES_VALUE = "_all_";
+
+const DETAILED_STATUS_OPTIONS = (Object.keys(orderStatusConfig) as OrderStatusType[]).map(status => ({
+  value: status,
+  label: orderStatusConfig[status].label,
+}));
+
 const possibleNextStatuses: Record<OrderStatusType, OrderStatusType[]> = {
   pending_customer_confirmation: ['pending_kitchen', 'cancelled_by_restaurant', 'cancelled_by_customer'],
   pending_kitchen: ['confirmed_by_kitchen', 'cancelled_by_restaurant'],
@@ -485,5 +492,5 @@ const MAIN_TABS: { value: MainTabValue; label: string; statuses?: OrderStatusTyp
   { value: 'pending_kitchen', label: 'Pending Kitchen', statuses: ['pending_kitchen', 'confirmed_by_kitchen'] }, 
   { value: 'cancelled', label: 'Cancelled', statuses: ['cancelled_by_customer', 'cancelled_by_restaurant'] },
 ];
-const ALL_STATUSES_VALUE = "_all_";
 
+    
