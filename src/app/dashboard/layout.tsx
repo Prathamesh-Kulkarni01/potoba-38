@@ -82,6 +82,7 @@ import {
 import { cn } from "@/lib/utils";
 import type { LucideIcon } from "lucide-react";
 import PWAInstaller from "@/components/pwa/PWAInstaller";
+import { OrderProvider } from "@/contexts/waiter/OrderContext";
 
 interface NavItem {
   href?: string;
@@ -532,7 +533,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           // If neither staffRoles nor staffPermissionKey is defined, but item.roles includes 'staff', it's a general staff item.
           // Or, if checks passed, it's visible.
           // console.log(`Showing (passed staff checks): ${item.label} for ${currentStaffSpecificRole}`);
-          return true;
+          return true; 
         }
         // If not staff (e.g. owner, admin, user), and general role match was true, show it.
         // console.log(`Showing (non-staff role match): ${item.label} for ${currentRole}`);
@@ -652,6 +653,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                     href={item.href}
                     target={item.target}
                     rel={item.rel}
+                    
                     className="flex items-center justify-between w-full"
                   >
                     <div className="flex items-center gap-2">
@@ -704,204 +706,206 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
   return (
     <>
-      {!isMobile ? (
-        <SidebarProvider defaultOpen>
-          <Sidebar>
-            <SidebarHeader className="p-4">
+      <OrderProvider> {/* Moved OrderProvider here to wrap the entire layout content */}
+        {!isMobile ? (
+          <SidebarProvider defaultOpen>
+            <Sidebar>
+              <SidebarHeader className="p-4">
+                <Link href="/dashboard" className="flex items-center gap-2">
+                  <Image
+                    src="/images/logo.png" 
+                    alt="Potoba Logo"
+                    width={40}
+                    height={40}
+                    className="rounded-md"
+                  />
+                  <h1 className="text-2xl font-bold text-sidebar-foreground group-data-[collapsible=icon]:hidden">
+                    Potoba
+                  </h1>
+                </Link>
+              </SidebarHeader>
+              <SidebarContent>
+                {(authContextRole === "owner" || (isStaffRole(authContextRole) && authContextRole !== 'Waiter' && selectedRestaurantId)) && (
+                  <div className="p-2 space-y-2 group-data-[collapsible=icon]:hidden">
+                    <div className="flex items-center space-x-2">
+                      <Select
+                        value={selectedRestaurantId || ""}
+                        onValueChange={handleRestaurantChange}
+                        disabled={restaurantsLoading || (authContextRole === "owner" && ownedRestaurants.length === 0) || isStaffRole(authContextRole)}
+                      >
+                        <SelectTrigger className="w-full flex-grow text-xs h-9">
+                          <SelectValue placeholder={restaurantsLoading ? "Loading..." : "Select Restaurant..."} />
+                        </SelectTrigger>
+                        {authContextRole === "owner" && (
+                          <SelectContent>
+                            {ownedRestaurants.length > 0 ? (
+                              ownedRestaurants.map((restaurant) => (
+                                <SelectItem
+                                  key={restaurant.id}
+                                  value={restaurant.id}
+                                  className="text-xs"
+                                >
+                                  {restaurant.name}
+                                </SelectItem>
+                              ))
+                            ) : (
+                              <SelectItem value="no-restaurants" disabled>
+                                No restaurants found
+                              </SelectItem>
+                            )}
+                          </SelectContent>
+                        )}
+                         {isStaffRole(authContextRole) && currentRestaurantDetails && (
+                            <SelectContent>
+                              <SelectItem value={currentRestaurantDetails.id} className="text-xs">
+                                  {currentRestaurantDetails.name}
+                              </SelectItem>
+                             </SelectContent>
+                         )}
+                      </Select>
+                      {selectedRestaurantId && (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                asChild
+                                className="h-9 w-9 flex-shrink-0"
+                              >
+                                <Link
+                                  href={`/site/${selectedRestaurantId}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  <ExternalLink className="h-4 w-4" />
+                                </Link>
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Open Public Page</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
+                    </div>
+                    {authContextRole === "owner" && (
+                      <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full text-xs"
+                          asChild
+                      >
+                          <Link href="/dashboard/create-restaurant">
+                          <PlusCircle className="mr-2 h-3 w-3" /> Create New
+                          </Link>
+                      </Button>
+                    )}
+                    <SidebarSeparator className="my-2" />
+                  </div>
+                )}
+                {renderNavMenu(navItemsToRender)}
+              </SidebarContent>
+              <SidebarFooter className="flex p-2 border-t border-sidebar-border">
+                <SidebarTrigger className="self-end hidden md:flex mt-2 h-8 w-8 p-0 group-data-[collapsible=icon]:mt-auto">
+                  <ChevronsLeftRight className="h-4 w-4" />
+                </SidebarTrigger>
+              </SidebarFooter>
+            </Sidebar>
+            <SidebarInset>
+              <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b bg-background/80 px-4 backdrop-blur-md sm:px-6">
+                <div className="flex items-center">
+                  <SidebarTrigger className="md:hidden" />
+                  {(authContextRole === "owner" || (isStaffRole(authContextRole) && authContextRole !== 'Waiter')) && selectedRestaurantId && (
+                    <div className="ml-4 text-sm font-medium text-foreground">
+                      {selectedRestaurantName}
+                      {isStaffRole(authContextRole) && authContextRole !== 'owner' && <span className="text-xs text-muted-foreground ml-2">({authContextRole} View)</span>}
+                    </div>
+                  )}
+                </div>
+                <UserNav />
+              </header>
+              <main className="flex-1 p-6 bg-background overflow-y-auto">
+                {children}
+              </main>
+            </SidebarInset>
+          </SidebarProvider>
+        ) : (
+          <div className="flex min-h-screen flex-col">
+            <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b bg-background/80 px-4 backdrop-blur-md sm:px-6">
               <Link href="/dashboard" className="flex items-center gap-2">
                 <Image
-                  src="/images/logo.png" 
+                  src="/images/logo.png"
                   alt="Potoba Logo"
-                  width={40}
-                  height={40}
+                  width={32}
+                  height={32}
                   className="rounded-md"
                 />
-                <h1 className="text-2xl font-bold text-sidebar-foreground group-data-[collapsible=icon]:hidden">
-                  Potoba
-                </h1>
+                <h1 className="text-xl font-bold text-primary">Potoba</h1>
               </Link>
-            </SidebarHeader>
-            <SidebarContent>
-              {(authContextRole === "owner" || (isStaffRole(authContextRole) && authContextRole !== 'Waiter' && selectedRestaurantId)) && (
-                <div className="p-2 space-y-2 group-data-[collapsible=icon]:hidden">
-                  <div className="flex items-center space-x-2">
+              <div className="flex items-center gap-2">
+                {authContextRole === "owner" && (
+                  <>
                     <Select
                       value={selectedRestaurantId || ""}
                       onValueChange={handleRestaurantChange}
-                      disabled={restaurantsLoading || (authContextRole === "owner" && ownedRestaurants.length === 0) || isStaffRole(authContextRole)}
+                      disabled={restaurantsLoading || ownedRestaurants.length === 0}
                     >
-                      <SelectTrigger className="w-full flex-grow text-xs h-9">
-                        <SelectValue placeholder={restaurantsLoading ? "Loading..." : "Select Restaurant..."} />
+                      <SelectTrigger className="w-auto h-8 text-xs px-2 py-1 max-w-[110px] truncate">
+                        <SelectValue placeholder={restaurantsLoading ? "..." : "Restaurant"} />
                       </SelectTrigger>
-                      {authContextRole === "owner" && (
-                        <SelectContent>
-                          {ownedRestaurants.length > 0 ? (
-                            ownedRestaurants.map((restaurant) => (
-                              <SelectItem
-                                key={restaurant.id}
-                                value={restaurant.id}
-                                className="text-xs"
-                              >
-                                {restaurant.name}
-                              </SelectItem>
-                            ))
-                          ) : (
-                            <SelectItem value="no-restaurants" disabled>
-                              No restaurants found
-                            </SelectItem>
-                          )}
-                        </SelectContent>
-                      )}
-                       {isStaffRole(authContextRole) && currentRestaurantDetails && (
-                          <SelectContent>
-                            <SelectItem value={currentRestaurantDetails.id} className="text-xs">
-                                {currentRestaurantDetails.name}
-                            </SelectItem>
-                           </SelectContent>
-                       )}
+                      <SelectContent>
+                        {ownedRestaurants.map((restaurant) => (
+                          <SelectItem
+                            key={restaurant.id}
+                            value={restaurant.id}
+                            className="text-xs"
+                          >
+                            {restaurant.name}
+                          </SelectItem>
+                        ))}
+                        <SelectItem
+                          value="create_new_restaurant_redirect_target"
+                          className="text-xs text-primary"
+                        >
+                          Create New
+                        </SelectItem>
+                      </SelectContent>
                     </Select>
                     {selectedRestaurantId && (
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              asChild
-                              className="h-9 w-9 flex-shrink-0"
-                            >
-                              <Link
-                                href={`/site/${selectedRestaurantId}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                              >
-                                <ExternalLink className="h-4 w-4" />
-                              </Link>
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>Open Public Page</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    )}
-                  </div>
-                  {authContextRole === "owner" && (
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        className="w-full text-xs"
+                      <Button
+                        variant="ghost"
+                        size="icon"
                         asChild
-                    >
-                        <Link href="/dashboard/create-restaurant">
-                        <PlusCircle className="mr-2 h-3 w-3" /> Create New
+                        className="h-8 w-8 text-primary p-0"
+                      >
+                        <Link
+                          href={`/site/${selectedRestaurantId}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="Open Public Page"
+                        >
+                          <ExternalLink className="h-4 w-4" />
                         </Link>
-                    </Button>
-                  )}
-                  <SidebarSeparator className="my-2" />
-                </div>
-              )}
-              {renderNavMenu(navItemsToRender)}
-            </SidebarContent>
-            <SidebarFooter className="flex p-2 border-t border-sidebar-border">
-              <SidebarTrigger className="self-end hidden md:flex mt-2 h-8 w-8 p-0 group-data-[collapsible=icon]:mt-auto">
-                <ChevronsLeftRight className="h-4 w-4" />
-              </SidebarTrigger>
-            </SidebarFooter>
-          </Sidebar>
-          <SidebarInset>
-            <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b bg-background/80 px-4 backdrop-blur-md sm:px-6">
-              <div className="flex items-center">
-                <SidebarTrigger className="md:hidden" />
-                {(authContextRole === "owner" || (isStaffRole(authContextRole) && authContextRole !== 'Waiter')) && selectedRestaurantId && (
-                  <div className="ml-4 text-sm font-medium text-foreground">
-                    {selectedRestaurantName}
-                    {isStaffRole(authContextRole) && authContextRole !== 'owner' && <span className="text-xs text-muted-foreground ml-2">({authContextRole} View)</span>}
+                      </Button>
+                    )}
+                  </>
+                )}
+                 {(isStaffRole(authContextRole) && authContextRole !== 'Waiter' && currentRestaurantDetails) && (
+                  <div className="text-sm font-medium text-foreground truncate max-w-[120px]">
+                      {currentRestaurantDetails.name}
                   </div>
                 )}
+                <UserNav />
               </div>
-              <UserNav />
             </header>
-            <main className="flex-1 p-6 bg-background overflow-y-auto">
+            <main className="flex-1 bg-background max-h-[calc(100dvh-theme(spacing.16)-theme(spacing.16))] overflow-y-auto p-4 pt-6 ">
               {children}
             </main>
-          </SidebarInset>
-        </SidebarProvider>
-      ) : (
-        <div className="flex min-h-screen flex-col">
-          <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b bg-background/80 px-4 backdrop-blur-md sm:px-6">
-            <Link href="/dashboard" className="flex items-center gap-2">
-              <Image
-                src="/images/logo.png"
-                alt="Potoba Logo"
-                width={32}
-                height={32}
-                className="rounded-md"
-              />
-              <h1 className="text-xl font-bold text-primary">Potoba</h1>
-            </Link>
-            <div className="flex items-center gap-2">
-              {authContextRole === "owner" && (
-                <>
-                  <Select
-                    value={selectedRestaurantId || ""}
-                    onValueChange={handleRestaurantChange}
-                    disabled={restaurantsLoading || ownedRestaurants.length === 0}
-                  >
-                    <SelectTrigger className="w-auto h-8 text-xs px-2 py-1 max-w-[110px] truncate">
-                      <SelectValue placeholder={restaurantsLoading ? "..." : "Restaurant"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ownedRestaurants.map((restaurant) => (
-                        <SelectItem
-                          key={restaurant.id}
-                          value={restaurant.id}
-                          className="text-xs"
-                        >
-                          {restaurant.name}
-                        </SelectItem>
-                      ))}
-                      <SelectItem
-                        value="create_new_restaurant_redirect_target"
-                        className="text-xs text-primary"
-                      >
-                        Create New
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                  {selectedRestaurantId && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      asChild
-                      className="h-8 w-8 text-primary p-0"
-                    >
-                      <Link
-                        href={`/site/${selectedRestaurantId}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        title="Open Public Page"
-                      >
-                        <ExternalLink className="h-4 w-4" />
-                      </Link>
-                    </Button>
-                  )}
-                </>
-              )}
-               {(isStaffRole(authContextRole) && authContextRole !== 'Waiter' && currentRestaurantDetails) && (
-                <div className="text-sm font-medium text-foreground truncate max-w-[120px]">
-                    {currentRestaurantDetails.name}
-                </div>
-              )}
-              <UserNav />
-            </div>
-          </header>
-          <main className="flex-1 bg-background max-h-[calc(100dvh-theme(spacing.16)-theme(spacing.16))] overflow-y-auto p-4 pt-6 ">
-            {children}
-          </main>
-          <BottomNavigationBar navItems={getFilteredNavItems(bottomNavLinks, authContextRole, authContextUserStaffRole, user?.staffPermissions)} />
-        </div>
-      )}
+            <BottomNavigationBar navItems={getFilteredNavItems(bottomNavLinks, authContextRole, authContextUserStaffRole, user?.staffPermissions)} />
+          </div>
+        )}
+      </OrderProvider>
       <PWAInstaller />
     </>
   );
