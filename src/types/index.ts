@@ -332,14 +332,16 @@ export interface Order {
   taxAmount?: number;
   serviceCharge?: number;
   discountAmount?: number;
+  discountType?: 'percentage' | 'amount';
   totalAmount: number;
   status: OrderStatus; 
   customerName?: string | null;
   customerPhoneNumber?: string | null;
   customerWhatsapp?: string | null;
+  email?: string | null;
   customerNotes?: string; 
   kitchenNotes?: string; 
-  paymentMethod?: string;
+  paymentMethod?: 'cash' | 'card' | 'upi' | 'wallet' | 'other' | null;
   transactionId?: string;
   groupId?: string | null;
   createdAt: Timestamp;
@@ -527,3 +529,19 @@ export interface SpecialOffer {
   tags?: string[];
   dataAiHint?: string; 
 }
+
+// Type for representing a billable session in the Table Management UI
+export interface BillableSession {
+  key: string; // 'main_bill' or 'group_GROUP_ID'
+  displayName: string;
+  items: OrderItem[];
+  orderId?: string | null; // Firestore Order ID if persisted
+  createdAt?: string | number | null; // Timestamp of creation/first item
+  customerName?: string | null; // For main bill or group creator
+  isGroup: boolean;
+  groupId?: string | null;
+  // Add other relevant session-specific details if needed
+  status?: OrderStatus | null; // Status of the persisted Firestore order for this session
+}
+
+    

@@ -1,3 +1,4 @@
+
 // src/components/table-management/menu-selection-for-bill.tsx
 'use client';
 
@@ -15,15 +16,16 @@ interface MenuSelectionForBillProps {
   menuItems: MenuItem[];
   categories: MenuCategory[];
   subcategories: MenuSubcategory[];
-  onAddItemToBill: (item: MenuItem) => void;
+  onAddItemToBill: (item: MenuItem) => void; 
   onClosePanel: () => void;
+  activeGroupId?: string; 
 }
 
 const MenuItemCardDisplay = ({ item, onAddItemToBill }: { item: MenuItem, onAddItemToBill: (item: MenuItem) => void }) => {
   return (
     <Card className="overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col text-sm">
       {item.imageUrl ? (
-        <Image src={item.imageUrl} alt={item.name} width={150} height={90} className="w-full h-20 object-cover" data-ai-hint="food item" />
+        <Image src={item.imageUrl} alt={item.name} width={150} height={90} className="w-full h-20 object-cover" data-ai-hint="food item" loading="lazy"/>
       ) : (
         <div className="w-full h-20 bg-muted flex items-center justify-center text-muted-foreground" data-ai-hint="food icon">
           <Utensils className="w-8 h-8" />
@@ -31,7 +33,7 @@ const MenuItemCardDisplay = ({ item, onAddItemToBill }: { item: MenuItem, onAddI
       )}
       <CardHeader className="p-2">
         <CardTitle className="text-xs font-semibold leading-tight truncate">{item.name}</CardTitle>
-        <p className="text-xs text-primary font-medium">${item.price.toFixed(2)}</p>
+        <p className="text-xs text-primary font-medium">₹{item.price.toFixed(2)}</p>
       </CardHeader>
       <CardFooter className="p-2 mt-auto">
         <Button onClick={() => onAddItemToBill(item)} size="xs" className="w-full h-7 text-xs bg-accent hover:bg-accent/90 text-accent-foreground">
@@ -47,8 +49,9 @@ export default function MenuSelectionForBill({
   menuItems,
   categories,
   subcategories,
-  onAddItemToBill,
+  onAddItemToBill, 
   onClosePanel,
+  activeGroupId, 
 }: MenuSelectionForBillProps) {
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -91,7 +94,7 @@ export default function MenuSelectionForBill({
   return (
     <div className="flex flex-col h-full bg-card text-card-foreground rounded-lg shadow-lg">
       <div className="flex items-center justify-between p-3 border-b">
-        <h3 className="text-lg font-semibold text-primary">Add Items to Bill</h3>
+        <h3 className="text-lg font-semibold text-primary">Add Items {activeGroupId ? `to Group ${activeGroupId.substring(0,4)}` : 'to Bill'}</h3>
         <Button variant="ghost" size="icon" onClick={onClosePanel} className="h-7 w-7">
           <X className="h-4 w-4" />
         </Button>
@@ -115,10 +118,9 @@ export default function MenuSelectionForBill({
             const directItems = itemsDirectlyInCategory.get(category.id) || [];
             const subcategoriesInCategory = subcategories.filter(sub => sub.categoryId === category.id);
             
-            // Determine if this category has any visible content (direct items or subcategories with items)
             const hasContent = directItems.length > 0 || subcategoriesInCategory.some(sub => (itemsBySubcategory.get(sub.id) || []).length > 0);
-            if (!hasContent && searchTerm) return null; // Hide category if search yields no results within it
-            if (!hasContent && !searchTerm && categories.length > 1 ) return null; // Hide empty categories unless it's the only one (or show a message)
+            if (!hasContent && searchTerm) return null; 
+            if (!hasContent && !searchTerm && categories.length > 1 ) return null;
 
             return (
               <AccordionItem value={category.id} key={category.id} className="border-b-0 mb-2 last:mb-0">
@@ -135,7 +137,7 @@ export default function MenuSelectionForBill({
                   )}
                   {subcategoriesInCategory.map(subcategory => {
                     const itemsInSub = itemsBySubcategory.get(subcategory.id) || [];
-                    if (itemsInSub.length === 0 && searchTerm) return null; // Hide subcat if search yields no results
+                    if (itemsInSub.length === 0 && searchTerm) return null; 
                     if (itemsInSub.length === 0 && !searchTerm) return null;
 
                     return (
@@ -163,3 +165,5 @@ export default function MenuSelectionForBill({
     </div>
   );
 }
+
+    

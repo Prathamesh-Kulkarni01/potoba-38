@@ -10,7 +10,7 @@ import { updateOrder, createOrder } from '@/lib/firebase/orders';
 import { getOrdersCollectionPath, convertFirebaseTimestampToString } from '@/lib/firebase/utils';
 import { getMenuItems as fetchMenuItemsFirebase, getMenuCategories, getMenuSubcategories } from '@/lib/firebase/menu';
 import type { RestaurantProfile, OrderStatus as OrderStatusType, OrderItem, ClientOrder, MenuItem as MenuItemType, MenuCategory, MenuSubcategory } from '@/types';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import LoadingSpinner from '@/components/shared/loading-spinner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"; // Corrected import
 import { useToast } from '@/hooks/use-toast';
@@ -341,7 +341,7 @@ export default function OrderManagementPage() {
   if (!restaurant && !pageLoading) return <Card><CardHeader><CardTitle>Error</CardTitle></CardHeader><CardContent><p>Restaurant data could not be loaded.</p></CardContent></Card>;
 
   const orderListPanelClasses = cn("p-4 overflow-y-auto transition-all duration-300 ease-in-out flex-grow", isOrderEditPanelVisible ? "w-full md:w-3/5" : "w-full");
-  const orderEditPanelClasses = cn("absolute top-0 right-0 h-full bg-card shadow-xl z-20 transition-transform duration-300 ease-in-out overflow-y-auto ", "w-full sm:w-[380px] md:w-[420px] lg:w-[450px]", isOrderEditPanelVisible ? "transform translate-x-0" : "transform translate-x-full");
+  const orderEditPanelClasses = cn("absolute top-0 p-8 right-0 h-full bg-card shadow-xl z-20 transition-transform duration-300 ease-in-out overflow-y-auto ", "w-full sm:w-[380px] md:w-[420px] lg:w-[450px]", isOrderEditPanelVisible ? "transform translate-x-0" : "transform translate-x-full");
   const menuSelectionPanelClasses = cn("absolute top-0 left-0 h-full bg-card shadow-xl z-20 transition-transform duration-300 ease-in-out overflow-y-auto border-r", "w-full sm:w-[380px] md:w-[420px] lg:w-[450px]", isMenuSelectionForOrderOpen ? "transform translate-x-0" : "transform -translate-x-full");
 
   return (

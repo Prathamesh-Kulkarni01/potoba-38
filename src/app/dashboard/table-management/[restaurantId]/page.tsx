@@ -2,16 +2,16 @@
 // src/app/dashboard/table-management/[restaurantId]/page.tsx
 'use client';
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { useAuth } from '@/lib/auth/context';
 import { getRestaurant } from '@/lib/firebase/firestore';
 import { addTable, updateTable, deleteTable, getTableAreas, addTableArea, updateTableArea, deleteTableArea, getTables as fetchTablesFromDb } from '@/lib/firebase/tables';
-import { updateOrder, createOrder } from '@/lib/firebase/orders';
+import { updateOrder as updateFirebaseOrder, createOrder as createFirebaseOrder, getOrder as getFirestoreOrder } from '@/lib/firebase/orders';
 import { getOrdersCollectionPath, getTablesCollectionPath, convertFirebaseTimestampToString } from '@/lib/firebase/utils';
 import { getMenuItems as fetchMenuItemsFirebase, getMenuCategories, getMenuSubcategories } from '@/lib/firebase/menu';
-import type { RestaurantProfile, Table as FirebaseTableType, TableStatus, OrderStatus, OrderItem, MenuItem as MenuItemType, MenuCategory, MenuSubcategory, ClientOrder, ClientTableGroup, TableArea } from '@/types';
+import type { RestaurantProfile, Table as FirebaseTableType, TableStatus, OrderStatus, OrderItem, MenuItem as MenuItemType, MenuCategory, MenuSubcategory, ClientOrder, ClientTableGroup, TableArea, BillableSession, Waiter } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import LoadingSpinner from '@/components/shared/loading-spinner';
 import { Button } from '@/components/ui/button';
@@ -19,17 +19,17 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger, DialogClose } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { PlusCircle, Edit3, Trash2, QrCode, Users, Circle, X, MinusCircle, Utensils, Hourglass, ShoppingCart, CheckCircle, Clock, XCircle, LayoutGrid, MapPin as MapPinIcon } from 'lucide-react';
+import { PlusCircle, Edit3, Trash2, QrCode, Users, Circle, X, MinusCircle, Utensils, Hourglass, ShoppingCart, CheckCircle, Clock, XCircle, LayoutGrid, MapPin as MapPinIcon, Send } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import MenuSelectionForBill from '@/components/table-management/menu-selection-for-bill';
 import { cn } from '@/lib/utils';
-import { collection, query, where, orderBy, onSnapshot, Timestamp, Unsubscribe } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot, Timestamp, Unsubscribe, doc, updateDoc, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { db } from '@/lib/firebase/config';
 import { calculateOrderTaxes } from '@/lib/taxEngine';
 import BillingPanel from '@/components/shared/billing-panel';
@@ -38,6 +38,8 @@ import { getTableGroupsForTable } from '@/lib/firebase/groups';
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';
 import AreaForm from '@/components/table-management/area-form';
 import { Separator } from '@/components/ui/separator';
+import { useOrders as useOrderContext } from '@/contexts/waiter/OrderContext';
+import { EditInstructionsDialog } from '@/components/waiter/EditInstructionsDialog';
 
 
 const tableFormSchema = z.object({
@@ -52,9 +54,10 @@ const statusColors: Record<TableStatus, string> = {
   occupied: 'bg-red-500',
   reserved: 'bg-yellow-500',
   needs_cleaning: 'bg-blue-500',
+  paying: 'bg-indigo-500',
 };
 
-const orderStatusConfig = {
+const orderStatusConfig: Record<OrderStatus, { label: string; icon?: React.ElementType; color: string; shortLabel?: string }> = {
   pending_customer_confirmation: { label: 'Pending Customer Confirmation', shortLabel: 'Pending Cust.', icon: Hourglass, color: 'text-yellow-600' },
   pending_kitchen: { label: 'Pending Kitchen Acceptance', shortLabel: 'Pending Kitchen', icon: Hourglass, color: 'text-yellow-600' },
   confirmed_by_kitchen: { label: 'Kitchen Confirmed', shortLabel: 'Kitchen Confirmed', icon: Utensils, color: 'text-blue-600' },
@@ -67,10 +70,24 @@ const orderStatusConfig = {
   cancelled_by_restaurant: { label: 'Cancelled by Restaurant', shortLabel: 'Cancelled (Rest)', icon: XCircle, color: 'text-gray-500' },
 };
 
+const possibleNextStatusesForOrder: Record<OrderStatus, OrderStatus[]> = {
+  pending_customer_confirmation: ['pending_kitchen', 'cancelled_by_restaurant', 'cancelled_by_customer'],
+  pending_kitchen: ['confirmed_by_kitchen', 'cancelled_by_restaurant'],
+  confirmed_by_kitchen: ['preparing', 'cancelled_by_restaurant'],
+  preparing: ['ready_for_pickup', 'served', 'cancelled_by_restaurant'],
+  ready_for_pickup: ['served', 'completed', 'cancelled_by_restaurant'],
+  served: ['payment_pending', 'completed'],
+  payment_pending: ['completed', 'cancelled_by_restaurant'],
+  completed: [],
+  cancelled_by_customer: [],
+  cancelled_by_restaurant: [],
+};
+
+
 const toClientOrder = (docId: string, data: any): ClientOrder => {
     const orderBase: Omit<ClientOrder, 'id' | 'createdAt' | 'updatedAt'> = {
         restaurantId: data.restaurantId,
-        userId: data.userId || undefined, 
+        userId: data.userId || null, 
         tableId: data.tableId || null,
         tableNumber: data.tableNumber || null,
         items: data.items as OrderItem[],
@@ -80,9 +97,11 @@ const toClientOrder = (docId: string, data: any): ClientOrder => {
         customerName: data.customerName || null, 
         customerPhoneNumber: data.customerPhoneNumber || null, 
         customerWhatsapp: data.customerWhatsapp || null,
+        email: data.email || null,
         taxAmount: typeof data.taxAmount === 'number' ? data.taxAmount : undefined,
         serviceCharge: typeof data.serviceCharge === 'number' ? data.serviceCharge : undefined,
         discountAmount: typeof data.discountAmount === 'number' ? data.discountAmount : undefined,
+        discountType: data.discountType || 'amount',
         customerNotes: typeof data.customerNotes === 'string' ? data.customerNotes : undefined,
         kitchenNotes: typeof data.kitchenNotes === 'string' ? data.kitchenNotes : undefined,
         paymentMethod: typeof data.paymentMethod === 'string' ? data.paymentMethod : undefined,
@@ -102,7 +121,7 @@ const toFirebaseTableType = (docId: string, data: any): FirebaseTableType => {
   return {
     id: docId,
     ...data,
-    tableDocId: docId, // Ensure tableDocId is same as id
+    tableDocId: docId, 
     createdAt: convertFirebaseTimestampToString(data.createdAt),
     updatedAt: convertFirebaseTimestampToString(data.updatedAt),
   } as FirebaseTableType;
@@ -115,6 +134,7 @@ export default function TableManagementPage() {
   const { user, role, initialLoading: authLoading } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
+  const orderContext = useOrderContext();
 
   const [restaurant, setRestaurant] = useState<RestaurantProfile | null>(null);
   const [tables, setTables] = useState<FirebaseTableType[]>([]); 
@@ -129,23 +149,39 @@ export default function TableManagementPage() {
   const [qrModalTable, setQrModalTable] = useState<FirebaseTableType | null>(null);
 
   const [selectedTable, setSelectedTable] = useState<FirebaseTableType | null>(null);
-  const [selectedTableOrders, setSelectedTableOrders] = useState<ClientOrder[]>([]);
+  
   const [menuItems, setMenuItemsState] = useState<MenuItemType[]>([]);
   const [categories, setCategoriesState] = useState<MenuCategory[]>([]);
   const [subcategories, setSubcategoriesState] = useState<MenuSubcategory[]>([]);
-  const [currentBillItems, setCurrentBillItems] = useState<OrderItem[]>([]);
+  
   const [isBillPanelVisible, setIsBillPanelVisible] = useState(false);
   const [isMenuSelectionPanelOpen, setIsMenuSelectionPanelOpen] = useState(false);
 
+  const [persistedTableOrders, setPersistedTableOrders] = useState<ClientOrder[]>([]);
   const ordersListenerUnsubscribeRef = useRef<Unsubscribe | null>(null);
+  
+  const [activeTableGroups, setActiveTableGroups] = useState<ClientTableGroup[]>([]);
+  const groupListenersUnsubscribeRef = useRef<Map<string, Unsubscribe>>(new Map());
 
-  const [groupOrders, setGroupOrders] = useState<ClientTableGroup[]>([]);
-  const [activeBillTab, setActiveBillTab] = useState('main'); // 'main' or groupId
-  const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
-  const [activeGroupSubTab, setActiveGroupSubTab] = useState<'bill' | 'details'>('bill');
+  const [activeBillSessionKey, setActiveBillSessionKey] = useState<string | null>('main_bill');
 
-  const [isAreaModalOpen, setIsAreaModalOpen] = useState(false);
-  const [editingArea, setEditingArea] = useState<TableArea | null>(null);
+  const [customerName, setCustomerName] = useState<string>('');
+  const [customerPhoneNumber, setCustomerPhoneNumber] = useState<string>('');
+  const [customerWhatsapp, setCustomerWhatsapp] = useState<string>('');
+  const [email, setEmail] = useState<string>('');
+  const [currentCustomerNotes, setCurrentCustomerNotes] = useState<string>('');
+  const [currentKitchenNotes, setCurrentKitchenNotes] = useState<string>('');
+  const [currentOrderStatusForPanel, setCurrentOrderStatusForPanel] = useState<OrderStatus | null>(null);
+  const [discountType, setDiscountType] = useState<'percentage' | 'amount'>('amount');
+  const [discountValue, setDiscountValue] = useState<number>(0);
+  const [serviceChargeValue, setServiceChargeValue] = useState<number>(0);
+  const [paymentMethod, setPaymentMethod] = useState<ClientOrder['paymentMethod']>(undefined);
+  const [transactionId, setTransactionId] = useState<string>('');
+
+  const [itemsForActiveSession, setItemsForActiveSession] = useState<OrderItem[]>([]);
+  const [editingItemForInstructions, setEditingItemForInstructions] = useState<OrderItem | null>(null);
+  const [isInstructionsModalOpen, setIsInstructionsModalOpen] = useState(false);
+
 
   const form = useForm<TableFormValues>({
     resolver: zodResolver(tableFormSchema),
@@ -170,9 +206,9 @@ export default function TableManagementPage() {
         if (restaurantData && restaurantData.ownerId === user.uid) {
             setRestaurant(restaurantData);
             setMenuItemsState(fetchedMenuItems);
-            setCategoriesState(fetchedCategories.sort((a,b) => a.order - b.order));
-            setSubcategoriesState(fetchedSubcategories.sort((a,b) => a.order - b.order));
-            setTableAreas(fetchedAreas.sort((a, b) => a.order - b.order));
+            setCategoriesState(fetchedCategories.sort((a,b) => (a.order || 0) - (b.order || 0)));
+            setSubcategoriesState(fetchedSubcategories.sort((a,b) => (a.order || 0) - (b.order || 0)));
+            setTableAreas(fetchedAreas.sort((a, b) => (a.order || 0) - (b.order || 0)));
         } else {
             toast({ variant: "destructive", title: "Access Denied", description: "Restaurant not found or you don't have permission." });
             router.replace('/dashboard');
@@ -180,8 +216,6 @@ export default function TableManagementPage() {
     } catch (error) {
         console.error("Error fetching initial restaurant/menu/area data:", error);
         toast({ variant: "destructive", title: "Error", description: "Could not load initial restaurant data." });
-    } finally {
-        // Page loading will be set to false by tables listener, or here if no tables
     }
   }, [restaurantId, user, role, authLoading, router, toast]);
 
@@ -196,7 +230,7 @@ export default function TableManagementPage() {
     const tablesColRef = collection(db, getTablesCollectionPath(restaurantId));
     const q = query(tablesColRef, orderBy('areaName', 'asc'), orderBy('tableNumber', 'asc'));
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribeTables = onSnapshot(q, (snapshot) => {
       const fetchedTables = snapshot.docs.map(docSnap => toFirebaseTableType(docSnap.id, docSnap.data()));
       setTables(fetchedTables);
       setPageLoading(false);
@@ -205,165 +239,271 @@ export default function TableManagementPage() {
       toast({ variant: "destructive", title: "Error", description: "Could not load live table data." });
       setPageLoading(false);
     });
-
-    return () => unsubscribe();
+    return () => unsubscribeTables();
   }, [restaurantId, user, role, toast]);
 
-
   useEffect(() => {
-    if (ordersListenerUnsubscribeRef.current) {
-      ordersListenerUnsubscribeRef.current();
-      ordersListenerUnsubscribeRef.current = null;
-    }
+    if (ordersListenerUnsubscribeRef.current) ordersListenerUnsubscribeRef.current();
+    groupListenersUnsubscribeRef.current.forEach(unsub => unsub());
+    groupListenersUnsubscribeRef.current.clear();
 
     if (!selectedTable || !restaurantId || !db) {
-      setSelectedTableOrders([]);
-      setCurrentBillItems([]);
-      setGroupOrders([]);
+      setPersistedTableOrders([]);
+      setActiveTableGroups([]);
+      setItemsForActiveSession([]);
+      setActiveBillSessionKey('main_bill');
       return;
     }
-
-    setFormSubmitting(true); 
+    
     const ordersColRef = collection(db, getOrdersCollectionPath(restaurantId));
-    const activeStatuses: OrderStatus[] = ['pending_kitchen', 'confirmed_by_kitchen', 'preparing', 'ready_for_pickup', 'served', 'payment_pending'];
-    const q = query(ordersColRef, where('tableId', '==', selectedTable.id), where('status', 'in', activeStatuses), orderBy('createdAt', 'asc'));
-
-    ordersListenerUnsubscribeRef.current = onSnapshot(q, (snapshot) => {
+    const activeOrderStatuses: OrderStatus[] = ['pending_kitchen', 'confirmed_by_kitchen', 'preparing', 'ready_for_pickup', 'served', 'payment_pending'];
+    const ordersQuery = query(ordersColRef, where('tableId', '==', selectedTable.id), where('status', 'in', activeOrderStatuses), orderBy('createdAt', 'asc'));
+    
+    ordersListenerUnsubscribeRef.current = onSnapshot(ordersQuery, (snapshot) => {
       const orders = snapshot.docs.map(docSnap => toClientOrder(docSnap.id, docSnap.data()));
-      setSelectedTableOrders(orders);
-
-      const aggregatedBillItems: OrderItem[] = orders.reduce((acc, order) => {
-        order.items.forEach(item => {
-          const menuItem = menuItems.find(mi => mi.id === item.menuItemId);
-          const existingItem = acc.find(bi => bi.menuItemId === item.menuItemId);
-          const enrichedItem = {
-            ...item,
-            categoryId: menuItem?.categoryId,
-            taxOverrides: menuItem?.taxOverrides,
-          };
-          if (existingItem) {
-            existingItem.quantity += item.quantity;
-            existingItem.totalPrice += item.totalPrice;
-          } else {
-            acc.push(enrichedItem);
-          }
-        });
-        return acc;
-      }, [] as OrderItem[]);
-      setCurrentBillItems(aggregatedBillItems);
-      if (orders.length === 0) setActiveBillTab('main');
-      else if (!orders.find(o => o.groupId === activeGroupId) && activeGroupId !== 'main') {
-          // If the currently active group order no longer exists (e.g. completed), switch to main tab
-          setActiveBillTab('main');
-      }
-      setFormSubmitting(false);
-    }, (error) => {
-      console.error(`Error listening to orders for table ${selectedTable.id}:`, error);
-      toast({ variant: "destructive", title: "Error Loading Orders", description: error.message || "Could not load orders for this table." });
-      setCurrentBillItems([]);
-      setFormSubmitting(false);
-    });
-
-     getTableGroupsForTable(restaurantId, selectedTable.id)
-      .then(setGroupOrders)
-      .catch(() => setGroupOrders([]));
+      setPersistedTableOrders(orders);
+    }, (error) => console.error(`Error listening to orders for table ${selectedTable.id}:`, error));
+    
+    const groupsColRef = collection(db, `restaurants/${restaurantId}/tableGroups`);
+    const groupsQuery = query(groupsColRef, where('tableId', '==', selectedTable.id), where('status', 'in', ['active', 'ordering', 'locked']));
+    const groupSub = onSnapshot(groupsQuery, (snapshot) => {
+        const groups = snapshot.docs.map(docSnap => ({
+            id: docSnap.id,
+            ...(docSnap.data() as Omit<TableGroup, 'id'>),
+            createdAt: convertFirebaseTimestampToString(docSnap.data().createdAt),
+            updatedAt: convertFirebaseTimestampToString(docSnap.data().updatedAt),
+        } as ClientTableGroup));
+        setActiveTableGroups(groups);
+    }, (error) => console.error(`Error listening to groups for table ${selectedTable.id}:`, error));
+    groupListenersUnsubscribeRef.current.set('main_groups_listener', groupSub);
 
     return () => { 
-      if (ordersListenerUnsubscribeRef.current) {
-        ordersListenerUnsubscribeRef.current();
-      }
+      if (ordersListenerUnsubscribeRef.current) ordersListenerUnsubscribeRef.current();
+      groupListenersUnsubscribeRef.current.forEach(unsub => unsub());
+      groupListenersUnsubscribeRef.current.clear();
     };
-  }, [selectedTable, restaurantId, toast, menuItems]);
+  }, [selectedTable, restaurantId]);
+  
+  const billableSessions = useMemo((): BillableSession[] => {
+    if (!selectedTable) return [];
+    const sessions: BillableSession[] = [];
+    const mainBillLocalItems = orderContext.getOrderForTable(selectedTable.id).filter(item => !item.groupId);
+    const mainBillPersistedOrder = persistedTableOrders.find(o => !o.groupId && o.tableId === selectedTable.id);
+
+    if (mainBillPersistedOrder || mainBillLocalItems.length > 0) {
+      const items = mainBillPersistedOrder ? mainBillPersistedOrder.items : mainBillLocalItems;
+      sessions.push({
+        key: 'main_bill',
+        displayName: 'Main Bill',
+        items: items,
+        orderId: mainBillPersistedOrder?.id || null,
+        createdAt: mainBillPersistedOrder?.createdAt || (mainBillLocalItems[0]?.createdAt),
+        customerName: mainBillPersistedOrder?.customerName || null,
+        status: mainBillPersistedOrder?.status || null,
+        isGroup: false,
+      });
+    }
+
+    persistedTableOrders.filter(o => o.groupId && o.tableId === selectedTable.id).forEach(order => {
+      sessions.push({
+        key: `group_${order.groupId}`,
+        displayName: `Group: ${order.groupId?.substring(0,4)} (${activeTableGroups.find(g=>g.id===order.groupId)?.creatorName || 'Host'})`,
+        items: order.items,
+        orderId: order.id,
+        createdAt: order.createdAt,
+        customerName: order.customerName || activeTableGroups.find(g => g.id === order.groupId)?.creatorName || `Group ${order.groupId}`,
+        status: order.status,
+        isGroup: true,
+        groupId: order.groupId,
+      });
+    });
+
+    activeTableGroups.forEach(group => {
+      if (group.tableId === selectedTable.id && !sessions.some(s => s.groupId === group.id && s.orderId)) {
+        sessions.push({
+          key: `group_${group.id}`,
+          displayName: `Group Cart: ${group.creatorName || group.id.substring(0,4)}`,
+          items: group.cartItems,
+          orderId: null,
+          createdAt: group.createdAt,
+          customerName: group.creatorName,
+          status: null, // Cart not yet an order
+          isGroup: true,
+          groupId: group.id,
+        });
+      }
+    });
+
+    if (sessions.length === 0 && mainBillLocalItems.length > 0) {
+         sessions.push({
+            key: 'main_bill_local_only',
+            displayName: 'Main Bill (Local)',
+            items: mainBillLocalItems,
+            orderId: null,
+            createdAt: mainBillLocalItems[0]?.createdAt || Date.now(),
+            customerName: null,
+            status: null,
+            isGroup: false,
+        });
+    }
+    
+    return sessions.sort((a, b) => {
+      if (a.key === 'main_bill' || a.key === 'main_bill_local_only') return -1;
+      if (b.key === 'main_bill' || b.key === 'main_bill_local_only') return 1;
+      const dateA = a.createdAt ? new Date(a.createdAt as string).getTime() : 0;
+      const dateB = b.createdAt ? new Date(b.createdAt as string).getTime() : 0;
+      return dateA - dateB;
+    });
+  }, [selectedTable, persistedTableOrders, activeTableGroups, orderContext]);
+
+  useEffect(() => {
+    const activeSession = billableSessions.find(s => s.key === activeBillSessionKey);
+    if (activeSession) {
+      setItemsForActiveSession(activeSession.items);
+      setCustomerName(activeSession.customerName || '');
+      const associatedOrder = activeSession.orderId ? persistedTableOrders.find(o => o.id === activeSession.orderId) : null;
+      
+      if (associatedOrder) {
+        setCurrentOrderStatusForPanel(associatedOrder.status);
+        setCustomerPhoneNumber(associatedOrder.customerPhoneNumber || '');
+        setCustomerWhatsapp(associatedOrder.customerWhatsapp || '');
+        setEmail(associatedOrder.email || '');
+        setCurrentCustomerNotes(associatedOrder.customerNotes || '');
+        setCurrentKitchenNotes(associatedOrder.kitchenNotes || '');
+        setDiscountType(associatedOrder.discountType || 'amount');
+        setDiscountValue(associatedOrder.discountAmount || 0);
+        setServiceChargeValue(associatedOrder.serviceCharge || 0);
+        setPaymentMethod(associatedOrder.paymentMethod || undefined);
+        setTransactionId(associatedOrder.transactionId || '');
+      } else { 
+        setCurrentOrderStatusForPanel(activeSession.isGroup ? 'pending_kitchen' : null); // Group carts are pending
+        setCustomerPhoneNumber(''); setCustomerWhatsapp(''); setEmail('');
+        setCurrentCustomerNotes(''); setCurrentKitchenNotes('');
+        setDiscountType('amount'); setDiscountValue(0); setServiceChargeValue(0);
+        setPaymentMethod(undefined); setTransactionId('');
+      }
+    } else if (billableSessions.length > 0 && (!activeBillSessionKey || !billableSessions.find(s => s.key === activeBillSessionKey))) {
+      setActiveBillSessionKey(billableSessions[0].key);
+    } else if (billableSessions.length === 0) {
+      setItemsForActiveSession([]);
+      setActiveBillSessionKey('main_bill'); // Default back if no sessions
+    }
+  }, [activeBillSessionKey, billableSessions, persistedTableOrders]);
 
 
   const handleSelectTable = (table: FirebaseTableType) => {
     setSelectedTable(table);
     setIsBillPanelVisible(true);
     setIsMenuSelectionPanelOpen(false); 
-    setActiveBillTab('main'); // Default to main bill when a table is selected
+    const initialSession = billableSessions.find(s => s.key === 'main_bill' || s.key === 'main_bill_local_only') || billableSessions[0];
+    setActiveBillSessionKey(initialSession ? initialSession.key : 'main_bill');
   };
 
-  const handleAddItemToBill = (menuItem: MenuItemType, quantity: number = 1) => {
-    setCurrentBillItems(prevBillItems => {
-        const existingItem = prevBillItems.find(bi => bi.menuItemId === menuItem.id);
-        if (existingItem) {
-        return prevBillItems.map(bi => 
-            bi.menuItemId === menuItem.id 
-            ? { ...bi, quantity: bi.quantity + quantity, totalPrice: (bi.quantity + quantity) * bi.unitPrice } 
-            : bi
-        );
-        } else {
-        return [...prevBillItems, {
-            menuItemId: menuItem.id,
-            menuItemName: menuItem.name,
-            quantity,
-            unitPrice: menuItem.price,
-            totalPrice: quantity * menuItem.price,
-          categoryId: menuItem.categoryId,
-          taxOverrides: menuItem.taxOverrides,
-        }];
-        }
-    });
-    toast({ title: "Item Added", description: `${menuItem.name} added to bill.`});
+  const handleAddItemToBill = (menuItem: MenuItemType) => {
+    if (!selectedTable) return;
+    const groupId = activeBillSessionKey?.startsWith('group_') ? activeBillSessionKey.replace('group_', '') : null;
+    orderContext.addItemToOrder(selectedTable.id, menuItem, 1, undefined, groupId);
+    toast({ title: "Item Added", description: `${menuItem.name} added to ${activeBillSessionKey === 'main_bill' || activeBillSessionKey === 'main_bill_local_only' ? 'main bill' : `group ${groupId}`}.`});
   };
 
-  const handleUpdateItemQuantityInBill = (menuItemId: string, newQuantity: number) => {
-    if (newQuantity <= 0) {
-      setCurrentBillItems(currentBillItems.filter(bi => bi.menuItemId !== menuItemId));
-    } else {
-      setCurrentBillItems(currentBillItems.map(bi => 
-        bi.menuItemId === menuItemId 
-          ? { ...bi, quantity: newQuantity, totalPrice: newQuantity * bi.unitPrice } 
-          : bi
-      ));
+  const handleUpdateItemQuantityInBill = (menuItemId: string, newQuantity: number, itemUniqueId?: string) => {
+    if (!selectedTable) return;
+    orderContext.updateItemQuantity(selectedTable.id, menuItemId, newQuantity, undefined, itemUniqueId);
+  };
+
+  const handleRemoveItemFromBill = (menuItemId: string, itemUniqueId?: string) => {
+    if (!selectedTable) return;
+    orderContext.removeItemFromOrder(selectedTable.id, menuItemId, itemUniqueId);
+  };
+
+  const handleEditItemInstructions = (item: OrderItem) => {
+    setEditingItemForInstructions(item);
+    setIsInstructionsModalOpen(true);
+  };
+
+  const handleSaveItemInstructions = (instructions: string) => {
+    if (editingItemForInstructions && selectedTable) {
+      orderContext.updateItemInstructions(selectedTable.id, editingItemForInstructions.menuItemId, instructions, editingItemForInstructions.uniqueId);
     }
+    setIsInstructionsModalOpen(false);
+    setEditingItemForInstructions(null);
   };
 
-  const handleRemoveItemFromBill = (menuItemId: string) => {
-    setCurrentBillItems(currentBillItems.filter(bi => bi.menuItemId !== menuItemId));
-  };
 
-  const handleFinalizeBill = async () => {
-    if (!selectedTable || currentBillItems.length === 0) {
+  const handleFinalizeBill = async (
+    orderDataFromPanel: Partial<Pick<ClientOrder, 'customerName' | 'customerPhoneNumber' | 'customerWhatsapp' | 'email' | 'customerNotes' | 'kitchenNotes' | 'status' | 'tableNumber' | 'discountAmount' | 'serviceCharge' | 'paymentMethod' | 'transactionId'>> & { discountType?: 'percentage' | 'amount' }
+  ) => {
+    if (!selectedTable || itemsForActiveSession.length === 0) {
       toast({variant: "destructive", title: "Error", description: "No table selected or bill is empty."});
       return;
     }
     setFormSubmitting(true);
     try {
-      const activeOrder = selectedTableOrders.find(o => o.status === 'served' || o.status === 'payment_pending');
-      
-      const subtotal = currentBillItems.reduce((sum, item) => sum + item.totalPrice, 0);
-      const taxRate = restaurant?.taxRate ?? 0.10; 
-      const taxAmount = subtotal * taxRate;
-      const totalAmount = subtotal + taxAmount;
+      const activeSession = billableSessions.find(s => s.key === activeBillSessionKey);
+      if (!activeSession) throw new Error("Active bill session not found.");
 
-      if (activeOrder) {
-        await updateOrder(restaurantId, activeOrder.id, { items: currentBillItems, subtotal, taxAmount, totalAmount, status: 'payment_pending' });
-        toast({ title: "Bill Updated", description: `Bill for table ${selectedTable.tableNumber} is pending payment.` });
-      } else {
-        const newOrderData = {
-          restaurantId: restaurantId,
-          tableId: selectedTable.id,
-          tableNumber: selectedTable.tableNumber,
-          items: currentBillItems,
-          subtotal,
-          taxAmount,
-          totalAmount,
-          status: 'payment_pending' as OrderStatus, 
-        };
-        await createOrder(restaurantId, newOrderData);
-        toast({ title: "Bill Finalized", description: `Bill for table ${selectedTable.tableNumber} created and pending payment.` });
+      const orderPayload: Partial<ClientOrder> = {
+        restaurantId,
+        tableId: selectedTable.id,
+        tableNumber: selectedTable.tableNumber,
+        items: itemsForActiveSession,
+        groupId: activeSession.isGroup ? activeSession.groupId : null,
+        status: orderDataFromPanel.status || currentOrderStatusForPanel || 'payment_pending',
+        ...orderDataFromPanel,
+      };
+      
+      if (activeSession.orderId) { 
+        await updateFirebaseOrder(restaurantId, activeSession.orderId, orderPayload);
+        toast({ title: "Order Updated", description: `${activeSession.displayName} updated.` });
+      } else { 
+        const newOrder = await createFirebaseOrder(restaurantId, orderPayload);
+        toast({ title: "Order Placed", description: `${activeSession.displayName} placed and is now ${newOrder.status}.` });
+        if (activeSession.isGroup && activeSession.groupId) {
+            const groupRef = doc(db, `restaurants/${restaurantId}/tableGroups`, activeSession.groupId);
+            await updateDoc(groupRef, { status: 'ordered', lastOrderId: newOrder.id, updatedAt: serverTimestamp() });
+        }
       }
-      if (selectedTable.status !== 'occupied' && selectedTable.status !== 'needs_cleaning') { 
-         await updateTable(restaurantId, selectedTable.id, { status: 'occupied' }); 
+      
+      await orderContext.updateTableStatus(selectedTable.id, orderPayload.status === 'completed' ? 'available' : 'occupied');
+      
+      if (orderPayload.status === 'completed') {
+        // If main bill completed, clear its local items and its persisted orderId from context
+        if (activeSession.key === 'main_bill' || activeSession.key === 'main_bill_local_only') {
+           orderContext.clearOrder(selectedTable.id, null); // Clear local main items
+        } else if (activeSession.isGroup && activeSession.groupId) {
+            orderContext.clearOrder(selectedTable.id, activeSession.groupId); // Clear local group items
+        }
+        // Check if all sessions are completed for the table
+        const allSessionsCompleted = billableSessions.every(s => {
+            if (s.key === activeBillSessionKey) return orderPayload.status === 'completed'; // current one
+            const otherOrder = persistedTableOrders.find(o => o.id === s.orderId);
+            return otherOrder?.status === 'completed' || (!s.orderId && s.items.length === 0); // other persisted or empty local
+        });
+
+        if (allSessionsCompleted) {
+          setIsBillPanelVisible(false);
+          setSelectedTable(null);
+          setActiveBillSessionKey('main_bill');
+        } else {
+           // Switch to another active session or main_bill if available
+          const nextSession = billableSessions.find(s => s.key !== activeBillSessionKey && (s.orderId || s.items.length > 0) ) || billableSessions.find(s => s.key === 'main_bill' || s.key === 'main_bill_local_only');
+          setActiveBillSessionKey(nextSession ? nextSession.key : 'main_bill');
+        }
       }
+
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Finalization Failed", description: error.message || "Could not finalize bill." });
+      toast({ variant: "destructive", title: "Operation Failed", description: error.message || "Could not finalize/update order." });
     } finally {
       setFormSubmitting(false);
     }
   };
-
+  
+  const handleSendToKOTForActiveSession = async () => {
+    if (!selectedTable || !activeBillSessionKey) return;
+    const groupId = activeBillSessionKey.startsWith('group_') ? activeBillSessionKey.replace('group_', '') : null;
+    await orderContext.sendOrderToKitchen(selectedTable.id, groupId);
+    // Toast is handled within sendOrderToKitchen of context
+  };
 
   const handleTableSubmit = async (values: TableFormValues) => {
     setFormSubmitting(true);
@@ -403,7 +543,7 @@ export default function TableManagementPage() {
         toast({ title: "Area Added", description: `${values.name} has been added.` });
       }
       const updatedAreas = await getTableAreas(restaurantId);
-      setTableAreas(updatedAreas.sort((a, b) => a.order - b.order));
+      setTableAreas(updatedAreas.sort((a, b) => (a.order || 0) - (b.order || 0)));
       setIsAreaModalOpen(false);
       setEditingArea(null);
     } catch (error: any) {
@@ -413,17 +553,40 @@ export default function TableManagementPage() {
     }
   };
 
-  const handleStatusChange = async (tableId: string, newStatus: TableStatus) => {
+  const handleTableStatusChange = async (tableId: string, newStatus: FirebaseTableType['status']) => {
     setFormSubmitting(true);
     try {
-      const tableToUpdate = tables.find(t => t.id === tableId);
-      if (!tableToUpdate) return;
       await updateTable(restaurantId, tableId, { status: newStatus });
-      toast({ title: "Status Updated", description: `Table ${tableToUpdate.tableNumber} is now ${newStatus}.` });
+      toast({ title: "Table Status Updated" });
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to update status." });
+      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to update table status." });
     } finally {
       setFormSubmitting(false);
+    }
+  };
+
+  const handleAssignWaiterToTable = async (tableId: string, waiterId: string | null) => {
+    if (!selectedTable) return;
+    const waiterName = waiterId ? (WAITERS_DATA.find(w => w.id === waiterId)?.name || null) : null;
+    await orderContext.assignWaiterToTable(tableId, waiterId, waiterName);
+  };
+
+  const handleUpdateOrderStatusForSession = async (newStatus: OrderStatus) => {
+    if (!restaurantId || !activeBillSessionKey || !setOrderStatus) return;
+    const activeSession = billableSessions.find(s => s.key === activeBillSessionKey);
+    if (activeSession?.orderId) {
+      setFormSubmitting(true);
+      try {
+        await updateFirebaseOrder(restaurantId, activeSession.orderId, { status: newStatus });
+        setOrderStatus(newStatus); // Update local state for panel
+        toast({title: "Order Status Updated", description: `Order for ${activeSession.displayName} is now ${newStatus}.`})
+      } catch (error: any) {
+         toast({ variant: "destructive", title: "Status Update Failed", description: error.message });
+      } finally {
+        setFormSubmitting(false);
+      }
+    } else {
+      setOrderStatus(newStatus); // For local/new orders, just update panel state
     }
   };
   
@@ -447,8 +610,7 @@ export default function TableManagementPage() {
         await deleteTableArea(restaurantId, data.id);
         toast({ title: "Area Deleted", description: `Area ${(data as TableArea).name} and its tables have been updated.` });
         const updatedAreas = await getTableAreas(restaurantId);
-        setTableAreas(updatedAreas.sort((a, b) => a.order - b.order));
-        // Re-fetch tables might be needed if areaName on tables isn't updated via listener quickly enough
+        setTableAreas(updatedAreas.sort((a, b) => (a.order || 0) - (b.order || 0)));
         const currentTables = await fetchTablesFromDb(restaurantId);
         setTables(currentTables);
       }
@@ -493,17 +655,16 @@ export default function TableManagementPage() {
          return (configuredBaseUrl.endsWith('/') ? configuredBaseUrl.slice(0, -1) : configuredBaseUrl) + storedQrValue;
       }
     }
-    console.warn("Could not reliably reconstruct test link from stored qrCodeValue:", storedQrValue);
     return storedQrValue; 
   };
   
   const tableGridPanelClasses = cn(
-    "p-4 overflow-y-auto transition-all duration-300 ease-in-out flex-grow",
+    "p-1 md:p-4 overflow-y-auto transition-all duration-300 ease-in-out flex-grow",
      isBillPanelVisible ? "w-full md:w-1/2 lg:w-2/5 xl:w-1/3" : "w-full" 
   );
 
   const billPanelClasses = cn(
-    "absolute top-0 right-0 h-[calc(100vh-theme(spacing.16)-80px)] md:relative md:top-0 md:right-0 md:h-full p-4 border-l bg-card text-card-foreground overflow-y-auto flex flex-col transition-all duration-300 ease-in-out",
+    "absolute top-0 right-0 h-[calc(100vh-theme(spacing.16)-theme(spacing.16))] md:relative md:top-0 md:right-0 md:h-full border-l bg-card text-card-foreground overflow-y-auto flex flex-col transition-all duration-300 ease-in-out",
     "w-full md:w-1/2 lg:w-3/5 xl:w-2/3", 
     isBillPanelVisible ? "translate-x-0" : "translate-x-full md:hidden"
   );
@@ -515,7 +676,7 @@ export default function TableManagementPage() {
   );
 
   const tablesByArea = tables.reduce((acc, table) => {
-    const areaKey = table.areaId || '_UNASSIGNED_AREA_'; // Use a special key for unassigned
+    const areaKey = table.areaId || '_UNASSIGNED_AREA_'; 
     if (!acc[areaKey]) {
       acc[areaKey] = { name: table.areaName || 'Unassigned Tables', id: areaKey, tables: [] };
     }
@@ -524,16 +685,16 @@ export default function TableManagementPage() {
   }, {} as Record<string, { name: string; id: string; tables: FirebaseTableType[] }>);
 
   const sortedAreaKeys = Object.keys(tablesByArea).sort((a, b) => {
-    if (a === '_UNASSIGNED_AREA_') return 1; // Push unassigned to the end
+    if (a === '_UNASSIGNED_AREA_') return 1; 
     if (b === '_UNASSIGNED_AREA_') return -1;
     const areaA = tableAreas.find(area => area.id === a);
     const areaB = tableAreas.find(area => area.id === b);
-    return (areaA?.order || 0) - (areaB?.order || 0);
+    return (areaA?.order || 0) - (areaB?.order || 0) || areaA!.name.localeCompare(areaB!.name);
   });
 
 
   return (
-    <div className="flex h-[calc(100vh-theme(spacing.16)-80px)] overflow-hidden relative">
+    <div className="flex h-[calc(100vh-theme(spacing.16)-theme(spacing.16))] overflow-hidden relative">
        {selectedTable && isBillPanelVisible && (
         <div className={menuSelectionPanelClasses}>
           {isMenuSelectionPanelOpen && ( 
@@ -543,6 +704,7 @@ export default function TableManagementPage() {
                 subcategories={subcategories}
                 onAddItemToBill={handleAddItemToBill}
                 onClosePanel={() => setIsMenuSelectionPanelOpen(false)}
+                activeGroupId={activeBillSessionKey?.startsWith('group_') ? activeBillSessionKey.replace('group_', '') : undefined}
             />
           )}
         </div>
@@ -578,37 +740,37 @@ export default function TableManagementPage() {
                             {areaInfo.name} ({areaInfo.tables.length})
                             </AccordionTrigger>
                             <AccordionContent className="p-3">
-                                <div className={`grid grid-cols-1 ${
+                                <div className={`grid grid-cols-2 ${
                                     (selectedTable && isBillPanelVisible) 
-                                    ? 'sm:grid-cols-1 md:grid-cols-1 lg:grid-cols-2 xl:grid-cols-2' // Fewer columns when bill panel is open
-                                    : 'sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3' // More columns otherwise
-                                } gap-4`}>
+                                    ? 'sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3' 
+                                    : 'sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6' 
+                                } gap-3`}>
                                 {areaInfo.tables.map(table => (
                                     <Card 
                                     key={table.id} 
                                     className={`flex flex-col shadow-md hover:shadow-lg transition-all group cursor-pointer ${selectedTable?.id === table.id ? 'ring-2 ring-primary shadow-xl scale-105' : 'hover:scale-[1.02]'}`}
                                     onClick={() => handleSelectTable(table)}
                                     >
-                                    <CardHeader className="pb-2">
+                                    <CardHeader className="pb-2 pt-3 px-3">
                                         <div className="flex justify-between items-center">
-                                            <CardTitle className="text-lg">Table {table.tableNumber}</CardTitle>
+                                            <CardTitle className="text-base sm:text-lg">{table.tableNumber}</CardTitle>
                                             <div className={`h-3 w-3 rounded-full ${statusColors[table.status]}`} title={table.status}></div>
                                         </div>
-                                        <CardDescription>Capacity: {table.capacity} guests</CardDescription>
+                                        <CardDescription className="text-xs">Cap: {table.capacity}</CardDescription>
                                     </CardHeader>
-                                    <CardContent className="flex-grow space-y-2 text-xs">
-                                        <Select value={table.status} onValueChange={(newStatus) => handleStatusChange(table.id, newStatus as TableStatus)}>
-                                        <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                                    <CardContent className="flex-grow space-y-1.5 text-xs px-3 pb-2">
+                                        <Select value={table.status} onValueChange={(newStatus) => handleTableStatusChange(table.id, newStatus as TableStatus)} onClick={(e)=>e.stopPropagation()}>
+                                        <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
                                         <SelectContent>
                                             {(Object.keys(statusColors) as TableStatus[]).map(s => <SelectItem key={s} value={s} className="capitalize text-xs">{s.replace('_', ' ')}</SelectItem>)}
                                         </SelectContent>
                                         </Select>
                                     </CardContent>
-                                    <CardFooter className="flex justify-between items-center pt-2 mt-auto opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => {e.stopPropagation(); setQrModalTable(table)}} title="Show QR Code"><QrCode className="h-4 w-4 text-muted-foreground hover:text-primary"/></Button>
-                                        <div className="space-x-1">
-                                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => {e.stopPropagation(); openEditModal(table)}} title="Edit Table"><Edit3 className="h-3.5 w-3.5 text-muted-foreground hover:text-accent"/></Button>
-                                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => {e.stopPropagation(); openDeleteDialog(table, 'table')}} title="Delete Table"><Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive"/></Button>
+                                    <CardFooter className="flex justify-between items-center pt-1 pb-2 px-3 mt-auto opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => {e.stopPropagation(); setQrModalTable(table)}} title="Show QR Code"><QrCode className="h-3.5 w-3.5 text-muted-foreground hover:text-primary"/></Button>
+                                        <div className="space-x-0.5">
+                                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => {e.stopPropagation(); openEditModal(table)}} title="Edit Table"><Edit3 className="h-3 w-3 text-muted-foreground hover:text-accent"/></Button>
+                                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => {e.stopPropagation(); openDeleteDialog(table, 'table')}} title="Delete Table"><Trash2 className="h-3 w-3 text-muted-foreground hover:text-destructive"/></Button>
                                         </div>
                                     </CardFooter>
                                     </Card>
@@ -638,95 +800,58 @@ export default function TableManagementPage() {
        </ScrollArea>
 
         {selectedTable && isBillPanelVisible && (
-          <div className={billPanelClasses}>
-            <Tabs value={activeBillTab} onValueChange={setActiveBillTab} className="w-full">
-              <TabsList className="mb-4 overflow-x-auto flex-nowrap whitespace-nowrap">
-                <TabsTrigger value="main">Main Bill</TabsTrigger>
-                {groupOrders.map(group => (
-                  <TabsTrigger
-                    key={group.id}
-                    value={group.id}
-                    className={activeBillTab === group.id ? 'bg-primary text-primary-foreground' : ''}
-                    onClick={() => { setActiveGroupId(group.id); setActiveGroupSubTab('bill'); }}
-                  >
-                    {group.creatorName || 'Group'} ({group.members.length})
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-              <TabsContent value="main">
+            <div className={billPanelClasses}>
                 <BillingPanel
-                  billItems={currentBillItems}
+                  billableSessions={billableSessions}
+                  activeBillSessionKey={activeBillSessionKey}
+                  onSelectSession={setActiveBillSessionKey}
+                  itemsForActiveSession={itemsForActiveSession}
                   restaurant={restaurant}
                   categoryMap={categoryMap}
                   isLoading={formSubmitting}
                   onUpdateItemQuantity={handleUpdateItemQuantityInBill}
                   onRemoveItem={handleRemoveItemFromBill}
+                  onEditItemInstructions={handleEditItemInstructions}
                   onFinalize={handleFinalizeBill}
-                  onClose={() => { setIsBillPanelVisible(false); setSelectedTable(null); }}
+                  onSendToKOT={handleSendToKOTForActiveSession}
+                  onClose={() => { setIsBillPanelVisible(false); setSelectedTable(null); setActiveBillSessionKey('main_bill'); }}
                   onToggleMenuSelection={() => setIsMenuSelectionPanelOpen(prev => !prev)}
-                  isMenuSelectionOpen={isMenuSelectionPanelOpen}
-                  panelTitle={`Bill for Table ${selectedTable.tableNumber}`}
+                  isMenuSelectionPanelOpen={isMenuSelectionPanelOpen}
                   showMenuButton
                   showCloseButton
-                  activeTab="bill" 
+                  finalizeLabel="Accept Payment & Settle"
+                  customerName={customerName} setCustomerName={setCustomerName}
+                  customerPhoneNumber={customerPhoneNumber} setCustomerPhoneNumber={setCustomerPhoneNumber}
+                  customerWhatsapp={customerWhatsapp} setCustomerWhatsapp={setCustomerWhatsapp}
+                  email={email} setEmail={setEmail}
+                  customerNotes={currentCustomerNotes} setCustomerNotes={setCurrentCustomerNotes}
+                  kitchenNotes={currentKitchenNotes} setKitchenNotes={setCurrentKitchenNotes}
+                  discountType={discountType} setDiscountType={setDiscountType}
+                  discountValue={discountValue} setDiscountValue={setDiscountValue}
+                  serviceChargeValue={serviceChargeValue} setServiceChargeValue={setServiceChargeValue}
+                  paymentMethod={paymentMethod} setPaymentMethod={setPaymentMethod}
+                  transactionId={transactionId} setTransactionId={setTransactionId}
+                  selectedTable={selectedTable}
+                  onUpdateTableStatus={handleTableStatusChange}
+                  onAssignWaiter={handleAssignWaiterToTable}
+                  orderStatus={currentOrderStatusForPanel}
+                  setOrderStatus={handleUpdateOrderStatusForSession}
+                  orderStatusConfig={orderStatusConfig}
+                  possibleNextStatuses={currentOrderStatusForPanel ? possibleNextStatusesForOrder[currentOrderStatusForPanel] : []}
                 />
-              </TabsContent>
-              {groupOrders.map(group => (
-                <TabsContent key={group.id} value={group.id}>
-                  <div className="flex flex-col gap-2">
-                    <Tabs value={activeGroupSubTab} onValueChange={(val) => setActiveGroupSubTab(val as 'bill' | 'details')} className="w-full">
-                      <TabsList className="mb-2 flex-nowrap overflow-x-auto">
-                        <TabsTrigger value="bill">Bill</TabsTrigger>
-                        <TabsTrigger value="details">Details</TabsTrigger>
-                      </TabsList>
-                      <TabsContent value="bill">
-                        <BillingPanel
-                          billItems={group.cartItems}
-                          restaurant={restaurant}
-                          categoryMap={categoryMap}
-                          isLoading={formSubmitting}
-                          onUpdateItemQuantity={() => { /* Group cart update logic */ }}
-                          onRemoveItem={() => { /* Group cart update logic */ }}
-                          onFinalize={() => { /* Group finalize logic */ }}
-                          panelTitle={`Group: ${group.creatorName || group.id}`}
-                          finalizeLabel="Finalize Group Bill"
-                          customerName={group.creatorName || ''}
-                          tableNumber={selectedTable?.tableNumber || ''}
-                          orderStatusConfig={orderStatusConfig}
-                          activeTab={activeGroupSubTab}
-                          setActiveTab={setActiveGroupSubTab}
-                          view="bill"
-                        />
-                      </TabsContent>
-                      <TabsContent value="details">
-                        <BillingPanel
-                          billItems={group.cartItems}
-                          restaurant={restaurant}
-                          categoryMap={categoryMap}
-                          isLoading={formSubmitting}
-                          onUpdateItemQuantity={() => { /* Group cart update logic */ }}
-                          onRemoveItem={() => { /* Group cart update logic */ }}
-                          onFinalize={() => { /* Group finalize logic */ }}
-                          panelTitle={`Group: ${group.creatorName || group.id}`}
-                          finalizeLabel="Finalize Group Bill"
-                          customerName={group.creatorName || ''}
-                          customerPhoneNumber={group.creatorPhone || ''}
-                          tableNumber={selectedTable?.tableNumber || ''}
-                          orderStatusConfig={orderStatusConfig}
-                          activeTab={activeGroupSubTab}
-                          setActiveTab={setActiveGroupSubTab}
-                          view="details"
-                        />
-                      </TabsContent>
-                    </Tabs>
-                  </div>
-                </TabsContent>
-              ))}
-            </Tabs>
-          </div>
+            </div>
         )}
       </div>
 
+      {editingItemForInstructions && (
+        <EditInstructionsDialog
+          isOpen={isInstructionsModalOpen}
+          onOpenChange={setIsInstructionsModalOpen}
+          itemName={editingItemForInstructions.menuItemName}
+          initialInstructions={editingItemForInstructions.instructions || ""}
+          onSave={handleSaveItemInstructions}
+        />
+      )}
 
       <Dialog open={isTableModalOpen} onOpenChange={setIsTableModalOpen}>
         <DialogContent>
@@ -745,11 +870,11 @@ export default function TableManagementPage() {
                     <FormLabel>Area (Optional)</FormLabel>
                     <Select
                       onValueChange={(value) => field.onChange(value === "_UNASSIGNED_" ? null : value)}
-                      value={field.value ?? undefined} // Use undefined to show placeholder if field.value is null
+                      value={field.value ?? "_UNASSIGNED_"} 
                     >
                       <FormControl><SelectTrigger><SelectValue placeholder="Assign to an area..." /></SelectTrigger></FormControl>
                       <SelectContent>
-                        <SelectItem value="_UNASSIGNED_">No Area / Unassigned</SelectItem> {/* Ensure this has a non-empty value */}
+                        <SelectItem value="_UNASSIGNED_">No Area / Unassigned</SelectItem> 
                         {tableAreas.map(area => <SelectItem key={area.id} value={area.id}>{area.name}</SelectItem>)}
                       </SelectContent>
                     </Select>
@@ -768,7 +893,6 @@ export default function TableManagementPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Manage Areas Dialog */}
       <Dialog open={isAreaModalOpen} onOpenChange={(isOpen) => { if (!isOpen) setEditingArea(null); setIsAreaModalOpen(isOpen);}}>
         <DialogContent className="sm:max-w-md">
             <DialogHeader>
@@ -794,7 +918,7 @@ export default function TableManagementPage() {
                 area={editingArea} 
                 onSubmit={handleAreaSubmit} 
                 isLoading={formSubmitting}
-                onDone={() => {setEditingArea(null); /* Potentially close parent if no edit, or keep open */}}
+                onDone={() => {setEditingArea(null);}}
             />
              <DialogFooter>
                 <DialogClose asChild><Button type="button" variant="outline" onClick={() => {setIsAreaModalOpen(false); setEditingArea(null);}}>Close</Button></DialogClose>
@@ -828,6 +952,7 @@ export default function TableManagementPage() {
                         height={200}
                         className="border rounded-md"
                         data-ai-hint="qr code table"
+                        loading="lazy"
                     />
                     <Input type="text" readOnly value={qrModalTable.qrCodeValue} className="text-center text-xs"/>
                     <p className="text-xs text-muted-foreground">
@@ -844,3 +969,5 @@ export default function TableManagementPage() {
   );
 }
 
+
+    
