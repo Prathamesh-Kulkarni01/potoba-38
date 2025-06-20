@@ -1,4 +1,3 @@
-
 // src/app/dashboard/table-management/[restaurantId]/page.tsx
 'use client';
 
@@ -11,7 +10,7 @@ import { addTable, updateTable, deleteTable, getTableAreas, addTableArea, update
 import { updateOrder as updateFirebaseOrder, createOrder as createFirebaseOrder, getOrder as getFirestoreOrder } from '@/lib/firebase/orders';
 import { getOrdersCollectionPath, getTablesCollectionPath, convertFirebaseTimestampToString } from '@/lib/firebase/utils';
 import { getMenuItems as fetchMenuItemsFirebase, getMenuCategories, getMenuSubcategories } from '@/lib/firebase/menu';
-import type { RestaurantProfile, Table as FirebaseTableType, TableStatus, OrderStatus, OrderItem, MenuItem as MenuItemType, MenuCategory, MenuSubcategory, ClientOrder, ClientTableGroup, TableArea, BillableSession, Waiter } from '@/types';
+import type { RestaurantProfile, Table as FirebaseTableType, TableStatus, OrderStatus, OrderItem, MenuItem as MenuItemType, MenuCategory, MenuSubcategory, ClientOrder, ClientTableGroup, TableArea, BillableSession, Waiter, TableGroup } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import LoadingSpinner from '@/components/shared/loading-spinner';
 import { Button } from '@/components/ui/button';
@@ -182,6 +181,11 @@ export default function TableManagementPage() {
   const [editingItemForInstructions, setEditingItemForInstructions] = useState<OrderItem | null>(null);
   const [isInstructionsModalOpen, setIsInstructionsModalOpen] = useState(false);
 
+  const [isAreaModalOpen, setIsAreaModalOpen] = useState(false);
+  const [editingArea, setEditingArea] = useState<TableArea | null>(null);
+
+  // Placeholder for waiters data (replace with real data/fetch as needed)
+  const WAITERS_DATA: { id: string; name: string }[] = [];
 
   const form = useForm<TableFormValues>({
     resolver: zodResolver(tableFormSchema),
@@ -565,20 +569,21 @@ export default function TableManagementPage() {
     }
   };
 
+  // Fix handleAssignWaiterToTable to always pass a string for waiterId
   const handleAssignWaiterToTable = async (tableId: string, waiterId: string | null) => {
     if (!selectedTable) return;
-    const waiterName = waiterId ? (WAITERS_DATA.find(w => w.id === waiterId)?.name || null) : null;
-    await orderContext.assignWaiterToTable(tableId, waiterId, waiterName);
+    const waiterName = waiterId ? (WAITERS_DATA.find((w: {id: string; name: string}) => w.id === waiterId)?.name || '') : '';
+    await orderContext.assignWaiterToTable(tableId, waiterId || '', waiterName);
   };
 
   const handleUpdateOrderStatusForSession = async (newStatus: OrderStatus) => {
-    if (!restaurantId || !activeBillSessionKey || !setOrderStatus) return;
+    if (!restaurantId || !activeBillSessionKey) return;
     const activeSession = billableSessions.find(s => s.key === activeBillSessionKey);
     if (activeSession?.orderId) {
       setFormSubmitting(true);
       try {
         await updateFirebaseOrder(restaurantId, activeSession.orderId, { status: newStatus });
-        setOrderStatus(newStatus); // Update local state for panel
+        setCurrentOrderStatusForPanel(newStatus); // Update local state for panel
         toast({title: "Order Status Updated", description: `Order for ${activeSession.displayName} is now ${newStatus}.`})
       } catch (error: any) {
          toast({ variant: "destructive", title: "Status Update Failed", description: error.message });
@@ -586,7 +591,7 @@ export default function TableManagementPage() {
         setFormSubmitting(false);
       }
     } else {
-      setOrderStatus(newStatus); // For local/new orders, just update panel state
+      setCurrentOrderStatusForPanel(newStatus); // For local/new orders, just update panel state
     }
   };
   
@@ -675,14 +680,15 @@ export default function TableManagementPage() {
     isMenuSelectionPanelOpen ? "transform translate-x-0" : "transform -translate-x-full"
   );
 
-  const tablesByArea = tables.reduce((acc, table) => {
-    const areaKey = table.areaId || '_UNASSIGNED_AREA_'; 
+  const tablesByArea: Record<string, { name: string; id: string; tables: FirebaseTableType[] }> = tables.reduce<Record<string, { name: string; id: string; tables: FirebaseTableType[] }>>((acc, table: FirebaseTableType) => {
+    const areaKey = table.areaId || '_UNASSIGNED_AREA_';
     if (!acc[areaKey]) {
       acc[areaKey] = { name: table.areaName || 'Unassigned Tables', id: areaKey, tables: [] };
     }
     acc[areaKey].tables.push(table);
     return acc;
-  }, {} as Record<string, { name: string; id: string; tables: FirebaseTableType[] }>);
+  }, {});
+
 
   const sortedAreaKeys = Object.keys(tablesByArea).sort((a, b) => {
     if (a === '_UNASSIGNED_AREA_') return 1; 
@@ -745,7 +751,7 @@ export default function TableManagementPage() {
                                     ? 'sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3' 
                                     : 'sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6' 
                                 } gap-3`}>
-                                {areaInfo.tables.map(table => (
+                                {areaInfo.tables.map((table: FirebaseTableType) => (
                                     <Card 
                                     key={table.id} 
                                     className={`flex flex-col shadow-md hover:shadow-lg transition-all group cursor-pointer ${selectedTable?.id === table.id ? 'ring-2 ring-primary shadow-xl scale-105' : 'hover:scale-[1.02]'}`}
@@ -759,7 +765,7 @@ export default function TableManagementPage() {
                                         <CardDescription className="text-xs">Cap: {table.capacity}</CardDescription>
                                     </CardHeader>
                                     <CardContent className="flex-grow space-y-1.5 text-xs px-3 pb-2">
-                                        <Select value={table.status} onValueChange={(newStatus) => handleTableStatusChange(table.id, newStatus as TableStatus)} onClick={(e)=>e.stopPropagation()}>
+                                        <Select value={table.status} onValueChange={(newStatus) => handleTableStatusChange(table.id, newStatus as TableStatus)}>
                                         <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
                                         <SelectContent>
                                             {(Object.keys(statusColors) as TableStatus[]).map(s => <SelectItem key={s} value={s} className="capitalize text-xs">{s.replace('_', ' ')}</SelectItem>)}
@@ -816,7 +822,7 @@ export default function TableManagementPage() {
                   onSendToKOT={handleSendToKOTForActiveSession}
                   onClose={() => { setIsBillPanelVisible(false); setSelectedTable(null); setActiveBillSessionKey('main_bill'); }}
                   onToggleMenuSelection={() => setIsMenuSelectionPanelOpen(prev => !prev)}
-                  isMenuSelectionPanelOpen={isMenuSelectionPanelOpen}
+                  isMenuSelectionOpen={isMenuSelectionPanelOpen}
                   showMenuButton
                   showCloseButton
                   finalizeLabel="Accept Payment & Settle"
@@ -970,4 +976,3 @@ export default function TableManagementPage() {
 }
 
 
-    

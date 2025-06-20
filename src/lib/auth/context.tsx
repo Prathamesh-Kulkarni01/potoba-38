@@ -1,4 +1,3 @@
-
 // auth-context.tsx
 'use client';
 
@@ -9,7 +8,10 @@ import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import type { AuthUser, UserRole, UserProfile as UserProfileType, StaffRole } from '@/types';
 import { isStaffRole, STAFF_ROLES_ARRAY, defaultStaffPermissions, DEFAULT_PERMISSIONS_BY_ROLE } from '@/types';
 import AppLoadingScreen from '@/components/shared/app-loading-screen'; 
-import { updateUserProfile } from '../firebase/firestore'; 
+import { updateUserProfile } from '../firebase/firestore';
+import { ErrorBoundary } from '@/components/shared/error-boundary';
+import { ConnectionStatus, useConnectionStatus } from '@/components/shared/connection-status';
+import { prefetcher } from '../prefetch';
 
 interface AuthContextType {
   user: AuthUser | null;
@@ -31,8 +33,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [authOpLoading, setAuthOpLoading] = useState(false); 
   const [profileLoading, setProfileLoading] = useState(false); 
   const [initialAuthCheckDone, setInitialAuthCheckDone] = useState(false);
+  const { isOnline } = useConnectionStatus();
   
   const combinedLoading = authOpLoading || profileLoading;
+
+  // Prefetch user data
+  useEffect(() => {
+    if (user?.uid) {
+      prefetcher.prefetchData({
+        paths: [`users/${user.uid}`, `restaurants/${user.restaurantId}`],
+        key: `user-data-${user.uid}`,
+      }).catch(console.error);
+    }
+  }, [user?.uid, user?.restaurantId]);
 
   const signInAnonymouslyHandler = useCallback(async (): Promise<AuthUser | null> => {
     setAuthOpLoading(true);
@@ -109,17 +122,46 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
 
+  // Cache key for storing user data
+  const USER_CACHE_KEY = 'cached_user_data';
+  const CACHE_EXPIRY = 1000 * 60 * 30; // 30 minutes
+
   useEffect(() => {
     let unsubscribeProfile: (() => void) | null = null;
 
-    const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser: FirebaseUser | null) => {
+    const getCachedData = () => {
+      const cachedData = localStorage.getItem(USER_CACHE_KEY);
+      if (cachedData) {
+        try {
+          const { data, timestamp } = JSON.parse(cachedData);
+          if (Date.now() - timestamp < CACHE_EXPIRY) {
+            return data;
+          }
+        } catch (e) {
+          console.warn('Error parsing cached user data:', e);
+        }
+      }
+      return null;
+    };
+
+    const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
       if (unsubscribeProfile) {
         unsubscribeProfile();
         unsubscribeProfile = null;
       }
       
       if (firebaseUser) {
-        setProfileLoading(true); // Indicate that we are now fetching profile data
+        setProfileLoading(true);
+        
+        // Try to load from cache first
+        const cachedData = getCachedData();
+        if (cachedData && cachedData.uid === firebaseUser.uid) {
+          setUser(cachedData);
+          setRole(cachedData.role);
+          setStaffRoleState(cachedData.staffRole);
+          setInitialAuthCheckDone(true);
+        }
+
         const baseAuthUser: AuthUser = { // Create a base user object immediately
           uid: firebaseUser.uid,
           displayName: firebaseUser.displayName || null,
@@ -147,6 +189,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           let finalUser: AuthUser;
           if (docSnap.exists()) {
             const userProfileData = docSnap.data() as UserProfileType;
+            
+            // Get cached data first
+            const cachedData = getCachedData();
+            const hasChanged = !cachedData || 
+                             cachedData.role !== userProfileData.role ||
+                             cachedData.staffRole !== userProfileData.staffRole ||
+                             cachedData.restaurantId !== userProfileData.restaurantId;
+            
             finalUser = {
               ...baseAuthUser,
               role: userProfileData.role,
@@ -198,10 +248,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
   }, []);
   
+  const handleAuthError = useCallback((error: any) => {
+    console.error('Auth error:', error);
+    if (error.code === 'auth/network-request-failed' && !isOnline) {
+      // Handle offline case
+      return;
+    }
+    throw error;
+  }, [isOnline]);
+
   const contextLoadingState = authOpLoading || profileLoading || !initialAuthCheckDone;
 
   return (
-    <AuthContext.Provider value={{ 
+    <ErrorBoundary>
+      <AuthContext.Provider value={{ 
         user, 
         role, 
         staffRole: staffRoleState, 
@@ -210,9 +270,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         signInAnonymouslyHandler, 
         linkAnonymousWithPhoneNumber, 
         confirmPhoneNumberVerification 
-    }}>
-      {!initialAuthCheckDone ? <AppLoadingScreen message="Initializing Potoba..." /> : children}
-    </AuthContext.Provider>
+      }}>
+        {!initialAuthCheckDone ? (
+          <AppLoadingScreen 
+            message="Initializing Potoba..." 
+            timeout={15000}
+            progress={user ? 50 : 0} 
+          />
+        ) : (
+          <>
+            {children}
+            <ConnectionStatus />
+          </>
+        )}
+      </AuthContext.Provider>
+    </ErrorBoundary>
   );
 };
 
@@ -223,4 +295,3 @@ export const useAuth = (): AuthContextType => {
   }
   return context;
 };
-    

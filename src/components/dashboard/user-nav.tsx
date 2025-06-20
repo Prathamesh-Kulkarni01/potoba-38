@@ -48,12 +48,12 @@ export default function UserNav() {
   };
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2 flex-1 justify-end">
       <ThemeToggle />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" className="relative h-10 w-10 rounded-full">
-            <Avatar className="h-10 w-10 border-2 border-primary">
+            <Avatar className="h-8 w-8 border-2 border-primary">
               {/* Placeholder image, replace with actual user image if available */}
               <AvatarImage src={`https://picsum.photos/seed/${user.uid}/40/40`} alt={user.email || 'User Avatar'} data-ai-hint="user avatar" />
               <AvatarFallback className="bg-primary text-primary-foreground font-semibold">

@@ -178,6 +178,24 @@
     opacity: 1;
   }
 }
+@keyframes ping-slow {
+  0% {
+    transform: scale(1);
+    opacity: 0.4;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 0.2;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0.4;
+  }
+}
+
+.animate-ping-slow {
+  animation: ping-slow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
 
 /* New animations for the improved header - kept from previous user request */
 .animate-float-slow {
@@ -242,10 +260,7 @@
 }
 
 /* Improved theme transitions */
-.theme-transition {
-  transition: background-color 0.5s ease, color 0.5s ease, border-color 0.3s ease, opacity 0.3s ease;
-}
-
+.theme-transition,
 body, header, main, footer, nav, aside, section, article, div, button, input, select, textarea, a, p, h1, h2, h3, h4, h5, h6, span, li, ul, ol, table, th, td {
-  @apply theme-transition;
+  transition: background-color 0.5s ease, color 0.5s ease, border-color 0.3s ease, opacity 0.3s ease;
 }
